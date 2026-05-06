@@ -1,0 +1,35 @@
+# FastAPI
+fastapi
+uvicorn[standard]
+
+# Database
+sqlalchemy[asyncio]
+asyncpg
+alembic
+
+# HTTP Client
+httpx
+
+# Scheduler
+apscheduler
+
+# Validation & Settings
+pydantic
+pydantic-settings
+
+# Logging
+structlog
+
+# CORS
+python-multipart
+
+# Testing
+pytest
+pytest-asyncio
+pytest-httpx
+
+# Utilities
+python-dateutil
+
+# Reports (Excel generation)
+openpyxl
