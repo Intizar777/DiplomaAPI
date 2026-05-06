@@ -22,7 +22,6 @@ from app.routers import (
     sensors_router,
     inventory_router,
 )
-from app.api.v1.reports import router as reports_router
 
 # Configure structured logging
 structlog.configure(
@@ -108,7 +107,6 @@ app.include_router(products_router)
 app.include_router(output_router)
 app.include_router(sensors_router)
 app.include_router(inventory_router)
-app.include_router(reports_router, prefix="/api/v1")
 
 
 @app.get("/api/v1/docs", include_in_schema=False)

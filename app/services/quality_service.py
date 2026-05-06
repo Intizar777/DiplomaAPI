@@ -132,12 +132,12 @@ class QualityService:
         decision: Optional[str] = None
     ) -> QualityLotsResponse:
         """Get quality lots with decisions."""
-        # Join with Product to get product_name
+        # Join with Product to get product_name using source_system_id
         query = select(
             QualityResult,
             Product.name.label("product_name")
         ).outerjoin(
-            Product, QualityResult.product_id == Product.id
+            Product, QualityResult.product_id == Product.source_system_id
         ).where(
             QualityResult.test_date >= from_date,
             QualityResult.test_date <= to_date

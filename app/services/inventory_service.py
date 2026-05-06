@@ -36,12 +36,12 @@ class InventoryService:
         if not latest_date:
             return {"items": [], "snapshot_date": None}
         
-        # Join with Product to get product_name
+        # Join with Product to get product_name using source_system_id
         query = select(
             InventorySnapshot,
             Product.name.label("product_name")
         ).outerjoin(
-            Product, InventorySnapshot.product_id == Product.id
+            Product, InventorySnapshot.product_id == Product.source_system_id
         ).where(
             InventorySnapshot.snapshot_date == latest_date
         ).order_by(InventorySnapshot.warehouse_code, Product.name)
