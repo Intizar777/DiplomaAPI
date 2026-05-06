@@ -8,7 +8,7 @@ from typing import Dict, List, Optional
 from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import QualityResult
+from app.models import QualityResult, Product
 from app.schemas import QualitySummaryResponse, DefectTrendsResponse, QualityLotsResponse
 from app.services.gateway_client import GatewayClient
 import structlog
@@ -132,7 +132,13 @@ class QualityService:
         decision: Optional[str] = None
     ) -> QualityLotsResponse:
         """Get quality lots with decisions."""
-        query = select(QualityResult).where(
+        # Join with Product to get product_name
+        query = select(
+            QualityResult,
+            Product.name.label("product_name")
+        ).outerjoin(
+            Product, QualityResult.product_id == Product.id
+        ).where(
             QualityResult.test_date >= from_date,
             QualityResult.test_date <= to_date
         )
@@ -143,16 +149,17 @@ class QualityService:
         query = query.order_by(desc(QualityResult.test_date))
         
         result = await self.db.execute(query)
-        records = result.scalars().all()
+        rows = result.all()
         
         # Group by lot
         by_lot: Dict[str, Dict] = {}
-        for record in records:
+        for row in rows:
+            record = row.QualityResult
             lot = record.lot_number
             if lot not in by_lot:
                 by_lot[lot] = {
                     "product_id": str(record.product_id),
-                    "product_name": record.product_name,
+                    "product_name": row.product_name or record.product_name,
                     "decision": record.decision,
                     "test_date": record.test_date,
                     "parameters": []

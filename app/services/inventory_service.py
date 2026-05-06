@@ -36,9 +36,15 @@ class InventoryService:
         if not latest_date:
             return {"items": [], "snapshot_date": None}
         
-        query = select(InventorySnapshot).where(
+        # Join with Product to get product_name
+        query = select(
+            InventorySnapshot,
+            Product.name.label("product_name")
+        ).outerjoin(
+            Product, InventorySnapshot.product_id == Product.id
+        ).where(
             InventorySnapshot.snapshot_date == latest_date
-        ).order_by(InventorySnapshot.warehouse_code, InventorySnapshot.product_name)
+        ).order_by(InventorySnapshot.warehouse_code, Product.name)
         
         if warehouse_code:
             query = query.where(InventorySnapshot.warehouse_code == warehouse_code)
@@ -46,20 +52,20 @@ class InventoryService:
             query = query.where(InventorySnapshot.product_id == product_id)
         
         result = await self.db.execute(query)
-        items = result.scalars().all()
+        rows = result.all()
         
         return {
             "items": [
                 {
-                    "product_id": str(item.product_id),
-                    "product_name": item.product_name,
-                    "warehouse_code": item.warehouse_code,
-                    "lot_number": item.lot_number,
-                    "quantity": float(item.quantity) if item.quantity else 0,
-                    "unit_of_measure": item.unit_of_measure,
-                    "last_updated": item.last_updated.isoformat() if item.last_updated else None,
+                    "product_id": str(row.InventorySnapshot.product_id),
+                    "product_name": row.product_name or row.InventorySnapshot.product_name,
+                    "warehouse_code": row.InventorySnapshot.warehouse_code,
+                    "lot_number": row.InventorySnapshot.lot_number,
+                    "quantity": float(row.InventorySnapshot.quantity) if row.InventorySnapshot.quantity else 0,
+                    "unit_of_measure": row.InventorySnapshot.unit_of_measure,
+                    "last_updated": row.InventorySnapshot.last_updated.isoformat() if row.InventorySnapshot.last_updated else None,
                 }
-                for item in items
+                for row in rows
             ],
             "snapshot_date": latest_date.isoformat() if latest_date else None
         }
