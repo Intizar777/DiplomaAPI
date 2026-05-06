@@ -3,6 +3,7 @@ Product business logic service.
 """
 from datetime import date
 from typing import Optional, List, Dict
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,16 +61,22 @@ class ProductService:
         records_processed = 0
         
         for product_data in products:
-            product_id = product_data.get("id")
+            product_id_raw = product_data.get("id")
+            try:
+                product_id = UUID(product_id_raw) if isinstance(product_id_raw, str) else product_id_raw
+            except (ValueError, AttributeError):
+                logger.warning("invalid_product_id_skipped", raw=product_id_raw)
+                continue
             code = product_data.get("code")
             
-            # Try to find existing product by code (upsert)
+            # Try to find existing product by gateway id (upsert)
             existing = await self.db.execute(
-                select(Product).where(Product.code == code)
+                select(Product).where(Product.id == product_id)
             )
             product = existing.scalar_one_or_none()
             
             if product:
+                product.code = code or product.code
                 product.name = product_data.get("name", product.name)
                 product.category = product_data.get("category", product.category)
                 product.brand = product_data.get("brand", product.brand)
@@ -79,6 +86,7 @@ class ProductService:
                 product.source_system_id = product_data.get("sourceSystemId", product.source_system_id)
             else:
                 product = Product(
+                    id=product_id,  # Preserve original UUID from Gateway
                     code=code,
                     name=product_data.get("name", ""),
                     category=product_data.get("category"),
