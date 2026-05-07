@@ -5,7 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional, List, Dict
 
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import InventorySnapshot, Product
@@ -41,7 +41,7 @@ class InventoryService:
             InventorySnapshot,
             Product.name.label("product_name")
         ).outerjoin(
-            Product, InventorySnapshot.product_id == Product.source_system_id
+            Product, cast(InventorySnapshot.product_id, String) == Product.source_system_id
         ).where(
             InventorySnapshot.snapshot_date == latest_date
         ).order_by(InventorySnapshot.warehouse_code, Product.name)

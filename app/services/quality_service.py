@@ -5,7 +5,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Dict, List, Optional
 
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import QualityResult, Product
@@ -137,7 +137,7 @@ class QualityService:
             QualityResult,
             Product.name.label("product_name")
         ).outerjoin(
-            Product, QualityResult.product_id == Product.source_system_id
+            Product, cast(QualityResult.product_id, String) == Product.source_system_id
         ).where(
             QualityResult.test_date >= from_date,
             QualityResult.test_date <= to_date
