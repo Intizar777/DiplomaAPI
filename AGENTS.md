@@ -112,7 +112,7 @@ A feature is **done** when:
 Run these before claiming a feature is done:
 
 ```bash
-# Run all tests
+# Run all tests (uses testcontainers for real PostgreSQL)
 pytest tests/ -v
 
 # Check types
@@ -125,6 +125,8 @@ ruff check app/
 uvicorn app.main:app --reload
 # Then visit http://localhost:8000/docs to test endpoints
 ```
+
+**Note on testing:** Tests use `testcontainers[postgresql]` to spin up a temporary PostgreSQL database for each test run. This requires Docker. If Docker is unavailable, you can fall back to a test database configured in `.env.test`. Testcontainers ensures tests are isolated and reproducible.
 
 ## Common Patterns
 
@@ -183,6 +185,8 @@ uvicorn app.main:app --reload
 |---------|----------|
 | Type check fails on model field | Add type hints to model: `field_name: str \| None = None` |
 | Test fails in async function | Use `@pytest.mark.asyncio` decorator |
+| Tests fail: "Cannot connect to Docker daemon" | Tests use testcontainers; start Docker: `docker daemon` or use test DB in `.env.test` |
+| Testcontainers times out on first run | First run downloads PostgreSQL image (~200MB). Subsequent runs are fast. |
 | Alembic migration fails | Check `.env` `DATABASE_URL` is correct, run `alembic downgrade base` then `upgrade head` |
 | Import error in routes | Check `app/routers/__init__.py` exports the router |
 | Endpoint returns 500 | Check server logs, look for exceptions in error handling |

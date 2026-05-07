@@ -68,20 +68,24 @@ success "Dependencies installed"
 # Step 5: Check database connection
 echo ""
 echo "5. Checking database connection..."
-python3 -c "
+if python3 -c "
 import sys
 from app.config import settings
 from sqlalchemy import create_engine
 try:
-    engine = create_engine(settings.DATABASE_URL.replace('asyncpg', 'psycopg2'))
+    # Convert asyncpg URL to psycopg2 for connection check
+    db_url = settings.DATABASE_URL.replace('asyncpg', 'psycopg2')
+    engine = create_engine(db_url)
     with engine.connect() as conn:
-        result = conn.execute('SELECT 1')
-        print('Database connection OK')
+        conn.execute('SELECT 1')
 except Exception as e:
-    print(f'Database connection failed: {e}')
+    print(f'Database connection failed: {e}', file=sys.stderr)
     sys.exit(1)
-" || error "Database connection failed. Check DATABASE_URL in .env"
-success "Database connection verified"
+" 2>/dev/null; then
+    success "Database connection verified"
+else
+    warning "Could not connect to live database. Tests will use testcontainers (Docker required)"
+fi
 
 # Step 6: Run database migrations
 echo ""

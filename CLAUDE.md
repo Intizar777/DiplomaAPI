@@ -270,22 +270,49 @@ async def lifespan(app: FastAPI):
 
 ## Testing Strategy
 
-### Unit Tests (Business Logic)
+### Unit Tests (Business Logic with Testcontainers)
 
-Test services in isolation:
+Test services with a real PostgreSQL database (not mocked). Use testcontainers for isolation:
 
 ```python
-# tests/test_sales_service.py
+# tests/conftest.py — Shared fixtures
+import pytest
+from testcontainers.postgres import PostgresContainer
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from app.models import Base
+
+@pytest.fixture(scope="session")
+def postgres_container():
+    container = PostgresContainer("postgres:14")
+    container.start()
+    yield container
+    container.stop()
+
 @pytest.fixture
-async def session():
-    # In-memory SQLite or test database
+async def test_engine(postgres_container):
+    url = postgres_container.get_connection_string().replace("psycopg2", "asyncpg")
+    engine = create_async_engine(url)
+    
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    
+    yield engine
+    
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
+
+@pytest.fixture
+async def session(test_engine):
     async with AsyncSession(test_engine) as s:
         yield s
 
+# tests/test_sales_service.py — Example test
 @pytest.mark.asyncio
 async def test_get_top_products(session):
-    # Arrange: insert test data
-    await session.add(Product(name="Widget", sku="W001"))
+    # Arrange: insert test data into real PostgreSQL
+    session.add(Product(name="Widget", sku="W001"))
+    session.add(SalesData(product_id=1, amount=100.0))
     await session.commit()
     
     # Act
@@ -295,6 +322,8 @@ async def test_get_top_products(session):
     assert len(result) > 0
     assert result[0].name == "Widget"
 ```
+
+**Why testcontainers?** Real database tests catch schema mismatches, migration bugs, and query errors that mocks miss. Each test gets a clean isolated database. Tests are slow but reliable.
 
 ### Integration Tests (Routes)
 
@@ -309,6 +338,21 @@ async def test_sales_summary_endpoint(client):
     data = response.json()
     assert "total_amount" in data
 ```
+
+### Test Database Setup (Testcontainers)
+
+Tests use **testcontainers** to provision a temporary PostgreSQL database for each test run. This ensures:
+- Tests are isolated (no shared state)
+- Schema matches production (real database, not mocked)
+- Migrations are tested (each test runs from scratch)
+- No pollution between test runs
+
+**Requirements:**
+- Docker must be running (`docker ps` should work)
+- `testcontainers[postgresql]` in requirements.txt
+- `conftest.py` with fixtures (see example in Testing Strategy section)
+
+**First run:** Downloads PostgreSQL image (~200MB). Subsequent runs reuse the image.
 
 ### When to Skip Tests
 

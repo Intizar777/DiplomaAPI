@@ -27,6 +27,8 @@ python-multipart
 pytest
 pytest-asyncio
 pytest-httpx
+testcontainers[postgresql]
+psycopg2-binary
 
 # Utilities
 python-dateutil

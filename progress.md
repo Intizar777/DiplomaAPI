@@ -6,17 +6,25 @@ Track what was done each session, blockers, and next steps for continuity.
 
 ## Session: 2026-05-07
 
-**Duration:** 30 minutes  
+**Duration:** 45 minutes  
 **Completed by:** Claude Code (Harness Creator)
 
 ### What Was Done
 
-- Created comprehensive harness files:
-  - ✅ AGENTS.md — Project overview, working rules, definition of done
-  - ✅ CLAUDE.md — Architecture deep-dive, patterns, tech decisions
-  - ✅ feature_list.json — Feature tracking (22 features, 18 done, 2 in progress, 2 not started)
-  - ✅ init.sh — Initialization script with verification steps
-  - ✅ progress.md — This file
+**Initial Harness Setup (30 min):**
+- ✅ AGENTS.md — Project overview, working rules, definition of done
+- ✅ CLAUDE.md — Architecture deep-dive, patterns, tech decisions
+- ✅ feature_list.json — Feature tracking (22 features, 18 done, 2 in progress, 2 not started)
+- ✅ init.sh — Initialization script with verification steps
+- ✅ progress.md — Session continuity log
+- ✅ Memory files — Project overview and working patterns for cross-session persistence
+
+**Testcontainers Integration (15 min):**
+- ✅ requirements.txt — Added `testcontainers[postgresql]` and `psycopg2-binary`
+- ✅ tests/conftest.py — Pytest fixtures for testcontainers-based testing
+- ✅ CLAUDE.md — Updated testing section with testcontainers pattern and example
+- ✅ AGENTS.md — Added verification notes and troubleshooting for testcontainers
+- ✅ init.sh — Updated DB check to gracefully handle testcontainers fallback
 
 ### Current State
 
