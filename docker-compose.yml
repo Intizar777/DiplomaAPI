@@ -25,7 +25,7 @@ services:
     container_name: dashboard_api
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/dashboard_api
-      GATEWAY_URL: http://host.docker.internal:3000/api
+      GATEWAY_URL: ${GATEWAY_URL:-http://host.docker.internal:3000/api}
       GATEWAY_AUTH_EMAIL: ${GATEWAY_AUTH_EMAIL:-admin@efko.local}
       GATEWAY_AUTH_PASSWORD: ${GATEWAY_AUTH_PASSWORD:-Efko2024!}
       GATEWAY_TIMEOUT_CONNECT: "10.0"
