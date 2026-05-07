@@ -157,7 +157,7 @@ async def sync_kpi_task():
 
 async def sync_sales_task():
     """Sync sales data from Gateway."""
-    from_date = date.today() - timedelta(days=1)
+    from_date = date.today() - timedelta(days=30)  # Exactly 1 month ago
     to_date = date.today()
 
     from app.models import AggregatedSales

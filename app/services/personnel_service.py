@@ -81,7 +81,7 @@ class PersonnelService:
         return counts
 
     @track_feature_path(feature_name="personnel.sync_from_gateway", log_result=True)
-    async def sync_from_gateway(self) -> int:
+    async def sync_from_gateway(self, from_date=None, to_date=None) -> int:
         """Sync all personnel entities from Gateway (full upsert)."""
         if not self.gateway:
             raise ValueError("Gateway client is required for sync")
@@ -125,8 +125,18 @@ class PersonnelService:
 
     async def _sync_production_lines(self) -> int:
         """Sync production lines from Gateway."""
+        from app.services.gateway_client import GatewayError
         logger.info("syncing_production_lines_from_gateway")
-        gateway_data = await self.gateway.get_personnel_production_lines()
+        try:
+            gateway_data = await self.gateway.get_personnel_production_lines()
+        except GatewayError as e:
+            if "404" in str(e):
+                logger.warning(
+                    "personnel_production_lines_endpoint_not_found",
+                    detail=str(e)[:200],
+                )
+                return 0
+            raise
         items = gateway_data.get("productionLines", [])
         logger.info("production_lines_fetched_from_gateway", total=len(items))
         return await self._upsert_entities(ProductionLine, items, self._apply_production_line_fields)

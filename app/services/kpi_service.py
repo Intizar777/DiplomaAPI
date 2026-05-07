@@ -237,38 +237,29 @@ class KPIService:
                 logger.warning("kpi_sync_no_data_from_gateway")
                 return 0
             
-            # Check if record for this period already exists
-            existing = await self.db.execute(
-                select(AggregatedKPI).where(
-                    AggregatedKPI.period_from == from_date,
-                    AggregatedKPI.period_to == to_date,
-                    AggregatedKPI.production_line.is_(None)
-                )
-            )
-            existing_kpi = existing.scalar_one_or_none()
-            
-            if existing_kpi:
-                # Update existing record (upsert)
-                existing_kpi.total_output = Decimal(str(kpi_data.get("totalOutput", 0)))
-                existing_kpi.defect_rate = Decimal(str(kpi_data.get("defectRate", 0)))
-                existing_kpi.completed_orders = kpi_data.get("completedOrders", 0)
-                existing_kpi.total_orders = kpi_data.get("totalOrders", 0)
-                existing_kpi.oee_estimate = Decimal(str(kpi_data.get("oeeEstimate", 0))) if kpi_data.get("oeeEstimate") else None
-                logger.info("kpi_sync_updated_existing", period_from=from_date.isoformat(), period_to=to_date.isoformat())
-            else:
-                # Insert new record
-                aggregated = AggregatedKPI(
-                    period_from=from_date,
-                    period_to=to_date,
-                    production_line=None,
+            # Use ON CONFLICT DO UPDATE for upsert
+            from sqlalchemy.dialects.postgresql import insert
+            stmt = insert(AggregatedKPI).values(
+                period_from=from_date,
+                period_to=to_date,
+                production_line=None,
+                total_output=Decimal(str(kpi_data.get("totalOutput", 0))),
+                defect_rate=Decimal(str(kpi_data.get("defectRate", 0))),
+                completed_orders=kpi_data.get("completedOrders", 0),
+                total_orders=kpi_data.get("totalOrders", 0),
+                oee_estimate=Decimal(str(kpi_data.get("oeeEstimate", 0))) if kpi_data.get("oeeEstimate") else None
+            ).on_conflict_do_update(
+                index_elements=['period_from', 'period_to', 'production_line'],
+                set_=dict(
                     total_output=Decimal(str(kpi_data.get("totalOutput", 0))),
                     defect_rate=Decimal(str(kpi_data.get("defectRate", 0))),
                     completed_orders=kpi_data.get("completedOrders", 0),
                     total_orders=kpi_data.get("totalOrders", 0),
                     oee_estimate=Decimal(str(kpi_data.get("oeeEstimate", 0))) if kpi_data.get("oeeEstimate") else None
                 )
-                self.db.add(aggregated)
-                logger.info("kpi_sync_inserted_new", period_from=from_date.isoformat(), period_to=to_date.isoformat())
+            )
+            await self.db.execute(stmt)
+            logger.info("kpi_sync_upserted", period_from=from_date.isoformat(), period_to=to_date.isoformat())
             
             await self.db.commit()
             records_processed += 1

@@ -52,7 +52,7 @@ class ProductService:
         return {row[0]: row[1] for row in result.all()}
     
     @track_feature_path(feature_name="products.sync_from_gateway", log_result=True)
-    async def sync_from_gateway(self) -> int:
+    async def sync_from_gateway(self, from_date=None, to_date=None) -> int:
         """Sync products from Gateway (full upsert)."""
         logger.info("syncing_products_from_gateway")
         
@@ -71,11 +71,21 @@ class ProductService:
                 continue
             code = product_data.get("code")
             
-            # Try to find existing product by gateway id (upsert)
-            existing = await self.db.execute(
-                select(Product).where(Product.id == product_id)
-            )
-            product = existing.scalar_one_or_none()
+            # Try to find existing product by code first (unique constraint), then by id
+            if code:
+                existing = await self.db.execute(
+                    select(Product).where(Product.code == code)
+                )
+                product = existing.scalar_one_or_none()
+            else:
+                product = None
+            
+            # If not found by code, try by id
+            if not product and product_id:
+                existing = await self.db.execute(
+                    select(Product).where(Product.id == product_id)
+                )
+                product = existing.scalar_one_or_none()
             
             if product:
                 product.code = code or product.code

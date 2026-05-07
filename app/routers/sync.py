@@ -153,7 +153,7 @@ async def trigger_sync_all(
         if task_name in _running_tasks:
             skipped.append(task_name)
         else:
-            asyncio.create_task(_run_sync_task(task_name))
+            background_tasks.add_task(_run_sync_task, task_name)
             triggered.append(task_name)
     
     logger.info("sync_all_triggered", triggered=triggered, skipped=skipped)
@@ -189,7 +189,7 @@ async def trigger_sync_task(
             triggered_tasks=[]
         )
     
-    asyncio.create_task(_run_sync_task(task_name))
+    background_tasks.add_task(_run_sync_task, task_name)
     
     logger.info("sync_task_triggered", task_name=task_name)
     

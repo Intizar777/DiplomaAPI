@@ -108,7 +108,7 @@ class InventoryService:
         return {"items": items, "product_id": product_id}
     
     @track_feature_path(feature_name="inventory.sync_from_gateway", log_result=True)
-    async def sync_from_gateway(self) -> int:
+    async def sync_from_gateway(self, from_date=None, to_date=None) -> int:
         """Sync inventory from Gateway (snapshot current state)."""
         logger.info("syncing_inventory_from_gateway")
         

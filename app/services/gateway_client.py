@@ -714,7 +714,7 @@ class GatewayClient:
 
     async def get_personnel_production_lines(self) -> Dict[str, Any]:
         """Get personnel production lines from Gateway (paginated)."""
-        lines = await self._fetch_all_pages("/personnel/production-lines", "productionLines")
+        lines = await self._fetch_all_pages("/production/production-lines", "productionLines")
         return {"productionLines": lines}
 
     async def get_personnel_workstations(self) -> Dict[str, Any]:

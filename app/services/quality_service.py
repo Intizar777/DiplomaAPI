@@ -200,7 +200,6 @@ class QualityService:
         )
     
     @track_feature_path(feature_name="quality.sync_from_gateway", log_result=True)
-    @track_feature_path(feature_name="quality.sync_from_gateway", log_result=True)
     async def sync_from_gateway(
         self,
         from_date: Optional[date],

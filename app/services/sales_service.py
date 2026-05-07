@@ -286,7 +286,8 @@ class SalesService:
         # Gateway returns summary data
         summary = gateway_data.get("summary", gateway_data.get("regions", []))
         for item in summary:
-            aggregated = AggregatedSales(
+            from sqlalchemy.dialects.postgresql import insert
+            stmt = insert(AggregatedSales).values(
                 period_from=period_from,
                 period_to=period_to,
                 group_by_type="region",
@@ -294,15 +295,22 @@ class SalesService:
                 total_quantity=Decimal(str(item.get("totalQuantity", item.get("quantity", 0)))),
                 total_amount=Decimal(str(item.get("totalAmount", item.get("amount", 0)))),
                 sales_count=item.get("salesCount", 1)
+            ).on_conflict_do_update(
+                index_elements=['period_from', 'period_to', 'group_by_type', 'group_key'],
+                set_=dict(
+                    total_quantity=Decimal(str(item.get("totalQuantity", item.get("quantity", 0)))),
+                    total_amount=Decimal(str(item.get("totalAmount", item.get("amount", 0)))),
+                    sales_count=item.get("salesCount", 1)
+                )
             )
-            self.db.add(aggregated)
+            await self.db.execute(stmt)
             records_processed += 1
         
         # Also fetch by channel
         gateway_data_channel = await self.gateway.get_sales_summary(from_date, to_date, "channel")
         summary_channel = gateway_data_channel.get("summary", gateway_data_channel.get("channels", []))
         for item in summary_channel:
-            aggregated = AggregatedSales(
+            stmt = insert(AggregatedSales).values(
                 period_from=period_from,
                 period_to=period_to,
                 group_by_type="channel",
@@ -310,8 +318,15 @@ class SalesService:
                 total_quantity=Decimal(str(item.get("totalQuantity", item.get("quantity", 0)))),
                 total_amount=Decimal(str(item.get("totalAmount", item.get("amount", 0)))),
                 sales_count=item.get("salesCount", 1)
+            ).on_conflict_do_update(
+                index_elements=['period_from', 'period_to', 'group_by_type', 'group_key'],
+                set_=dict(
+                    total_quantity=Decimal(str(item.get("totalQuantity", item.get("quantity", 0)))),
+                    total_amount=Decimal(str(item.get("totalAmount", item.get("amount", 0)))),
+                    sales_count=item.get("salesCount", 1)
+                )
             )
-            self.db.add(aggregated)
+            await self.db.execute(stmt)
             records_processed += 1
         
         # Also sync raw sales data for product-level analytics
