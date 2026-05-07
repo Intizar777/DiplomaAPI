@@ -56,9 +56,64 @@ Track what was done each session, blockers, and next steps for continuity.
 
 ---
 
+## Session: 2026-05-07 (Continued - Testing Implementation)
+
+**Duration:** 60 minutes  
+**Completed by:** Claude Code
+
+### What Was Done
+
+**Unit Test Fixes (15 min):**
+- ✅ Fixed 3 failing sales service tests (Pydantic model access patterns)
+- ✅ Changed dictionary access (`item["field"]`) → attribute access (`item.field`)
+- ✅ All 47 unit tests now passing (100% success rate)
+
+**Integration Tests Implementation (45 min):**
+- ✅ Created 13 KPI integration tests (test_kpi_routes.py)
+- ✅ Fixed conftest.py with proper async fixtures:
+  - httpx.AsyncClient with ASGITransport for ASGI app mounting
+  - Proper dependency override for get_db() in test environment
+  - Async session fixtures that work with async tests
+- ✅ Handled JSON Decimal serialization (Decimals come back as strings from JSON)
+- ✅ Tested KPI endpoints: GET /current, GET /history, GET /compare
+- ✅ Total: 60 tests passing (47 unit + 13 integration)
+
+### Current State
+
+- **Tests:** 60 passing (47 unit + 13 integration, 0 failing)
+- **Coverage:** 49% overall; KPI router improved to 96%
+- **Active features:**
+  - feat-013: Type hints and mypy checking (in_progress)
+  - feat-014: Unit and integration tests (in_progress - Phase 1 & 2 partial)
+
+### Key Technical Discoveries
+
+1. **KPI compare endpoint** uses GET with query parameters (not POST)
+2. **JSON Decimal serialization**: Decimal values serialize to strings in JSON responses
+3. **Async fixture patterns**: Must use ASGITransport with httpx.AsyncClient for testing ASGI apps
+4. **Pydantic model responses**: Integration tests receive Pydantic models serialized to dicts via JSON
+
+### Next Session Should
+
+1. ✅ Run `./init.sh` to verify environment
+2. ✅ Read AGENTS.md for working rules
+3. Continue feat-014 Phase 2: Add integration tests for remaining routes
+   - Sales routes (~4 endpoints × 3-4 tests = ~12-16 tests)
+   - Orders routes (~3 endpoints × 2-3 tests = ~6-9 tests)
+   - Quality routes (~3 endpoints × 2-3 tests = ~6-9 tests)
+   - Inventory, Products, Sensors, Output routes
+4. Then Phase 3: E2E workflow tests
+5. Update feature_list.json with Phase 1 completion status
+6. Aim for >80% coverage (currently 49%)
+
+---
+
 ## Previous Sessions
 
-*None yet — this is the first harness initialization*
+### Session 1 (2026-05-07 - Harness Initialization)
+- Created AGENTS.md, CLAUDE.md, feature_list.json, init.sh
+- Set up testcontainers PostgreSQL for isolated testing
+- Created initial conftest.py with basic fixtures
 
 ---
 

@@ -112,7 +112,7 @@
       "description": "pytest suite with >80% coverage for services and endpoints",
       "dependencies": ["feat-002", "feat-003", "feat-004", "feat-005"],
       "status": "in_progress",
-      "evidence": "tests/ directory exists; coverage being improved"
+      "evidence": "Phase 1: 47 unit tests passing (100%), 13 KPI integration tests passing; 60 total tests; 49% coverage; router coverage improved to 96% for KPI"
     },
     {
       "id": "feat-015",
