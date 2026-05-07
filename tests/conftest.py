@@ -18,7 +18,9 @@ from app.models.product import Product
 from app.models.sales import AggregatedSales, SalesTrends
 from app.models.kpi import AggregatedKPI
 from fastapi.testclient import TestClient
+from httpx import AsyncClient, ASGITransport
 from app.main import app
+from app.database import get_db, AsyncSessionLocal
 
 fake = Faker()
 
@@ -63,12 +65,17 @@ async def session(test_engine):
         await s.rollback()
 
 
-@pytest.fixture
-def client(session):
-    """FastAPI TestClient with test database session."""
-    # Note: This is a simplified version; for full integration tests,
-    # you'd need to override the database dependency in the app
-    return TestClient(app)
+@pytest_asyncio.fixture
+async def client(session):
+    """httpx.AsyncClient for async integration tests."""
+    async def override_get_db():
+        yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
 
 
 @pytest_asyncio.fixture
