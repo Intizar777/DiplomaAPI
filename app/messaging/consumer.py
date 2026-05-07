@@ -4,6 +4,7 @@ RabbitMQ event consumer using aio-pika.
 import asyncio
 import json
 import traceback
+import time
 from typing import Optional
 
 import structlog
@@ -21,6 +22,7 @@ _stop_event: Optional[asyncio.Event] = None
 
 async def _process_message(message: AbstractIncomingMessage) -> None:
     """Process a single message from the queue."""
+    start_time = time.time()
     async with message.process(requeue=True, ignore_processed=True):
         try:
             envelope_raw = json.loads(message.body.decode())
@@ -30,8 +32,8 @@ async def _process_message(message: AbstractIncomingMessage) -> None:
 
             logger.info(
                 "📨 Event received",
+                event_name=event_type,
                 event_id=event_id,
-                event_type=event_type,
                 routing_key=message.routing_key,
                 correlation_id=correlation_id,
             )
@@ -41,28 +43,32 @@ async def _process_message(message: AbstractIncomingMessage) -> None:
 
             logger.info(
                 "⚙️  Processing event",
+                event_name=event_type,
                 event_id=event_id,
-                event_type=event_type,
                 routing_key=message.routing_key,
             )
 
             await dispatcher.dispatch(message.routing_key, envelope.payload, event_id=str(envelope.event_id))
 
+            processing_time = time.time() - start_time
             logger.info(
-                "✅ Event completed",
+                "✅ Event processing completed",
+                event_name=event_type,
                 event_id=event_id,
-                event_type=event_type,
                 routing_key=message.routing_key,
+                processing_time_ms=f"{processing_time * 1000:.2f}",
             )
         except Exception as exc:
+            processing_time = time.time() - start_time
             tb_str = traceback.format_exc()
             logger.error(
                 "❌ Event processing failed",
-                routing_key=message.routing_key,
+                event_name=envelope_raw.get("event_type", "unknown") if 'envelope_raw' in locals() else "unknown",
                 event_id=envelope_raw.get("event_id", "unknown") if 'envelope_raw' in locals() else "unknown",
-                event_type=envelope_raw.get("event_type", "unknown") if 'envelope_raw' in locals() else "unknown",
+                routing_key=message.routing_key,
                 error_type=type(exc).__name__,
                 error_message=str(exc),
+                processing_time_ms=f"{processing_time * 1000:.2f}",
                 traceback=tb_str,
             )
             raise
