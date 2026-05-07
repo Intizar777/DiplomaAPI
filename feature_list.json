@@ -1,0 +1,183 @@
+{
+  "version": "1.0",
+  "lastUpdated": "2026-05-07",
+  "features": [
+    {
+      "id": "feat-001",
+      "name": "Core API Setup",
+      "description": "FastAPI entry point, database connection, basic health check",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "app/main.py exists, /health endpoint working"
+    },
+    {
+      "id": "feat-002",
+      "name": "KPI Endpoints",
+      "description": "GET /api/v1/kpi/current, /api/v1/kpi/history, /api/v1/kpi/compare",
+      "dependencies": ["feat-001"],
+      "status": "done",
+      "evidence": "app/routers/kpi_router.py, app/services/kpi_service.py, tests passing"
+    },
+    {
+      "id": "feat-003",
+      "name": "Sales Endpoints",
+      "description": "GET /api/v1/sales/summary, /api/v1/sales/trends, /api/v1/sales/top-products, /api/v1/sales/regions",
+      "dependencies": ["feat-001"],
+      "status": "done",
+      "evidence": "app/routers/sales_router.py with product JOIN enrichment"
+    },
+    {
+      "id": "feat-004",
+      "name": "Orders Endpoints",
+      "description": "GET /api/v1/orders/status-summary, /api/v1/orders/list, /api/v1/orders/{id}",
+      "dependencies": ["feat-001"],
+      "status": "done",
+      "evidence": "app/routers/orders_router.py, app/services/order_service.py"
+    },
+    {
+      "id": "feat-005",
+      "name": "Quality Endpoints",
+      "description": "GET /api/v1/quality/summary, /api/v1/quality/defect-trends, /api/v1/quality/lots",
+      "dependencies": ["feat-001"],
+      "status": "done",
+      "evidence": "app/routers/quality_router.py, app/services/quality_service.py"
+    },
+    {
+      "id": "feat-006",
+      "name": "Hourly Cron Synchronization",
+      "description": "APScheduler job that syncs data from Gateway API every hour",
+      "dependencies": ["feat-001", "feat-002", "feat-003", "feat-004", "feat-005"],
+      "status": "done",
+      "evidence": "app/cron/scheduler.py, sync methods in services"
+    },
+    {
+      "id": "feat-007",
+      "name": "Gateway Client Integration",
+      "description": "httpx AsyncClient for calling external Gateway API with Bearer token auth",
+      "dependencies": ["feat-001"],
+      "status": "done",
+      "evidence": "app/services/gateway_client.py, used by sync methods"
+    },
+    {
+      "id": "feat-008",
+      "name": "Product Reference Table",
+      "description": "Product model and endpoints for managing product master data",
+      "dependencies": ["feat-001"],
+      "status": "done",
+      "evidence": "app/models/product.py, app/routers/products_router.py"
+    },
+    {
+      "id": "feat-009",
+      "name": "Inventory Endpoints",
+      "description": "GET /api/v1/inventory/levels with product_name enrichment via JOIN",
+      "dependencies": ["feat-001", "feat-008"],
+      "status": "done",
+      "evidence": "app/routers/inventory_router.py with product JOIN"
+    },
+    {
+      "id": "feat-010",
+      "name": "Database Migrations",
+      "description": "Alembic setup with initial schema: KPI, Sales, Orders, Quality, Inventory tables",
+      "dependencies": ["feat-001"],
+      "status": "done",
+      "evidence": "alembic/ directory with migration files"
+    },
+    {
+      "id": "feat-011",
+      "name": "Swagger Documentation",
+      "description": "Auto-generated API docs at /docs with all endpoints and schemas",
+      "dependencies": ["feat-001", "feat-002", "feat-003", "feat-004", "feat-005"],
+      "status": "done",
+      "evidence": "FastAPI auto-generates /docs from Pydantic schemas"
+    },
+    {
+      "id": "feat-012",
+      "name": "Structured Logging",
+      "description": "JSON structured logging with structlog, no print statements",
+      "dependencies": ["feat-001"],
+      "status": "done",
+      "evidence": "app/config.py configures structlog, used throughout"
+    },
+    {
+      "id": "feat-013",
+      "name": "Type Hints and mypy Checking",
+      "description": "Full type coverage in all modules; mypy --strict passes",
+      "dependencies": [],
+      "status": "in_progress",
+      "evidence": "Started; some modules need type annotations"
+    },
+    {
+      "id": "feat-014",
+      "name": "Unit and Integration Tests",
+      "description": "pytest suite with >80% coverage for services and endpoints",
+      "dependencies": ["feat-002", "feat-003", "feat-004", "feat-005"],
+      "status": "in_progress",
+      "evidence": "tests/ directory exists; coverage being improved"
+    },
+    {
+      "id": "feat-015",
+      "name": "Docker Deployment",
+      "description": "Dockerfile and docker-compose.yml for local development and production",
+      "dependencies": ["feat-001"],
+      "status": "done",
+      "evidence": "Dockerfile and docker-compose.yml in root"
+    },
+    {
+      "id": "feat-016",
+      "name": "Environment Configuration",
+      "description": ".env file with DATABASE_URL, GATEWAY_URL, GATEWAY_TOKEN, etc.",
+      "dependencies": ["feat-001"],
+      "status": "done",
+      "evidence": ".env file exists with all required variables"
+    },
+    {
+      "id": "feat-017",
+      "name": "Sensor Endpoints",
+      "description": "GET /api/v1/sensors/readings for IoT sensor data",
+      "dependencies": ["feat-001"],
+      "status": "done",
+      "evidence": "app/routers/sensors_router.py, app/services/sensor_service.py"
+    },
+    {
+      "id": "feat-018",
+      "name": "Output/Report Endpoints",
+      "description": "GET /api/v1/outputs for production output tracking",
+      "dependencies": ["feat-001"],
+      "status": "done",
+      "evidence": "app/routers/output_router.py, app/services/output_service.py"
+    },
+    {
+      "id": "feat-019",
+      "name": "API Rate Limiting",
+      "description": "Rate limit endpoints to prevent abuse (planned for v2)",
+      "dependencies": [],
+      "status": "not_started",
+      "evidence": "Planned but not implemented"
+    },
+    {
+      "id": "feat-020",
+      "name": "Authentication (JWT)",
+      "description": "JWT token validation for v2 API endpoints (planned)",
+      "dependencies": [],
+      "status": "not_started",
+      "evidence": "Planned but not implemented"
+    },
+    {
+      "id": "feat-021",
+      "name": "Redis Caching Layer",
+      "description": "Cache frequently-accessed data (KPI, top products) with Redis",
+      "dependencies": [],
+      "status": "not_started",
+      "evidence": "Planned for performance improvement"
+    },
+    {
+      "id": "feat-022",
+      "name": "Metrics Export (Prometheus)",
+      "description": "Export application metrics for monitoring (planned)",
+      "dependencies": [],
+      "status": "not_started",
+      "evidence": "Planned for observability"
+    }
+  ],
+  "notes": "Core features (001-018) are complete. Type hints (013) and tests (014) in progress. Performance and auth features (019-022) planned for v2."
+}
