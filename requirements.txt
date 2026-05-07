@@ -29,6 +29,7 @@ pytest-asyncio
 pytest-httpx
 testcontainers[postgresql]
 psycopg2-binary
+faker
 
 # Utilities
 python-dateutil
