@@ -12,6 +12,17 @@ FastAPI analytics service for EFKO microservices data aggregation. Dashboard API
 4. Read recent git commits — understand current state and ongoing work
 5. Run `./init.sh` — verify environment, run type checks, execute tests
 
+## At session start (clock in)
+1. Read PROGRESS.md for current state
+2. Read DECISIONS.md for important decisions
+3. Run make check to confirm repo is in consistent state
+4. Continue from PROGRESS.md "Next Steps" section
+
+## Before session end (clock out)
+1. Update PROGRESS.md
+2. Run make check to confirm consistent state
+3. Commit all completed work
+
 **Expected total time: 2-3 minutes**
 
 ## Project Structure
