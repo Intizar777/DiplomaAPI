@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 from app.config import settings
+from app.utils.logging_utils import log_data_flow
 import structlog
 
 logger = structlog.get_logger()
@@ -113,6 +114,13 @@ class GatewayClient:
             if not self.token:
                 raise GatewayAuthError("Login succeeded but no accessToken in response")
             
+            log_data_flow(
+                source="gateway_client",
+                target="token_store",
+                operation="auth_token_acquired",
+                payload_summary={"token_prefix": self.token[:8] + "..."} if self.token else None,
+            )
+            
             return self.token
             
         except httpx.TimeoutException as e:
@@ -210,6 +218,17 @@ class GatewayClient:
                 response_size = len(response.content)
                 
                 if 200 <= response.status_code < 300:
+                    response_data = response.json()
+                    log_data_flow(
+                        source="gateway_api",
+                        target="gateway_client",
+                        operation="http_response",
+                        payload_summary={
+                            "status_code": response.status_code,
+                            "content_type": response.headers.get("content-type"),
+                            "response_size": response_size,
+                        },
+                    )
                     logger.info(
                         "gateway_request_success",
                         attempt=attempt,
@@ -220,7 +239,7 @@ class GatewayClient:
                         response_size=response_size,
                         content_type=response.headers.get("content-type")
                     )
-                    return response.json()
+                    return response_data
                 
                 # Non-2xx response
                 response.raise_for_status()
@@ -432,6 +451,18 @@ class GatewayClient:
             pagination_supported=pagination_supported
         )
         
+        log_data_flow(
+            source="gateway_api",
+            target="gateway_client",
+            operation="paginated_fetch_complete",
+            records_count=len(all_records),
+            payload_summary={
+                "endpoint": endpoint,
+                "pages": page,
+                "pagination_supported": pagination_supported,
+            },
+        )
+        
         return all_records
     
     # Production API methods
@@ -450,8 +481,16 @@ class GatewayClient:
             params["to"] = to_date.isoformat()
         if production_line:
             params["productionLine"] = production_line
-        
-        return await self._request("GET", "/production/kpi", params=params)
+
+        data = await self._request("GET", "/production/kpi", params=params)
+        kpi_data = data.get("kpi", []) if isinstance(data, dict) else []
+        log_data_flow(
+            source="gateway_api",
+            target="kpi_service",
+            operation="fetch_kpi",
+            records_count=len(kpi_data) if isinstance(kpi_data, list) else 1,
+        )
+        return data
     
     async def get_sales(
         self,
@@ -469,6 +508,12 @@ class GatewayClient:
             params["groupBy"] = group_by
         
         sales = await self._fetch_all_pages("/production/sales", "sales", params)
+        log_data_flow(
+            source="gateway_api",
+            target="sales_service",
+            operation="fetch_sales",
+            records_count=len(sales),
+        )
         return {"sales": sales}
     
     async def get_sales_summary(
@@ -507,6 +552,12 @@ class GatewayClient:
             params["productionLine"] = production_line
         
         orders = await self._fetch_all_pages("/production/orders", "orders", params)
+        log_data_flow(
+            source="gateway_api",
+            target="order_service",
+            operation="fetch_orders",
+            records_count=len(orders),
+        )
         return {"orders": orders}
     
     async def get_order(self, order_id: str) -> Dict[str, Any]:
@@ -521,7 +572,7 @@ class GatewayClient:
         in_spec: Optional[bool] = None
     ) -> Dict[str, Any]:
         """Get quality results from Gateway.
-        
+
         Note: Gateway /production/quality does NOT support from/to or offset/limit.
         All results are fetched in a single request and filtered locally.
         """
@@ -534,8 +585,16 @@ class GatewayClient:
             params["decision"] = decision
         if in_spec is not None:
             params["inSpec"] = str(in_spec).lower()
-        
-        return await self._request("GET", "/production/quality", params=params)
+
+        data = await self._request("GET", "/production/quality", params=params)
+        quality_data = data.get("quality", []) if isinstance(data, dict) else []
+        log_data_flow(
+            source="gateway_api",
+            target="quality_service",
+            operation="fetch_quality",
+            records_count=len(quality_data) if isinstance(quality_data, list) else 1,
+        )
+        return data
     
     async def get_output(
         self,
@@ -550,6 +609,12 @@ class GatewayClient:
             params["to"] = to_date.isoformat()
         
         outputs = await self._fetch_all_pages("/production/output", "outputs", params)
+        log_data_flow(
+            source="gateway_api",
+            target="output_service",
+            operation="fetch_output",
+            records_count=len(outputs),
+        )
         return {"outputs": outputs}
     
     async def get_products(
@@ -563,8 +628,16 @@ class GatewayClient:
             params["category"] = category
         if brand:
             params["brand"] = brand
-        
-        return await self._request("GET", "/production/products", params=params)
+
+        data = await self._request("GET", "/production/products", params=params)
+        products = data.get("products", []) if isinstance(data, dict) else []
+        log_data_flow(
+            source="gateway_api",
+            target="product_service",
+            operation="fetch_products",
+            records_count=len(products) if isinstance(products, list) else 1,
+        )
+        return data
     
     async def get_sensors(
         self,
@@ -588,6 +661,12 @@ class GatewayClient:
             params["to"] = to_date.isoformat()
         
         readings = await self._fetch_all_pages("/production/sensors", "readings", params)
+        log_data_flow(
+            source="gateway_api",
+            target="sensor_service",
+            operation="fetch_sensors",
+            records_count=len(readings),
+        )
         return {"readings": readings}
     
     async def get_inventory(
@@ -606,7 +685,15 @@ class GatewayClient:
         if warehouse_code:
             params["warehouseCode"] = warehouse_code
         
-        return await self._request("GET", "/production/inventory", params=params)
+        data = await self._request("GET", "/production/inventory", params=params)
+        items = data.get("inventory", data.get("items", []))
+        log_data_flow(
+            source="gateway_api",
+            target="inventory_service",
+            operation="fetch_inventory",
+            records_count=len(items) if isinstance(items, list) else None,
+        )
+        return data
 
     # Personnel API methods
 
@@ -638,4 +725,10 @@ class GatewayClient:
     async def get_personnel_employees(self) -> Dict[str, Any]:
         """Get personnel employees from Gateway (paginated)."""
         employees = await self._fetch_all_pages("/personnel/employees", "employees")
+        log_data_flow(
+            source="gateway_api",
+            target="personnel_service",
+            operation="fetch_employees",
+            records_count=len(employees),
+        )
         return {"employees": employees}

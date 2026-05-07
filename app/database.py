@@ -1,11 +1,13 @@
 """
-Database configuration and session management.
+Database configuration and session management with lifecycle logging.
 """
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
 from app.config import settings
-from app.models.base import Base  # Single Base instance
+from app.models.base import Base
+import structlog
 
+logger = structlog.get_logger()
 
 # Create async engine
 engine = create_async_engine(
@@ -41,10 +43,31 @@ async def get_db():
 
 async def init_db():
     """Initialize database tables."""
+    logger.info(
+        "database_lifecycle",
+        phase="initialization",
+        action="create_tables",
+        database_url=settings.database_url.replace("://", "://***@"),
+    )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    logger.info(
+        "database_lifecycle",
+        phase="initialization",
+        action="create_tables_complete",
+    )
 
 
 async def close_db():
     """Close database connections."""
+    logger.info(
+        "database_lifecycle",
+        phase="shutdown",
+        action="dispose_engine",
+    )
     await engine.dispose()
+    logger.info(
+        "database_lifecycle",
+        phase="shutdown",
+        action="dispose_engine_complete",
+    )

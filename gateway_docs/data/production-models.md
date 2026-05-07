@@ -1,6 +1,6 @@
 # Модели данных: Production Service
 
-Производственный домен: продукты, заказы, качество, датчики, склады, продажи.
+Производственный домен: продукты, заказы, выпуск, качество, датчики, склады, продажи.
 
 ## Product
 
@@ -22,6 +22,26 @@
 
 **Связи:** orders, sales, inventory, qualitySpecs
 
+## ProductionLine
+
+**Таблица:** `production_lines`  
+**Назначение:** Производственные линии (включены в v1.2.0)
+
+| Поле | Тип | Описание |
+|------|-----|---------|
+| `id` | UUID | Уникальный ID |
+| `name` | String @unique | Название линии |
+| `code` | String @unique | Код линии |
+| `description` | String? | Описание (опционально) |
+| `isActive` | Boolean | Активна ли (default: true) |
+| `createdAt`, `updatedAt` | DateTime | Временные метки |
+
+**Связи:** orders (ProductionOrder), sensors (Sensor)  
+**Cross-service:** Workstation в Personnel Service ссылается на `productionLineId` (без DB constraint).
+
+**Events (Outbox):**
+- `production.production-line.changed.event` — публикуется при создании/обновлении линии через `OutboxMessage`. Payload: `{ productionLineId, name, code, description, isActive, changedAt }`. Потребляется Personnel Service для инкрементальной синхронизации `ProductionLineView`.
+
 ## ProductionOrder
 
 **Таблица:** `production_orders`  
@@ -36,15 +56,33 @@
 | `actualQuantity` | Decimal? | Фактическое количество |
 | `unitOfMeasure` | String | Единица измерения |
 | `status` | OrderStatus | PLANNED, IN_PROGRESS, COMPLETED, CANCELLED |
-| `productionLine` | String | Код производственной линии |
+| `productionLineId` | UUID | Производственная линия (FK ProductionLine) |
 | `plannedStart`, `plannedEnd` | DateTime | Плановые даты |
 | `actualStart`, `actualEnd` | DateTime? | Фактические даты |
 | `createdAt`, `updatedAt` | DateTime | Временные метки |
 
-**Связи:** product (FK), qualityResults (обратная)
+**Связи:** product (FK), productionLine (FK), outputs (ProductionOutput)
 
 **Примеры:**
 - Заказ: 500 кг продукта "Сыр" на линии "LINE-01", 2026-05-15 10:00–12:00
+
+## ProductionOutput
+
+**Таблица:** `production_output`  
+**Назначение:** Выпуск продукции по заказам (партии)
+
+| Поле | Тип | Описание |
+|------|-----|---------|
+| `id` | UUID | Уникальный ID |
+| `orderId` | UUID | Производственный заказ (FK ProductionOrder) |
+| `lotNumber` | String | Номер партии |
+| `quantity` | Decimal | Количество |
+| `qualityStatus` | QualityStatus | PENDING, APPROVED, REJECTED |
+| `productionDate` | DateTime | Дата производства |
+| `shift` | String | Смена |
+| `createdAt` | DateTime | Дата создания |
+
+**Связи:** order (FK ProductionOrder)
 
 ## QualitySpec
 
@@ -76,15 +114,13 @@
 |------|-----|---------|
 | `id` | UUID | Уникальный ID |
 | `lotNumber` | String | Номер партии |
-| `productId` | UUID | Какой продукт (FK Product) |
-| `parameterName` | String | Название параметра |
 | `resultValue` | Decimal | Измеренное значение |
-| `qualitySpecId` | UUID? | Спецификация для сравнения (FK QualitySpec) |
+| `qualitySpecId` | UUID | Спецификация для сравнения (FK QualitySpec) |
 | `qualityStatus` | QualityStatus | PENDING, APPROVED, REJECTED |
 | `testDate` | DateTime | Когда проводился тест |
 | `createdAt` | DateTime | Дата создания записи |
 
-**Связи:** product, qualitySpec
+**Связи:** qualitySpec
 
 ## SensorParameter
 
@@ -94,12 +130,9 @@
 | Поле | Тип | Описание |
 |------|-----|---------|
 | `id` | UUID | Уникальный ID |
-| `name` | String | Название параметра на русском (Температура, Давление) |
-| `code` | String @unique | Код параметра (TEMP, PRESSURE) |
+| `name` | String @unique | Название параметра на русском (Температура, Давление) |
 | `unit` | String | Единица измерения (°C, кПа, л/ч) |
-| `description` | String? | Описание (optional) |
-| `isActive` | Boolean | Активен ли (default: true) |
-| `createdAt`, `updatedAt` | DateTime | Временные метки |
+| `createdAt` | DateTime | Дата создания |
 
 **Примеры параметров:**
 - Температура (TEMP, °C)
@@ -150,12 +183,10 @@
 | Поле | Тип | Описание |
 |------|-----|---------|
 | `id` | UUID | Уникальный ID |
-| `name` | String | Название клиента |
-| `code` | String @unique | Код клиента |
-| `region` | String | Регион доставки |
-| `isActive` | Boolean | Активен ли (default: true) |
-| `sourceSystemId` | String? | ID в ERP |
-| `createdAt`, `updatedAt` | DateTime | Временные метки |
+| `name` | String @unique | Название клиента |
+| `createdAt` | DateTime | Дата создания |
+
+**Связи:** sales
 
 ## Sale
 
@@ -167,10 +198,11 @@
 | `id` | UUID | Уникальный ID |
 | `externalId` | String | ID продажи из внешней системы |
 | `productId` | UUID | Какой продукт (FK Product) |
-| `customerId` | UUID? | Кому продали (FK Customer, nullable) |
+| `customerId` | UUID | Кому продали (FK Customer) |
 | `quantity` | Decimal | Количество |
 | `amount` | Decimal | Сумма в деньгах |
 | `saleDate` | Date | Дата продажи |
+| `region` | String | Регион доставки |
 | `channel` | SaleChannel | RETAIL, WHOLESALE, HORECA, EXPORT |
 | `createdAt` | DateTime | Дата создания |
 
@@ -184,13 +216,11 @@
 | Поле | Тип | Описание |
 |------|-----|---------|
 | `id` | UUID | Уникальный ID |
-| `name` | String | Название склада |
 | `code` | String @unique | Код склада |
-| `location` | String | Физическое местоположение |
-| `capacity` | Decimal? | Вместимость (м³ или единиц) |
-| `isActive` | Boolean | Активен ли (default: true) |
-| `sourceSystemId` | String? | ID в системе управления складом |
-| `createdAt`, `updatedAt` | DateTime | Временные метки |
+| `name` | String | Название склада |
+| `createdAt` | DateTime | Дата создания |
+
+**Связи:** inventory
 
 ## Inventory
 
@@ -204,7 +234,6 @@
 | `warehouseId` | UUID | В каком складе (FK Warehouse) |
 | `lotNumber` | String? | Номер партии (optional) |
 | `quantity` | Decimal | Количество |
-| `unitOfMeasure` | String | Единица измерения |
 | `lastUpdated` | DateTime | Когда последний раз обновлено |
 
 **Связи:** product, warehouse
@@ -221,4 +250,4 @@
 
 ---
 
-**Related:** [../architecture/3nf-normalization.md](../architecture/3nf-normalization.md), [all-models.md](all-models.md)
+**Related:** [../architecture/3nf-normalization.md](../architecture/3nf-normalization.md), [../data/personnel-models.md](../data/personnel-models.md)

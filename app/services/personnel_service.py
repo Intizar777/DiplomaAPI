@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Location, ProductionLine, Department, Position, Workstation, Employee
 from app.services.gateway_client import GatewayClient
+from app.utils.logging_utils import track_feature_path, log_data_flow
 import structlog
 
 logger = structlog.get_logger()
@@ -79,6 +80,7 @@ class PersonnelService:
             counts[key] = result.scalar() or 0
         return counts
 
+    @track_feature_path(feature_name="personnel.sync_from_gateway", log_result=True)
     async def sync_from_gateway(self) -> int:
         """Sync all personnel entities from Gateway (full upsert)."""
         if not self.gateway:
@@ -104,6 +106,12 @@ class PersonnelService:
         # 6. Employees (deps: Position, Workstation)
         total_records += await self._sync_employees()
 
+        log_data_flow(
+            source="personnel_service",
+            target="database",
+            operation="sync_insert",
+            records_count=total_records,
+        )
         logger.info("personnel_sync_completed", total_records=total_records)
         return total_records
 

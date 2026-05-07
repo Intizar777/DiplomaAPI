@@ -1,17 +1,17 @@
 # API: Пагинация & Фильтрация
 
-Все список-эндпоинты поддерживают пагинацию для больших наборов данных.
+Все списочные (list) эндпоинты поддерживают пагинацию для больших наборов данных.
 
-## Пагинация параметры
+## Параметры пагинации
 
 ```
 offset    - Смещение от начала (default: 0, min: 0)
-limit     - Количество записей на странице (default: 20, max: 100 для personnel, 1000 для production)
+limit     - Количество записей на странице (default: 20, max: 100 для personnel, 1000 для auth)
 ```
 
 ## Структура ответа
 
-Все список-эндпоинты возвращают объект с массивом и total count:
+Все списочные эндпоинты возвращают объект с массивом и общим количеством:
 
 ```typescript
 {
@@ -51,11 +51,46 @@ GET /api/personnel/employees?offset=20&limit=20
 # items 21-40
 ```
 
-**Третья страница с меньшим лимитом:**
+**С фильтрами и пагинацией:**
 ```bash
-GET /api/personnel/employees?offset=40&limit=10
+GET /api/personnel/employees?status=ACTIVE&offset=0&limit=50
 
-# items 41-50
+Response:
+{
+  "employees": [...],
+  "total": 120
+}
+```
+
+**Production endpoints (с пагинацией):**
+```bash
+GET /api/production/products?category=FINISHED_PRODUCT&offset=0&limit=20
+GET /api/production/orders?status=IN_PROGRESS&offset=0&limit=20
+GET /api/production/sales?region=Краснодарский+край&offset=0&limit=50
+GET /api/production/sensors?productionLineId=<id>&offset=0&limit=100
+GET /api/production/production-lines?isActive=true&offset=0&limit=20
+```
+
+**Auth endpoints (с пагинацией, limit до 1000):**
+```bash
+GET /api/auth/users?role=MANAGER&offset=0&limit=100
+
+Response:
+{
+  "users": [...],
+  "total": 45
+}
+```
+
+**ETL endpoints (с пагинацией):**
+```bash
+GET /api/etl/imports?status=PENDING&offset=0&limit=20
+
+Response:
+{
+  "imports": [...],
+  "total": 12
+}
 ```
 
 **Последняя страница для 250 записей:**
@@ -67,7 +102,7 @@ GET /api/personnel/employees?offset=240&limit=20
 
 ## Фильтрация
 
-Большинство список-эндпоинтов поддерживают фильтры:
+Большинство списочных эндпоинтов поддерживают фильтры:
 
 ```bash
 # По типу
@@ -81,6 +116,9 @@ GET /api/production/sales?from=2026-05-01&to=2026-05-07
 
 # По нескольким критериям
 GET /api/production/inventory?productId=<id>&warehouseId=<id>
+
+# По активности (boolean transformation)
+GET /api/personnel/production-lines?isActive=true
 ```
 
 ## Комбинированная пагинация и фильтрация
@@ -93,7 +131,7 @@ GET /api/production/sales?channel=retail&offset=0&limit=50
 GET /api/personnel/workstations?locationId=<id>&workstationType=OPERATOR_POST&offset=0&limit=25
 ```
 
-## Правильный расчет offset'а
+## Правильный расчёт offset'а
 
 **Формула:**
 ```
@@ -108,7 +146,7 @@ offset = (page_number - 1) * limit
 
 ## JavaScript/TypeScript примеры
 
-**Fetch всех записей поабзацам:**
+**Получение всех записей постранично:**
 ```typescript
 async function getAllRecords() {
   const limit = 100;
@@ -183,7 +221,15 @@ const handlePrevPage = () => {
 
 3. **Обрабатывайте изменение total:**
    - Если во время пагинации добавились новые записи, total может измениться
-   - Пересчитайте количество страниц при каждом запросе
+   - Пересчитывайте количество страниц при каждом запросе
+
+4. **Используйте stable ordering:**
+   - Всегда сортируйте по `createdAt` или `id` для консистентности страниц
+   - Без сортировки порядок записей может меняться между запросами
+
+5. **Boolean параметры:**
+   - Для `isActive` и других boolean-фильтров используйте `@Type(() => Boolean)`
+   - Передавайте как `?isActive=true` или `?isActive=false`
 
 ---
 

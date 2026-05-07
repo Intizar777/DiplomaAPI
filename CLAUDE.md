@@ -28,6 +28,7 @@ Before marking a feature complete:
 - ✅ Implementation matches description
 - ✅ All new code has type hints
 - ✅ `pytest tests/ -v` passes
+- ✅ e2e tests passes
 - ✅ `mypy app/ --ignore-missing-imports` passes
 - ✅ Manual test in `/docs` works end-to-end
 - ✅ Migration created if schema changed
@@ -70,7 +71,7 @@ Before marking a feature complete:
 
 **Finish:**
 1. `mypy app/ --ignore-missing-imports`
-2. Update feature_list.json + progress.md
+2. Update feature_list.json + progress.md + docs that describe the feature
 3. `git commit -m "feat: description and why"`
 4. `git push origin main`
 

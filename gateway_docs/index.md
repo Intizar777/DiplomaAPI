@@ -6,8 +6,8 @@
 
 ## 🚀 Быстрый старт
 
-- **Новый разработчик?** → [Быстрый старт](getting-started/quickstart.md) (5 минут до первого запуска)
-- **Нужна помощь с установкой?** → [Установка окружения](getting-started/setup.md)
+- **Новый разработчик?** → [Быстрый старт](getting-started/quickstart.md) *(запланировано)*
+- **Нужна помощь с установкой?** → [Установка окружения](getting-started/setup.md) *(запланировано)*
 - **Готов писать код?** → [Архитектура системы](architecture/overview.md)
 
 ## 📚 Структура документации
@@ -28,8 +28,8 @@
 ### 📊 Модели данных
 Все таблицы и сущности в системе
 - [Auth Service](data/auth-models.md) — User, RefreshToken
-- [Personnel Service](data/personnel-models.md) — Department, Employee, Location, Workstation
-- [Production Service](data/production-models.md) — Product, Order, Quality, Sensor, Customer, Warehouse
+- [Personnel Service](data/personnel-models.md) — Department, Employee, Location, Workstation, ProductionLine
+- [Production Service](data/production-models.md) — Product, ProductionLine, ProductionOrder, ProductionOutput, Quality, Sensor, Customer, Warehouse
 
 ### 🔌 REST API
 Как вызывать API, примеры запросов и ответов
@@ -43,16 +43,16 @@
 ## 🎯 Маршруты по ролям
 
 **Я новый разработчик:**
-→ [Быстрый старт](getting-started/quickstart.md) → [Архитектура](architecture/overview.md) → [API](api/overview.md)
+→ [Архитектура](architecture/overview.md) → [API Overview](api/overview.md) → [Пагинация](api/pagination.md)
 
 **Я DevOps инженер:**
-→ [Установка](getting-started/setup.md) → [Базы данных](architecture/database.md) → [Мониторинг](operations/monitoring.md)
+→ [Архитектура](architecture/overview.md) → [Базы данных](architecture/database.md) → [Топология сервисов](architecture/services.md)
 
 **Я фронтенд разработчик:**
-→ [Гайд для клиентов](integration/client-guide.md) → [API](api/overview.md) → [Пагинация](api/pagination.md)
+→ [API Overview](api/overview.md) → [Пагинация](api/pagination.md) → [Аутентификация](operations/authentication.md)
 
 **Я решаю проблему:**
-→ [Диагностика](operations/troubleshooting.md) → [Логирование](operations/logging.md) → [FAQ](reference/faq.md)
+→ [Архитектура](architecture/overview.md) → [Базы данных](architecture/database.md) → [Топология сервисов](architecture/services.md)
 
 ## 💡 Ключевые концепции
 
@@ -63,10 +63,13 @@
 Сервисы общаются асинхронно через события (RabbitMQ), синхронно через RPC.
 
 ### Transactional Outbox
-Надежная публикация событий: событие отправляется только если основная БД транзакция успешна.
+Надёжная публикация событий: событие отправляется только если основная БД транзакция успешна.
 
-### 3NF Нормализация
-Структурированная схема без транзитивных зависимостей (v1.2.0).
+### 3NF Нормализация (v1.2.0)
+Структурированная схема без транзитивных зависимостей. PostalArea, Customer, SensorParameter, Warehouse вынесены в справочники.
+
+### Пагинация (v1.2.0)
+Все GET-эндпоинты поддерживают offset/limit с возвратом total count.
 
 ## 📖 Документация на GitHub
 
@@ -90,8 +93,8 @@
 
 ## 🆘 Нужна помощь?
 
-- **На простой вопрос?** → [FAQ](reference/faq.md)
-- **Что-то сломалось?** → [Диагностика](operations/troubleshooting.md)
+- **На простой вопрос?** → FAQ *(запланировано)*
+- **Что-то сломалось?** → Диагностика *(запланировано)*
 - **Нужно разобраться в коде?** → [Архитектура](architecture/overview.md)
 - **Вопрос по API?** → [REST API](api/overview.md)
 

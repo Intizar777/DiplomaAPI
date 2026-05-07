@@ -1,5 +1,5 @@
 """
-Report generation service for production analytics.
+Report generation service for production analytics with comprehensive logging.
 """
 import csv
 import io
@@ -18,6 +18,7 @@ from app.models import (
     SaleRecord,
     InventorySnapshot
 )
+from app.utils.logging_utils import track_feature_path, log_data_flow
 import structlog
 
 logger = structlog.get_logger()
@@ -29,6 +30,7 @@ class ReportService:
     def __init__(self, db: AsyncSession):
         self.db = db
     
+    @track_feature_path(feature_name="report.generate_report", log_result=True)
     async def generate_report(
         self,
         report_type: Literal["orders", "quality", "output", "sales", "inventory", "kpi"],
@@ -111,9 +113,16 @@ class ReportService:
                 "planned_end": r.planned_end.isoformat() if r.planned_end else "",
                 "snapshot_date": r.snapshot_date.isoformat()
             })
-        
+
+        log_data_flow(
+            source="database",
+            target="report",
+            operation="fetch",
+            payload_summary={"order_fields": len(data[0].keys()) if data else 0},
+            records_count=len(data),
+        )
         return data
-    
+
     async def _fetch_quality_data(
         self,
         date_from: date,
@@ -147,9 +156,16 @@ class ReportService:
                 "decision": r.decision,
                 "test_date": r.test_date.isoformat()
             })
-        
+
+        log_data_flow(
+            source="database",
+            target="report",
+            operation="fetch",
+            payload_summary={"quality_fields": len(data[0].keys()) if data else 0},
+            records_count=len(data),
+        )
         return data
-    
+
     async def _fetch_sales_data(
         self,
         date_from: date,
@@ -182,9 +198,16 @@ class ReportService:
                 "channel": r.channel,
                 "sale_date": r.sale_date.isoformat()
             })
-        
+
+        log_data_flow(
+            source="database",
+            target="report",
+            operation="fetch",
+            payload_summary={"sales_fields": len(data[0].keys()) if data else 0},
+            records_count=len(data),
+        )
         return data
-    
+
     async def _fetch_inventory_data(
         self,
         filters: Dict[str, Any]
@@ -224,9 +247,16 @@ class ReportService:
                 "days_to_expiry": days_to_expiry,
                 "status": "Критический" if r.quantity and r.quantity < 10 else "Норма"
             })
-        
+
+        log_data_flow(
+            source="database",
+            target="report",
+            operation="fetch",
+            payload_summary={"inventory_fields": len(data[0].keys()) if data else 0},
+            records_count=len(data),
+        )
         return data
-    
+
     async def _fetch_kpi_data(
         self,
         date_from: date,
@@ -259,9 +289,16 @@ class ReportService:
                 "total_orders": r.total_orders,
                 "oee_pct": float(r.oee_estimate) if r.oee_estimate else None
             })
-        
+
+        log_data_flow(
+            source="database",
+            target="report",
+            operation="fetch",
+            payload_summary={"kpi_fields": len(data[0].keys()) if data else 0},
+            records_count=len(data),
+        )
         return data
-    
+
     def _generate_csv(self, data: List[Dict[str, Any]]) -> bytes:
         """Generate CSV from data."""
         if not data:

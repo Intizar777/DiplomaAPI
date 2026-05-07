@@ -1,15 +1,23 @@
 """
-FastAPI application entry point.
+FastAPI application entry point with comprehensive lifecycle logging.
 """
+import asyncio
+import os
+import sys
+import traceback
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 import structlog
 
 from app.config import settings
 from app.database import init_db, close_db
 from app.cron import start_scheduler, stop_scheduler
+from app.logging_config import configure_logging
+from app.middleware import RequestLoggingMiddleware
 from app.routers import (
     kpi_router,
     sales_router,
@@ -24,57 +32,132 @@ from app.routers import (
     personnel_router,
 )
 
-# Configure structured logging
-structlog.configure(
-    processors=[
-        structlog.stdlib.filter_by_level,
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.stdlib.PositionalArgumentsFormatter(),
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-        structlog.processors.UnicodeDecoder(),
-        structlog.processors.JSONRenderer()
-    ],
-    context_class=dict,
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    wrapper_class=structlog.stdlib.BoundLogger,
-    cache_logger_on_first_use=True,
-)
-
+# Configure structured logging on module load
+configure_logging(settings.log_level)
 logger = structlog.get_logger()
+
+
+def _get_memory_info() -> dict:
+    """Get current process memory usage."""
+    try:
+        import psutil
+        process = psutil.Process(os.getpid())
+        mem_info = process.memory_info()
+        return {
+            "rss_mb": round(mem_info.rss / 1024 / 1024, 2),
+            "vms_mb": round(mem_info.vms / 1024 / 1024, 2),
+        }
+    except ImportError:
+        return {}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager."""
-    # Startup
+    """Application lifespan manager with detailed lifecycle logging."""
+    # ---- STARTUP PHASE ----
     logger.info(
-        "application_starting",
+        "lifecycle_startup_begin",
+        phase="startup",
         name=settings.app_name,
         version=settings.app_version,
-        debug=settings.debug
+        debug=settings.debug,
+        python_version=sys.version,
+        pid=os.getpid(),
     )
-    
+
     # Initialize database
-    await init_db()
-    logger.info("database_initialized")
-    
+    try:
+        await init_db()
+        logger.info(
+            "lifecycle_startup_checkpoint",
+            phase="startup",
+            checkpoint="database_initialized",
+        )
+    except Exception as e:
+        logger.error(
+            "lifecycle_startup_failed",
+            phase="startup",
+            checkpoint="database_initialization",
+            error_type=type(e).__name__,
+            error_message=str(e),
+        )
+        raise
+
     # Start scheduler
-    start_scheduler()
-    
+    try:
+        start_scheduler()
+        logger.info(
+            "lifecycle_startup_checkpoint",
+            phase="startup",
+            checkpoint="scheduler_started",
+        )
+    except Exception as e:
+        logger.error(
+            "lifecycle_startup_failed",
+            phase="startup",
+            checkpoint="scheduler_start",
+            error_type=type(e).__name__,
+            error_message=str(e),
+        )
+        raise
+
+    # Startup complete — mark as ready
+    logger.info(
+        "lifecycle_startup_complete",
+        phase="startup",
+        state="ready",
+        memory=_get_memory_info(),
+    )
+
     yield
-    
-    # Shutdown
-    logger.info("application_shutting_down")
-    
+
+    # ---- SHUTDOWN PHASE ----
+    logger.info(
+        "lifecycle_shutdown_begin",
+        phase="shutdown",
+        state="shutting_down",
+    )
+
     # Stop scheduler
-    stop_scheduler()
-    
+    try:
+        stop_scheduler()
+        logger.info(
+            "lifecycle_shutdown_checkpoint",
+            phase="shutdown",
+            checkpoint="scheduler_stopped",
+        )
+    except Exception as e:
+        logger.error(
+            "lifecycle_shutdown_error",
+            phase="shutdown",
+            checkpoint="scheduler_stop",
+            error_type=type(e).__name__,
+            error_message=str(e),
+        )
+
     # Close database connections
-    await close_db()
-    logger.info("database_connections_closed")
+    try:
+        await close_db()
+        logger.info(
+            "lifecycle_shutdown_checkpoint",
+            phase="shutdown",
+            checkpoint="database_connections_closed",
+        )
+    except Exception as e:
+        logger.error(
+            "lifecycle_shutdown_error",
+            phase="shutdown",
+            checkpoint="database_close",
+            error_type=type(e).__name__,
+            error_message=str(e),
+        )
+
+    logger.info(
+        "lifecycle_shutdown_complete",
+        phase="shutdown",
+        state="terminated",
+        memory=_get_memory_info(),
+    )
 
 
 # Create FastAPI application
@@ -85,8 +168,52 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Log unhandled exceptions with full context and return a generic error."""
+    trace_id = getattr(request.state, "trace_id", "unknown")
+    tb_str = traceback.format_exc()
+    logger.error(
+        "unhandled_exception",
+        trace_id=trace_id,
+        path=request.url.path,
+        method=request.method,
+        query=str(request.query_params),
+        error_type=type(exc).__name__,
+        error_message=str(exc),
+        traceback=tb_str,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "trace_id": trace_id},
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """Log validation errors with request context."""
+    trace_id = getattr(request.state, "trace_id", "unknown")
+    logger.warning(
+        "validation_error",
+        trace_id=trace_id,
+        path=request.url.path,
+        method=request.method,
+        errors=exc.errors(),
+    )
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "trace_id": trace_id},
+    )
+
+
+# Add request logging middleware (data flow tracking)
+app.add_middleware(RequestLoggingMiddleware)
 
 # Configure CORS
 app.add_middleware(

@@ -33,6 +33,7 @@ faker
 
 # Utilities
 python-dateutil
+psutil
 
 # Reports (Excel generation)
 openpyxl

@@ -34,6 +34,7 @@ Feature is done when:
 - ✅ feature_list.json updated
 - ✅ Commit documents WHY, not WHAT
 - ✅ No debug code or comments
+- ✅ Docs updated after changes
 
 ## Before Session End
 

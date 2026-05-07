@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Product
 from app.services.gateway_client import GatewayClient
+from app.utils.logging_utils import track_feature_path, log_data_flow
 import structlog
 
 logger = structlog.get_logger()
@@ -50,6 +51,7 @@ class ProductService:
         result = await self.db.execute(query)
         return {row[0]: row[1] for row in result.all()}
     
+    @track_feature_path(feature_name="products.sync_from_gateway", log_result=True)
     async def sync_from_gateway(self) -> int:
         """Sync products from Gateway (full upsert)."""
         logger.info("syncing_products_from_gateway")
@@ -104,6 +106,12 @@ class ProductService:
                 await self.db.flush()
                 logger.info("products_sync_batch", records_processed=records_processed)
         
+        log_data_flow(
+            source="product_service",
+            target="database",
+            operation="sync_insert",
+            records_count=records_processed,
+        )
         await self.db.commit()
         logger.info("products_sync_completed", records_processed=records_processed)
         return records_processed

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import AggregatedKPI
 from app.schemas import KPICurrentResponse, KPIHistoryResponse, KPICompareResponse
 from app.services.gateway_client import GatewayClient
+from app.utils.logging_utils import track_feature_path, log_data_flow
 import structlog
 
 logger = structlog.get_logger()
@@ -212,6 +213,7 @@ class KPIService:
             order_completion_change=completion_change
         )
     
+    @track_feature_path(feature_name="kpi.sync_from_gateway", log_result=True)
     async def sync_from_gateway(
         self,
         from_date: Optional[date],
@@ -314,5 +316,11 @@ class KPIService:
             
             await self.db.commit()
         
+        log_data_flow(
+            source="kpi_service",
+            target="database",
+            operation="sync_insert",
+            records_count=records_processed,
+        )
         logger.info("kpi_sync_completed", records_processed=records_processed)
         return records_processed

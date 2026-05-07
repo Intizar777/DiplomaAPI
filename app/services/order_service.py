@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import OrderSnapshot
 from app.schemas import OrderStatusSummaryResponse, OrderListResponse, OrderDetailResponse
 from app.services.gateway_client import GatewayClient
+from app.utils.logging_utils import track_feature_path, log_data_flow
 from app.config import settings
 import structlog
 
@@ -157,6 +158,7 @@ class OrderService:
             outputs=[]  # Would need to fetch from separate table or Gateway
         )
     
+    @track_feature_path(feature_name="orders.sync_from_gateway", log_result=True)
     async def sync_from_gateway(
         self,
         from_date: Optional[date],
@@ -226,5 +228,11 @@ class OrderService:
                 await self.db.rollback()
                 logger.error("orders_sync_final_batch_error", error=str(e)[:200])
         
+        log_data_flow(
+            source="order_service",
+            target="database",
+            operation="sync_insert",
+            records_count=records_processed,
+        )
         logger.info("orders_sync_completed", records_processed=records_processed)
         return records_processed

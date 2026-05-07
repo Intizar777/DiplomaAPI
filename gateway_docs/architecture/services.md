@@ -97,14 +97,16 @@
 **Роль:** Event Listener для синхронизации данных между сервисами
 
 **Ответственность:**
-- Слушает события из всех сервисов (Personnel, Production, Auth)
-- Обновляет Sync таблицы для отчетов и аналитики
+- Слушает события из всех сервисов (Personnel, Production, Auth, ETL)
+- Обновляет Sync таблицы для отчётов и аналитики
 - Синхронизирует данные между сервисами (например, employee ID в production)
+- Поддерживает adapter registry для внешних систем
 
 **RabbitMQ Queues:**
 - Слушает все `*.events` exchanges
 
-**Database:** PostgreSQL (Sync таблицы)
+**Database:** PostgreSQL (Sync таблицы)  
+**Примечание:** Sync Service — вспомогательный сервис, не входит в основные 5 доменных сервисов.
 
 ---
 

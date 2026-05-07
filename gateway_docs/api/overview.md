@@ -152,6 +152,60 @@ fetch('http://localhost:3000/api/personnel/employees', {
 });
 ```
 
+## API Endpoints
+
+**Personnel:**
+- `POST /api/personnel/departments` — создать подразделение
+- `GET /api/personnel/departments` — список подразделений
+- `PATCH /api/personnel/departments/:id` — обновить подразделение
+- `POST /api/personnel/positions` — создать должность
+- `GET /api/personnel/positions` — список должностей
+- `PATCH /api/personnel/positions/:id` — обновить должность
+- `POST /api/personnel/employees` — принять сотрудника
+- `GET /api/personnel/employees` — список сотрудников
+- `PATCH /api/personnel/employees/:id` — обновить сотрудника
+- `POST /api/personnel/employees/:id/terminate` — уволить сотрудника
+- `POST /api/personnel/locations` — создать локацию
+- `GET /api/personnel/locations` — список локаций
+- `PATCH /api/personnel/locations/:id` — обновить локацию
+- `POST /api/personnel/workstations` — создать рабочее место
+- `GET /api/personnel/workstations` — список рабочих мест
+- `GET /api/personnel/workstations/:id` — рабочее место по ID
+- `POST /api/personnel/workstations/assign` — назначить сотрудника на рабочее место
+- `POST /api/personnel/shift-templates` — создать шаблон смены
+- `GET /api/personnel/shift-templates` — список шаблонов смен
+- `PATCH /api/personnel/shift-templates/:id` — обновить шаблон смены
+- `GET /api/personnel/production-line-views` — список производственных линий (view из Production Service)
+
+**Auth:**
+- `POST /api/auth/register` — регистрация
+- `POST /api/auth/login` — вход
+- `POST /api/auth/refresh` — обновить токен
+- `GET /api/auth/users` — список пользователей (с пагинацией)
+
+**Production:**
+- `POST /api/production/products` — создать продукт
+- `GET /api/production/products` — список продуктов
+- `POST /api/production/orders` — создать заказ
+- `GET /api/production/orders` — список заказов
+- `GET /api/production/orders/:id` — заказ по ID
+- `PATCH /api/production/orders/:id/status` — обновить статус заказа
+- `POST /api/production/output` — зарегистрировать выпуск
+- `GET /api/production/output` — список выпусков
+- `POST /api/production/sales` — зарегистрировать продажу
+- `GET /api/production/sales` — список продаж
+- `GET /api/production/sales/summary` — сводка продаж
+- `POST /api/production/inventory` — обновить остаток
+- `GET /api/production/inventory` — остатки на складах
+- `POST /api/production/quality` — зарегистрировать результат КК
+- `GET /api/production/quality` — результаты КК
+- `POST /api/production/sensors` — записать показание датчика
+- `GET /api/production/sensors` — показания датчиков
+- `GET /api/production/kpi` — KPI производства
+- `GET /api/production/production-lines` — список производственных линий (с пагинацией)
+- `POST /api/production/production-lines` — создать производственную линию
+- `PUT /api/production/production-lines/:id` — обновить производственную линию
+
 ---
 
 **Related:** [pagination.md](pagination.md), [../integration/client-guide.md](../integration/client-guide.md)

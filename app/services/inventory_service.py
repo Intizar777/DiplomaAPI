@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import InventorySnapshot, Product
 from app.services.gateway_client import GatewayClient
+from app.utils.logging_utils import track_feature_path, log_data_flow
 import structlog
 
 logger = structlog.get_logger()
@@ -106,6 +107,7 @@ class InventoryService:
         
         return {"items": items, "product_id": product_id}
     
+    @track_feature_path(feature_name="inventory.sync_from_gateway", log_result=True)
     async def sync_from_gateway(self) -> int:
         """Sync inventory from Gateway (snapshot current state)."""
         logger.info("syncing_inventory_from_gateway")
@@ -169,5 +171,11 @@ class InventoryService:
                 await self.db.rollback()
                 logger.error("inventory_sync_final_batch_error", error=str(e)[:200])
         
+        log_data_flow(
+            source="inventory_service",
+            target="database",
+            operation="sync_insert",
+            records_count=records_processed,
+        )
         logger.info("inventory_sync_completed", records_processed=records_processed)
         return records_processed

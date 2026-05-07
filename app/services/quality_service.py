@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import QualityResult, Product
 from app.schemas import QualitySummaryResponse, DefectTrendsResponse, QualityLotsResponse
 from app.services.gateway_client import GatewayClient
+from app.utils.logging_utils import track_feature_path, log_data_flow
 import structlog
 
 logger = structlog.get_logger()
@@ -198,6 +199,8 @@ class QualityService:
             period_to=to_date
         )
     
+    @track_feature_path(feature_name="quality.sync_from_gateway", log_result=True)
+    @track_feature_path(feature_name="quality.sync_from_gateway", log_result=True)
     async def sync_from_gateway(
         self,
         from_date: Optional[date],
@@ -286,5 +289,11 @@ class QualityService:
                 await self.db.rollback()
                 logger.error("quality_sync_final_batch_error", error=str(e)[:200])
         
+        log_data_flow(
+            source="quality_service",
+            target="database",
+            operation="sync_insert",
+            records_count=records_processed,
+        )
         logger.info("quality_sync_completed", records_processed=records_processed)
         return records_processed

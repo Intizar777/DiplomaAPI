@@ -122,6 +122,57 @@
 
 **Связи:** locations (обратная)
 
+## ProductionLine (Cross-Service Reference)
+
+**Таблица:** `production_lines` (в **Production Service**)  
+**Назначение:** Производственные линии, на которые ссылаются рабочие места в Personnel
+
+| Поле | Тип | Описание |
+|------|-----|---------|
+| `id` | UUID | Уникальный ID |
+| `name` | String @unique | Название линии |
+| `code` | String @unique | Код линии |
+| `description` | String? | Описание |
+| `isActive` | Boolean | Активна ли (default: true) |
+| `createdAt`, `updatedAt` | DateTime | Временные метки |
+
+**Важно:** `Workstation.productionLineId` — это cross-service foreign key. На уровне БД constraint отсутствует (разные сервисы). Целостность обеспечивается на уровне приложения через события.
+
+**Связи:** orders (ProductionOrder), sensors (Sensor) — в Production Service.
+
+## ProductionLineView
+
+**Таблица:** `production_line_views`  
+**Назначение:** Read-only копия (view) производственных линий из Production Service. Позволяет делать joins на стороне Personnel без cross-service RPC.
+
+| Поле | Тип | Описание |
+|------|-----|---------|
+| `id` | UUID | Уникальный ID в Personnel |
+| `productionLineId` | UUID @unique | ID из Production Service |
+| `name` | String | Название линии |
+| `code` | String @unique | Код линии |
+| `description` | String? | Описание |
+| `isActive` | Boolean | Активна ли |
+| `lastSyncedAt` | DateTime | Когда последний раз синхронизировано |
+| `createdAt`, `updatedAt` | DateTime | Временные метки |
+
+**Синхронизация (3 канала):**
+1. **Cron** — `SyncProductionLinesUseCase.executeFullSync()` каждые 6 часов (`@Cron('0 */6 * * *')`). Полная пересинхронизация через RPC.
+2. **Event-driven** — `ProductionLineEventListener` слушает `production.production-line.changed.event` из Production Service. Инкрементальный sync через `executeIncrementalSync()`.
+3. **Ручной** — RPC endpoint `personnel.get.production-line-views.query` для чтения view.
+
+**Важно:** FK constraint отсутствует (cross-service reference). `workstations.production_line_id` не ссылается на `production_line_views` на уровне БД.
+
+**Пример использования:**
+```typescript
+// Join workstation + production line name одним запросом
+const workstations = await prisma.workstation.findMany({
+  include: {
+    productionLineView: true,
+  },
+});
+```
+
 ## Enums
 
 | Enum | Значения |
