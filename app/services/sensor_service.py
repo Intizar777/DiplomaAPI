@@ -18,8 +18,8 @@ logger = structlog.get_logger()
 
 class SensorService:
     """Service for Sensor readings business logic."""
-    
-    def __init__(self, db: AsyncSession, gateway: GatewayClient):
+
+    def __init__(self, db: AsyncSession, gateway: Optional[GatewayClient] = None):
         self.db = db
         self.gateway = gateway
     

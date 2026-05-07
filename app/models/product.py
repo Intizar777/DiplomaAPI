@@ -21,6 +21,7 @@ class Product(Base, UUIDMixin, TimestampMixin):
     shelf_life_days = Column(Integer, nullable=True)
     requires_quality_check = Column(Boolean, nullable=True, default=False)
     source_system_id = Column(String(100), nullable=True)
+    event_id = Column(UUID(as_uuid=True), nullable=True, unique=True, index=True)
 
     __table_args__ = (
         Index('idx_products_category_brand', 'category', 'brand'),

@@ -185,7 +185,15 @@
       "dependencies": ["feat-001", "feat-007"],
       "status": "done",
       "evidence": "app/models/personnel.py, app/services/personnel_service.py, app/routers/personnel.py, tests passing"
+    },
+    {
+      "id": "feat-024",
+      "name": "RabbitMQ Event Consumer for Production Domain",
+      "description": "Real-time event-driven sync from production, personnel, quality services via RabbitMQ. Listens to efko.production.events exchange for product/order/output/sale/inventory/quality events. Includes idempotency via event_id columns.",
+      "dependencies": ["feat-001", "feat-006"],
+      "status": "done",
+      "evidence": "app/messaging/ module with aio-pika consumer, dispatcher, 6 handlers; event_id UNIQUE constraints in DB; alembic migration applied; all tests (4/4) passing"
     }
   ],
-  "notes": "Core features (001-018) are complete. Personnel sync (023) complete. Type hints (013) and tests (014) in progress. Performance and auth features (019-022) planned for v2."
+  "notes": "Core features (001-018) complete. Personnel sync (023) complete. Event-driven RabbitMQ consumer (024) complete with absolute idempotency. Type hints (013) and tests (014) in progress. Performance and auth features (019-022) planned for v2."
 }

@@ -13,6 +13,9 @@ httpx
 # Scheduler
 apscheduler
 
+# Message Queue
+aio-pika
+
 # Validation & Settings
 pydantic
 pydantic-settings

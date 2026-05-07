@@ -24,6 +24,7 @@ class InventorySnapshot(Base, UUIDMixin, TimestampMixin):
     unit_of_measure = Column(String(20), nullable=True)
     last_updated = Column(DateTime(timezone=True), nullable=True)
     snapshot_date = Column(Date, nullable=False, index=True)
+    event_id = Column(UUID(as_uuid=True), nullable=True, unique=True, index=True)
 
     __table_args__ = (
         Index('idx_inventory_product_warehouse', 'product_id', 'warehouse_code'),

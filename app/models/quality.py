@@ -32,7 +32,10 @@ class QualityResult(Base, UUIDMixin, TimestampMixin):
     
     # Test date
     test_date = Column(Date, nullable=False, index=True)
-    
+
+    # Event tracking for idempotency
+    event_id = Column(UUID(as_uuid=True), nullable=True, unique=True, index=True)
+
     # Indexes
     __table_args__ = (
         Index('idx_quality_date_decision', 'test_date', 'decision'),

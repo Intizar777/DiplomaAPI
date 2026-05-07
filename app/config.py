@@ -34,6 +34,28 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     log_file: str = Field(default="logs/dashboard_api.log", alias="LOG_FILE")
+
+    # RabbitMQ
+    rabbitmq_url: str = Field(
+        default="amqp://guest:guest@localhost:5672/",
+        alias="RABBITMQ_URL"
+    )
+    rabbitmq_exchange: str = Field(
+        default="efko.production.events",
+        alias="RABBITMQ_EXCHANGE"
+    )
+    rabbitmq_queue_prefix: str = Field(
+        default="analytics",
+        alias="RABBITMQ_QUEUE_PREFIX"
+    )
+    rabbitmq_prefetch_count: int = Field(
+        default=10,
+        alias="RABBITMQ_PREFETCH_COUNT"
+    )
+    rabbitmq_enabled: bool = Field(
+        default=True,
+        alias="RABBITMQ_ENABLED"
+    )
     
     # API
     default_page_size: int = 100

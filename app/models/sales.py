@@ -88,6 +88,7 @@ class SaleRecord(Base, UUIDMixin, TimestampMixin):
     region = Column(String(100), nullable=True, index=True)
     channel = Column(String(50), nullable=True, index=True)
     snapshot_date = Column(Date, nullable=False, index=True)
+    event_id = Column(UUID(as_uuid=True), nullable=True, unique=True, index=True)
 
     __table_args__ = (
         Index('idx_sale_records_product_date', 'product_id', 'sale_date'),

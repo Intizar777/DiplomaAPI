@@ -18,6 +18,7 @@ from app.database import init_db, close_db
 from app.cron import start_scheduler, stop_scheduler
 from app.logging_config import configure_logging
 from app.middleware import RequestLoggingMiddleware
+from app.messaging import start_consumer, stop_consumer
 from app.routers import (
     kpi_router,
     sales_router,
@@ -101,6 +102,24 @@ async def lifespan(app: FastAPI):
         )
         raise
 
+    # Start RabbitMQ consumer
+    try:
+        await start_consumer()
+        logger.info(
+            "lifecycle_startup_checkpoint",
+            phase="startup",
+            checkpoint="rabbitmq_consumer_started",
+        )
+    except Exception as e:
+        logger.error(
+            "lifecycle_startup_failed",
+            phase="startup",
+            checkpoint="rabbitmq_consumer_start",
+            error_type=type(e).__name__,
+            error_message=str(e),
+        )
+        raise
+
     # Startup complete — mark as ready
     logger.info(
         "lifecycle_startup_complete",
@@ -117,6 +136,23 @@ async def lifespan(app: FastAPI):
         phase="shutdown",
         state="shutting_down",
     )
+
+    # Stop RabbitMQ consumer first
+    try:
+        await stop_consumer()
+        logger.info(
+            "lifecycle_shutdown_checkpoint",
+            phase="shutdown",
+            checkpoint="rabbitmq_consumer_stopped",
+        )
+    except Exception as e:
+        logger.error(
+            "lifecycle_shutdown_error",
+            phase="shutdown",
+            checkpoint="rabbitmq_consumer_stop",
+            error_type=type(e).__name__,
+            error_message=str(e),
+        )
 
     # Stop scheduler
     try:

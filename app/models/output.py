@@ -25,6 +25,7 @@ class ProductionOutput(Base, UUIDMixin, TimestampMixin):
     production_date = Column(Date, nullable=False, index=True)
     shift = Column(String(20), nullable=True, index=True)
     snapshot_date = Column(Date, nullable=False, index=True)
+    event_id = Column(UUID(as_uuid=True), nullable=True, unique=True, index=True)
 
     __table_args__ = (
         Index('idx_output_date_shift', 'production_date', 'shift'),

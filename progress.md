@@ -185,6 +185,83 @@ Track what was done each session, blockers, and next steps for continuity.
 
 ---
 
+## Session: 2026-05-07 (RabbitMQ Event Consumer & Event ID Idempotency)
+
+**Duration:** 90 minutes  
+**Completed by:** Claude Code
+
+### What Was Done
+
+**RabbitMQ Event Consumer Implementation:**
+- ✅ Added `aio-pika` to requirements.txt (async-native RabbitMQ client)
+- ✅ Extended `app/config.py` with 5 RabbitMQ settings (URL, exchange, queue prefix, prefetch count, enabled flag)
+- ✅ Created `app/messaging/schemas.py` — EventEnvelope + 8 Pydantic payload models with camelCase→snake_case aliases
+- ✅ Created `app/messaging/dispatcher.py` — Registry pattern with `@register()` decorator and `dispatch()` router
+- ✅ Created `app/messaging/consumer.py` — aio-pika consumer with:
+  - Auto-reconnect via `connect_robust()`
+  - 9 production event routing keys bound to durable queue
+  - Message validation, envelope unpacking, dispatcher routing
+  - Graceful shutdown with task cancellation
+  - structlog context variables for correlation tracking
+- ✅ Created 6 handler modules in `app/messaging/handlers/`:
+  - `product_handler.py` — product.created/updated events
+  - `order_handler.py` — order.created and order.status-updated events
+  - `output_handler.py` — output.recorded event
+  - `sale_handler.py` — sale.recorded event
+  - `inventory_handler.py` — inventory.updated event
+  - `quality_handler.py` — quality-result.recorded event
+- ✅ Integrated consumer into `app/main.py` lifespan (startup after scheduler, shutdown before scheduler)
+- ✅ Updated `.env.example` with RabbitMQ configuration section
+
+**Event ID Absolute Idempotency Feature:**
+- ✅ Created Alembic migration `add_event_id_columns_for_idempotency.py`
+  - Added UUID nullable event_id column to 6 tables: Product, OrderSnapshot, ProductionOutput, SaleRecord, InventorySnapshot, QualityResult
+  - Partial UNIQUE indices (WHERE event_id IS NOT NULL) for backward compatibility
+- ✅ Updated all 6 service models to include event_id column
+- ✅ Added `upsert_from_event()` method to all 6 services with three-level idempotency:
+  1. **DB Level:** UNIQUE constraint on event_id
+  2. **Application Level:** Select by event_id first if provided
+  3. **Business Logic Level:** Fallback to domain-specific idempotency keys (code, order_id, lot_number, external_id, composite keys)
+- ✅ Made `gateway` parameter Optional in all service __init__ methods (allows instantiation without real Gateway for event handlers)
+- ✅ Updated handler modules to pass event_id to upsert methods
+
+**Testing & Verification:**
+- ✅ Phase 1 tests: 4/4 passing (messaging module isolation tests)
+- ✅ All existing tests passing (144 tests)
+- ✅ Verified type hints, no new mypy errors
+- ✅ feature_list.json updated: feat-024 marked as "done"
+
+### Current State
+
+- **Tests:** 144 passing (0 failures)
+- **RabbitMQ Consumer:** Functional with 9 event types supported
+- **Event ID Tracking:** Absolute idempotency via three-level protection
+- **Active features:**
+  - feat-023: Personnel Sync and Endpoints (done)
+  - feat-024: RabbitMQ Event Consumer for Production Domain (done)
+- **Blockers:** None
+- **Production Readiness:** Consumer gracefully disables if `RABBITMQ_ENABLED=false`
+
+### Key Technical Decisions
+
+1. **aio-pika over pika:** Async-native, matches async/await codebase architecture
+2. **Partial unique indices:** Preserve backward compatibility for existing NULL event_id rows
+3. **Three-level idempotency:** Compensates for missing migrations by combining DB, app, and domain-level safeguards
+4. **Dispatcher registry pattern:** Decouples routing logic from handlers, enables unit testing of dispatcher
+5. **AsyncSessionLocal in handlers:** Isolated DB sessions per event, no shared transaction context
+6. **Cron fallback for incomplete payloads:** Events with missing fields (e.g., parameter_name, test_date) filled by hourly sync
+
+### Next Session Should
+
+1. ✅ Run `./init.sh` to verify environment
+2. ✅ Read AGENTS.md for working rules
+3. Continue feat-013: Complete mypy --strict compliance (currently in_progress)
+4. Continue feat-014: Expand integration test coverage if gaps remain
+5. Consider v2 features (feat-019 to feat-022: rate limiting, JWT auth, Redis caching, Prometheus)
+6. Optional: Add RabbitMQ containerized test environment (testcontainers-rabbitmq)
+
+---
+
 ## Previous Sessions
 
 ### Session 1 (2026-05-07 - Harness Initialization)

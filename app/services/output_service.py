@@ -18,8 +18,8 @@ logger = structlog.get_logger()
 
 class OutputService:
     """Service for Production Output business logic."""
-    
-    def __init__(self, db: AsyncSession, gateway: GatewayClient):
+
+    def __init__(self, db: AsyncSession, gateway: Optional[GatewayClient] = None):
         self.db = db
         self.gateway = gateway
     
@@ -189,3 +189,45 @@ class OutputService:
         )
         logger.info("output_sync_completed", records_processed=records_processed)
         return records_processed
+
+    async def upsert_from_event(self, payload: "OutputRecordedPayload", event_id: str = None) -> None:
+        """Upsert production output from output.recorded event. Idempotent by event_id or lot_number."""
+        from app.messaging.schemas import OutputRecordedPayload
+        from uuid import UUID
+
+        # First check by event_id if provided (absolute idempotency)
+        if event_id:
+            result = await self.db.execute(
+                select(ProductionOutput).where(ProductionOutput.event_id == UUID(event_id))
+            )
+            output = result.scalar_one_or_none()
+            if output:
+                logger.info("output_skipped_duplicate_event", event_id=event_id)
+                return
+
+        result = await self.db.execute(
+            select(ProductionOutput).where(ProductionOutput.lot_number == payload.lot_number)
+        )
+        output = result.scalar_one_or_none()
+
+        if output:
+            output.quantity = Decimal(str(payload.quantity))
+            if payload.order_id:
+                output.order_id = payload.order_id
+            if event_id:
+                output.event_id = UUID(event_id)
+            logger.info("output_updated_from_event", lot_number=payload.lot_number)
+        else:
+            output = ProductionOutput(
+                id=payload.id,
+                order_id=payload.order_id,
+                lot_number=payload.lot_number,
+                quantity=Decimal(str(payload.quantity)),
+                production_date=date.today(),
+                snapshot_date=date.today(),
+                event_id=UUID(event_id) if event_id else None,
+            )
+            self.db.add(output)
+            logger.info("output_inserted_from_event", lot_number=payload.lot_number)
+
+        await self.db.commit()

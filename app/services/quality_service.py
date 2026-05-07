@@ -19,8 +19,8 @@ logger = structlog.get_logger()
 
 class QualityService:
     """Service for quality business logic."""
-    
-    def __init__(self, db: AsyncSession, gateway: GatewayClient):
+
+    def __init__(self, db: AsyncSession, gateway: Optional[GatewayClient] = None):
         self.db = db
         self.gateway = gateway
     
@@ -296,3 +296,58 @@ class QualityService:
         )
         logger.info("quality_sync_completed", records_processed=records_processed)
         return records_processed
+
+    async def upsert_from_event(self, payload: "QualityResultRecordedPayload", event_id: str = None) -> None:
+        """Upsert quality result from event. Idempotent by event_id or lot_number.
+
+        Note: parameter_name and test_date are NOT NULL in DB but absent from event.
+        Defaults: parameter_name='from_event', test_date=date.today().
+        Hourly cron will overwrite with real values on next run.
+        """
+        from app.messaging.schemas import QualityResultRecordedPayload
+        from uuid import UUID
+
+        # First check by event_id if provided (absolute idempotency)
+        if event_id:
+            result = await self.db.execute(
+                select(QualityResult).where(QualityResult.event_id == UUID(event_id))
+            )
+            quality = result.scalar_one_or_none()
+            if quality:
+                logger.info("quality_result_skipped_duplicate_event", event_id=event_id)
+                return
+
+        result = await self.db.execute(
+            select(QualityResult).where(QualityResult.lot_number == payload.lot_number)
+        )
+        quality = result.scalar_one_or_none()
+
+        if quality:
+            quality.in_spec = payload.in_spec
+            quality.decision = payload.quality_status.lower()
+            if event_id:
+                quality.event_id = UUID(event_id)
+            logger.info(
+                "quality_result_updated_from_event",
+                lot_number=payload.lot_number,
+                decision=payload.quality_status,
+            )
+        else:
+            quality = QualityResult(
+                id=payload.id,
+                lot_number=payload.lot_number,
+                product_id=payload.product_id,
+                in_spec=payload.in_spec,
+                decision=payload.quality_status.lower(),
+                parameter_name="from_event",
+                test_date=date.today(),
+                event_id=UUID(event_id) if event_id else None,
+            )
+            self.db.add(quality)
+            logger.info(
+                "quality_result_inserted_from_event",
+                lot_number=payload.lot_number,
+                decision=payload.quality_status,
+            )
+
+        await self.db.commit()

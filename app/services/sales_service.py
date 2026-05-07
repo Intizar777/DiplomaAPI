@@ -24,8 +24,8 @@ logger = structlog.get_logger()
 
 class SalesService:
     """Service for sales business logic."""
-    
-    def __init__(self, db: AsyncSession, gateway: GatewayClient):
+
+    def __init__(self, db: AsyncSession, gateway: Optional[GatewayClient] = None):
         self.db = db
         self.gateway = gateway
     
@@ -446,3 +446,52 @@ class SalesService:
         )
         logger.info("sales_sync_completed", records_processed=records_processed)
         return records_processed
+
+    async def upsert_sale_from_event(self, payload: "SaleRecordedPayload", event_id: str = None) -> None:
+        """Upsert sale record from sale.recorded event. Idempotent by event_id or external_id/id."""
+        from app.messaging.schemas import SaleRecordedPayload
+        from uuid import UUID
+
+        # First check by event_id if provided (absolute idempotency)
+        if event_id:
+            result = await self.db.execute(
+                select(SaleRecord).where(SaleRecord.event_id == UUID(event_id))
+            )
+            record = result.scalar_one_or_none()
+            if record:
+                logger.info("sale_skipped_duplicate_event", event_id=event_id)
+                return
+
+        if payload.external_id:
+            result = await self.db.execute(
+                select(SaleRecord).where(SaleRecord.external_id == payload.external_id)
+            )
+        else:
+            result = await self.db.execute(
+                select(SaleRecord).where(SaleRecord.id == payload.id)
+            )
+
+        record = result.scalar_one_or_none()
+
+        if record:
+            record.amount = Decimal(str(payload.amount))
+            if payload.channel:
+                record.channel = payload.channel.lower()
+            if event_id:
+                record.event_id = UUID(event_id)
+            logger.info("sale_updated_from_event", external_id=payload.external_id)
+        else:
+            record = SaleRecord(
+                id=payload.id,
+                external_id=payload.external_id,
+                product_id=payload.product_id,
+                amount=Decimal(str(payload.amount)),
+                channel=payload.channel.lower() if payload.channel else None,
+                sale_date=date.today(),
+                snapshot_date=date.today(),
+                event_id=UUID(event_id) if event_id else None,
+            )
+            self.db.add(record)
+            logger.info("sale_inserted_from_event", external_id=payload.external_id)
+
+        await self.db.commit()

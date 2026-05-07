@@ -18,8 +18,8 @@ logger = structlog.get_logger()
 
 class ProductService:
     """Service for Product business logic."""
-    
-    def __init__(self, db: AsyncSession, gateway: GatewayClient):
+
+    def __init__(self, db: AsyncSession, gateway: Optional[GatewayClient] = None):
         self.db = db
         self.gateway = gateway
     
@@ -125,3 +125,55 @@ class ProductService:
         await self.db.commit()
         logger.info("products_sync_completed", records_processed=records_processed)
         return records_processed
+
+    async def upsert_from_event(self, payload: "ProductEventPayload", event_id: str = None) -> None:
+        """Upsert product from RabbitMQ event. Idempotent by event_id or code/id."""
+        from app.messaging.schemas import ProductEventPayload
+        from uuid import UUID
+
+        # First check by event_id if provided (absolute idempotency)
+        if event_id:
+            existing = await self.db.execute(
+                select(Product).where(Product.event_id == UUID(event_id))
+            )
+            product = existing.scalar_one_or_none()
+            if product:
+                logger.info("product_skipped_duplicate_event", event_id=event_id)
+                return
+
+        # Search by code first (unique), then by id (from event)
+        if payload.code:
+            existing = await self.db.execute(
+                select(Product).where(Product.code == payload.code)
+            )
+            product = existing.scalar_one_or_none()
+        else:
+            product = None
+
+        if not product:
+            existing = await self.db.execute(
+                select(Product).where(Product.id == payload.id)
+            )
+            product = existing.scalar_one_or_none()
+
+        if product:
+            # Update existing product
+            product.code = payload.code or product.code
+            product.name = payload.name
+            product.category = payload.category or product.category
+            if event_id:
+                product.event_id = UUID(event_id)
+            logger.info("product_updated_from_event", product_id=str(payload.id), code=payload.code)
+        else:
+            # Insert new product
+            product = Product(
+                id=payload.id,
+                code=payload.code,
+                name=payload.name,
+                category=payload.category,
+                event_id=UUID(event_id) if event_id else None,
+            )
+            self.db.add(product)
+            logger.info("product_inserted_from_event", product_id=str(payload.id), code=payload.code)
+
+        await self.db.commit()

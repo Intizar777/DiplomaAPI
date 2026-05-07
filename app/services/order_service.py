@@ -19,8 +19,8 @@ logger = structlog.get_logger()
 
 class OrderService:
     """Service for order business logic."""
-    
-    def __init__(self, db: AsyncSession, gateway: GatewayClient):
+
+    def __init__(self, db: AsyncSession, gateway: Optional[GatewayClient] = None):
         self.db = db
         self.gateway = gateway
         self.page_size = settings.default_page_size
@@ -236,3 +236,89 @@ class OrderService:
         )
         logger.info("orders_sync_completed", records_processed=records_processed)
         return records_processed
+
+    async def upsert_order_from_event(self, payload: "OrderCreatedPayload", event_id: str = None) -> None:
+        """Upsert order from order.created event. Idempotent by event_id or order_id."""
+        from app.messaging.schemas import OrderCreatedPayload
+        from uuid import UUID
+
+        # First check by event_id if provided (absolute idempotency)
+        if event_id:
+            result = await self.db.execute(
+                select(OrderSnapshot).where(OrderSnapshot.event_id == UUID(event_id))
+            )
+            existing = result.scalar_one_or_none()
+            if existing:
+                logger.info("order_skipped_duplicate_event", event_id=event_id)
+                return
+
+        result = await self.db.execute(
+            select(OrderSnapshot).where(OrderSnapshot.order_id == payload.id)
+        )
+        existing = result.scalar_one_or_none()
+
+        if existing:
+            if event_id:
+                existing.event_id = UUID(event_id)
+                await self.db.commit()
+            logger.info("order_already_exists_from_event", order_id=str(payload.id))
+            return
+
+        snapshot = OrderSnapshot(
+            order_id=payload.id,
+            external_order_id=payload.external_order_id,
+            product_id=payload.product_id,
+            status=payload.status.lower(),
+            snapshot_date=date.today(),
+            event_id=UUID(event_id) if event_id else None,
+        )
+        self.db.add(snapshot)
+        await self.db.commit()
+        logger.info("order_inserted_from_event", order_id=str(payload.id))
+
+    async def update_order_status_from_event(self, payload: "OrderStatusUpdatedPayload", event_id: str = None) -> None:
+        """Update order status from order.status-updated event. Keyed on event_id or order_id."""
+        from app.messaging.schemas import OrderStatusUpdatedPayload
+        from uuid import UUID
+
+        # First check by event_id if provided (absolute idempotency)
+        if event_id:
+            result = await self.db.execute(
+                select(OrderSnapshot).where(OrderSnapshot.event_id == UUID(event_id))
+            )
+            snapshot = result.scalar_one_or_none()
+            if snapshot:
+                logger.info("order_status_skipped_duplicate_event", event_id=event_id)
+                return
+
+        result = await self.db.execute(
+            select(OrderSnapshot).where(OrderSnapshot.order_id == payload.id)
+        )
+        snapshot = result.scalar_one_or_none()
+
+        if snapshot is None:
+            # Insert minimal placeholder
+            snapshot = OrderSnapshot(
+                order_id=payload.id,
+                status=payload.status.lower(),
+                actual_quantity=payload.actual_quantity,
+                actual_start=payload.actual_start,
+                actual_end=payload.actual_end,
+                snapshot_date=date.today(),
+                event_id=UUID(event_id) if event_id else None,
+            )
+            self.db.add(snapshot)
+            logger.info("order_placeholder_inserted_from_event", order_id=str(payload.id))
+        else:
+            snapshot.status = payload.status.lower()
+            if payload.actual_quantity is not None:
+                snapshot.actual_quantity = payload.actual_quantity
+            if payload.actual_start is not None:
+                snapshot.actual_start = payload.actual_start
+            if payload.actual_end is not None:
+                snapshot.actual_end = payload.actual_end
+            if event_id:
+                snapshot.event_id = UUID(event_id)
+            logger.info("order_status_updated_from_event", order_id=str(payload.id), status=payload.status)
+
+        await self.db.commit()

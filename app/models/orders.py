@@ -40,7 +40,10 @@ class OrderSnapshot(Base, UUIDMixin, TimestampMixin):
     
     # Snapshot date (when this record was captured)
     snapshot_date = Column(Date, nullable=False, index=True)
-    
+
+    # Event tracking for idempotency
+    event_id = Column(UUID(as_uuid=True), nullable=True, unique=True, index=True)
+
     # Indexes
     __table_args__ = (
         Index('idx_order_snapshots_composite', 'snapshot_date', 'status', 'production_line'),

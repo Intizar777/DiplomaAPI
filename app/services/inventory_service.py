@@ -18,8 +18,8 @@ logger = structlog.get_logger()
 
 class InventoryService:
     """Service for Inventory business logic."""
-    
-    def __init__(self, db: AsyncSession, gateway: GatewayClient):
+
+    def __init__(self, db: AsyncSession, gateway: Optional[GatewayClient] = None):
         self.db = db
         self.gateway = gateway
     
@@ -179,3 +179,57 @@ class InventoryService:
         )
         logger.info("inventory_sync_completed", records_processed=records_processed)
         return records_processed
+
+    async def upsert_from_event(self, payload: "InventoryUpdatedPayload", event_id: str = None) -> None:
+        """Upsert inventory snapshot from event. Idempotent by event_id or (product_id, warehouse_code)."""
+        from app.messaging.schemas import InventoryUpdatedPayload
+        from sqlalchemy import and_
+        from uuid import UUID
+
+        # First check by event_id if provided (absolute idempotency)
+        if event_id:
+            result = await self.db.execute(
+                select(InventorySnapshot).where(InventorySnapshot.event_id == UUID(event_id))
+            )
+            snapshot = result.scalar_one_or_none()
+            if snapshot:
+                logger.info("inventory_skipped_duplicate_event", event_id=event_id)
+                return
+
+        result = await self.db.execute(
+            select(InventorySnapshot).where(
+                and_(
+                    InventorySnapshot.product_id == payload.product_id,
+                    InventorySnapshot.warehouse_code == payload.warehouse_code,
+                )
+            )
+        )
+        snapshot = result.scalar_one_or_none()
+
+        if snapshot:
+            snapshot.quantity = Decimal(str(payload.quantity))
+            snapshot.last_updated = datetime.utcnow()
+            if event_id:
+                snapshot.event_id = UUID(event_id)
+            logger.info(
+                "inventory_updated_from_event",
+                product_id=str(payload.product_id),
+                warehouse=payload.warehouse_code,
+            )
+        else:
+            snapshot = InventorySnapshot(
+                id=payload.id,
+                product_id=payload.product_id,
+                warehouse_code=payload.warehouse_code,
+                quantity=Decimal(str(payload.quantity)),
+                snapshot_date=date.today(),
+                event_id=UUID(event_id) if event_id else None,
+            )
+            self.db.add(snapshot)
+            logger.info(
+                "inventory_inserted_from_event",
+                product_id=str(payload.product_id),
+                warehouse=payload.warehouse_code,
+            )
+
+        await self.db.commit()
