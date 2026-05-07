@@ -50,10 +50,10 @@ async def test_get_sales_summary_group_by_product(session, sample_sales_data):
 
     # Verify each summary item has required fields
     for item in result.summary:
-        assert "group_key" in item
-        assert "total_quantity" in item
-        assert "total_amount" in item
-        assert "sales_count" in item
+        assert hasattr(item, 'group_key')
+        assert hasattr(item, 'total_quantity')
+        assert hasattr(item, 'total_amount')
+        assert hasattr(item, 'sales_count')
 
 
 @pytest.mark.asyncio
@@ -87,7 +87,7 @@ async def test_get_sales_summary_calculates_total_correctly(session, sample_sale
     )
 
     # Total should be sum of all summary items
-    calculated_total = sum(Decimal(item["total_amount"]) for item in result.summary)
+    calculated_total = sum(item.total_amount for item in result.summary)
     assert result.total_amount == calculated_total
 
 
@@ -111,7 +111,7 @@ async def test_get_sales_trends_returns_ordered_by_date(session, db_session_with
     # If trends exist, verify ordering
     if len(result.trends) > 1:
         for i in range(len(result.trends) - 1):
-            assert result.trends[i]["trend_date"] <= result.trends[i + 1]["trend_date"]
+            assert result.trends[i].trend_date <= result.trends[i + 1].trend_date
 
 
 @pytest.mark.asyncio
@@ -146,7 +146,7 @@ async def test_get_top_products_ordered_by_amount(session, sample_sales_data):
     # Verify descending order by amount
     if len(result.products) > 1:
         for i in range(len(result.products) - 1):
-            assert result.products[i]["total_amount"] >= result.products[i + 1]["total_amount"]
+            assert result.products[i].total_amount >= result.products[i + 1].total_amount
 
 
 @pytest.mark.asyncio
@@ -166,8 +166,8 @@ async def test_get_sales_by_regions_returns_regional_breakdown(session, sample_s
     # Verify percentage field exists and is valid
     if len(result.regions) > 0:
         for region in result.regions:
-            assert "percentage" in region
-            assert 0 <= region["percentage"] <= 100
+            assert hasattr(region, 'percentage')
+            assert 0 <= region.percentage <= 100
 
 
 @pytest.mark.asyncio
@@ -182,7 +182,7 @@ async def test_get_sales_by_regions_percentages_sum_to_100(session, sample_sales
     )
 
     if len(result.regions) > 0:
-        total_percentage = sum(Decimal(r["percentage"]) for r in result.regions)
+        total_percentage = sum(r.percentage for r in result.regions)
         # Allow small rounding error
         assert 99 <= total_percentage <= 101
 
