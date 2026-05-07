@@ -29,29 +29,38 @@ async def _process_message(message: AbstractIncomingMessage) -> None:
             event_type = envelope_raw.get("event_type", "unknown")
 
             logger.info(
-                "rabbitmq_message_received",
+                "📨 Event received",
+                event_id=event_id,
                 event_type=event_type,
                 routing_key=message.routing_key,
-                event_id=event_id,
                 correlation_id=correlation_id,
             )
 
             from app.messaging.schemas import EventEnvelope
             envelope = EventEnvelope.model_validate(envelope_raw)
 
+            logger.info(
+                "⚙️  Processing event",
+                event_id=event_id,
+                event_type=event_type,
+                routing_key=message.routing_key,
+            )
+
             await dispatcher.dispatch(message.routing_key, envelope.payload, event_id=str(envelope.event_id))
 
             logger.info(
-                "rabbitmq_message_processed",
+                "✅ Event completed",
+                event_id=event_id,
                 event_type=event_type,
                 routing_key=message.routing_key,
-                event_id=event_id,
             )
         except Exception as exc:
             tb_str = traceback.format_exc()
             logger.error(
-                "rabbitmq_message_processing_failed",
+                "❌ Event processing failed",
                 routing_key=message.routing_key,
+                event_id=envelope_raw.get("event_id", "unknown") if 'envelope_raw' in locals() else "unknown",
+                event_type=envelope_raw.get("event_type", "unknown") if 'envelope_raw' in locals() else "unknown",
                 error_type=type(exc).__name__,
                 error_message=str(exc),
                 traceback=tb_str,
@@ -73,6 +82,12 @@ async def _consume_loop() -> None:
         "production.quality-result.recorded.event",
     ]
 
+    logger.info(
+        "🔗 Connecting to RabbitMQ",
+        url=settings.rabbitmq_url,
+        reconnect_interval=5,
+    )
+
     connection = await connect_robust(
         settings.rabbitmq_url,
         reconnect_interval=5,
@@ -92,16 +107,17 @@ async def _consume_loop() -> None:
             await queue.bind(exchange, routing_key=rk)
 
         logger.info(
-            "rabbitmq_consumer_started",
+            "🚀 RabbitMQ Consumer Started",
             exchange=exchange_name,
             queue=queue.name,
-            routing_keys=routing_keys,
+            routing_keys_count=len(routing_keys),
+            prefetch_count=settings.rabbitmq_prefetch_count,
         )
 
         async with queue.iterator() as queue_iter:
             async for message in queue_iter:
                 if _stop_event and _stop_event.is_set():
-                    logger.info("rabbitmq_consumer_stop_event_set")
+                    logger.info("⏹️  Stop event received, consumer shutting down")
                     break
                 await _process_message(message)
 
@@ -112,14 +128,14 @@ async def start_consumer() -> None:
 
     if not settings.rabbitmq_enabled:
         logger.info(
-            "rabbitmq_consumer_disabled",
-            reason="RABBITMQ_ENABLED=false",
+            "⚠️  RabbitMQ Consumer Disabled",
+            reason="RABBITMQ_ENABLED environment variable is false",
         )
         return
 
     _stop_event = asyncio.Event()
     _consumer_task = asyncio.create_task(_consume_loop(), name="rabbitmq_consumer")
-    logger.info("rabbitmq_consumer_task_created")
+    logger.info("✨ RabbitMQ Consumer Task Created")
 
 
 async def stop_consumer() -> None:
@@ -128,6 +144,8 @@ async def stop_consumer() -> None:
 
     if _consumer_task is None or _consumer_task.done():
         return
+
+    logger.info("🛑 Stopping RabbitMQ Consumer...")
 
     if _stop_event:
         _stop_event.set()
@@ -138,4 +156,4 @@ async def stop_consumer() -> None:
     except asyncio.CancelledError:
         pass
 
-    logger.info("rabbitmq_consumer_stopped")
+    logger.info("🏁 RabbitMQ Consumer Stopped")

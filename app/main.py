@@ -34,7 +34,7 @@ from app.routers import (
 )
 
 # Configure structured logging on module load
-configure_logging(settings.log_level)
+configure_logging(settings.log_level, use_json=not settings.debug)
 logger = structlog.get_logger()
 
 
