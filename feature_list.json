@@ -178,6 +178,14 @@
       "status": "not_started",
       "evidence": "Planned for observability"
     }
+    {
+      "id": "feat-023",
+      "name": "Personnel Sync and Endpoints",
+      "description": "Sync locations, production lines, departments, positions, workstations, employees from Gateway. Endpoints: /api/v1/personnel/departments, /positions, /employees, /locations, /summary",
+      "dependencies": ["feat-001", "feat-007"],
+      "status": "done",
+      "evidence": "app/models/personnel.py, app/services/personnel_service.py, app/routers/personnel.py, tests passing"
+    }
   ],
-  "notes": "Core features (001-018) are complete. Type hints (013) and tests (014) in progress. Performance and auth features (019-022) planned for v2."
+  "notes": "Core features (001-018) are complete. Personnel sync (023) complete. Type hints (013) and tests (014) in progress. Performance and auth features (019-022) planned for v2."
 }

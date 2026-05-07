@@ -24,6 +24,7 @@ from app.models import product
 from app.models import output
 from app.models import sensor
 from app.models import inventory
+from app.models import personnel
 
 # this is the Alembic Config object
 config = context.config

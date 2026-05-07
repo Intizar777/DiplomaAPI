@@ -9,6 +9,7 @@ from app.config import settings
 from app.cron.jobs import (
     sync_kpi_task, sync_sales_task, sync_orders_task, sync_quality_task,
     sync_products_task, sync_output_task, sync_sensors_task, sync_inventory_task,
+    sync_personnel_task,
 )
 
 logger = structlog.get_logger()
@@ -89,6 +90,14 @@ def start_scheduler():
         trigger=CronTrigger(minute=35),  # Every hour at minute 35
         id="sync_inventory",
         name="Sync Inventory from Gateway",
+        replace_existing=True
+    )
+    
+    scheduler.add_job(
+        sync_personnel_task,
+        trigger=CronTrigger(minute=40),  # Every hour at minute 40
+        id="sync_personnel",
+        name="Sync Personnel from Gateway",
         replace_existing=True
     )
     

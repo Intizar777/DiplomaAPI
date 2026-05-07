@@ -108,6 +108,46 @@ Track what was done each session, blockers, and next steps for continuity.
 
 ---
 
+## Session: 2026-05-07 (Personnel Sync Implementation)
+
+**Duration:** 60 minutes  
+**Completed by:** Claude Code
+
+### What Was Done
+
+**Personnel Sync Feature Implementation:**
+- ✅ Created `app/models/personnel.py` — 6 models: Location, ProductionLine, Department, Position, Workstation, Employee
+- ✅ Alembic migration `add_personnel_tables` generated and applied
+- ✅ Created `app/schemas/personnel.py` — response schemas for all 6 entities + summary
+- ✅ Added 6 Gateway client methods for `/personnel/*` endpoints in `app/services/gateway_client.py`
+- ✅ Created `app/services/personnel_service.py` — query methods + full sync_from_gateway with two-pass department upsert
+- ✅ Created `app/routers/personnel.py` — 5 endpoints: /departments, /positions, /employees, /locations, /summary
+- ✅ Added `sync_personnel_task` to cron jobs and scheduler at minute=40
+- ✅ Updated all `__init__.py` and `main.py` with personnel imports and router
+- ✅ Added test fixtures: sample_locations, sample_departments, sample_positions, sample_employees
+- ✅ Created `tests/unit/test_personnel_service.py` — 6 tests (query filters + sync upsert)
+- ✅ Created `tests/integration/test_personnel_routes.py` — 8 tests (all endpoints + empty/unknown filters)
+- ✅ All 139 tests passing (0 failures)
+
+### Current State
+
+- **Tests:** 139 passing (0 failing)
+- **Active features:**
+  - feat-013: Type hints and mypy checking (in_progress)
+  - feat-014: Unit and integration tests (in_progress)
+  - feat-023: Personnel Sync and Endpoints (done)
+- **Blockers:** None
+
+### Next Session Should
+
+1. ✅ Run `./init.sh` to verify environment
+2. ✅ Read AGENTS.md for working rules
+3. Continue feat-014: Add remaining integration tests (Output, Sensors routes if gaps remain)
+4. Continue feat-013: Improve type hints and run mypy
+5. Consider v2 features (feat-019 to feat-022) if core is solid
+
+---
+
 ## Previous Sessions
 
 ### Session 1 (2026-05-07 - Harness Initialization)

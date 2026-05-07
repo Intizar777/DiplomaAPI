@@ -11,6 +11,7 @@ from app.models.output import ProductionOutput
 from app.models.sensor import SensorReading
 from app.models.inventory import InventorySnapshot
 from app.models.sync_log import SyncLog, SyncError
+from app.models.personnel import Location, ProductionLine, Department, Position, Workstation, Employee
 
 __all__ = [
     "Base",
@@ -27,4 +28,10 @@ __all__ = [
     "InventorySnapshot",
     "SyncLog",
     "SyncError",
+    "Location",
+    "ProductionLine",
+    "Department",
+    "Position",
+    "Workstation",
+    "Employee",
 ]

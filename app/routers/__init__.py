@@ -11,6 +11,7 @@ from app.routers.products import router as products_router
 from app.routers.output import router as output_router
 from app.routers.sensors import router as sensors_router
 from app.routers.inventory import router as inventory_router
+from app.routers.personnel import router as personnel_router
 
 __all__ = [
     "kpi_router",
@@ -23,4 +24,5 @@ __all__ = [
     "output_router",
     "sensors_router",
     "inventory_router",
+    "personnel_router",
 ]

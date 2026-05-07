@@ -20,6 +20,15 @@ from app.schemas.quality import (
     QualityLotsResponse,
 )
 from app.schemas.sync import SyncStatusResponse, SyncTriggerResponse
+from app.schemas.personnel import (
+    LocationResponse,
+    ProductionLineResponse,
+    DepartmentResponse,
+    PositionResponse,
+    WorkstationResponse,
+    EmployeeResponse,
+    PersonnelSummaryResponse,
+)
 
 __all__ = [
     # Common
@@ -46,4 +55,12 @@ __all__ = [
     # Sync
     "SyncStatusResponse",
     "SyncTriggerResponse",
+    # Personnel
+    "LocationResponse",
+    "ProductionLineResponse",
+    "DepartmentResponse",
+    "PositionResponse",
+    "WorkstationResponse",
+    "EmployeeResponse",
+    "PersonnelSummaryResponse",
 ]

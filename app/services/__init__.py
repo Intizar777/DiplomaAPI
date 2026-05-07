@@ -10,6 +10,7 @@ from app.services.product_service import ProductService
 from app.services.output_service import OutputService
 from app.services.sensor_service import SensorService
 from app.services.inventory_service import InventoryService
+from app.services.personnel_service import PersonnelService
 
 __all__ = [
     "GatewayClient",
@@ -21,4 +22,5 @@ __all__ = [
     "OutputService",
     "SensorService",
     "InventoryService",
+    "PersonnelService",
 ]

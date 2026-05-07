@@ -607,3 +607,35 @@ class GatewayClient:
             params["warehouseCode"] = warehouse_code
         
         return await self._request("GET", "/production/inventory", params=params)
+
+    # Personnel API methods
+
+    async def get_personnel_locations(self) -> Dict[str, Any]:
+        """Get personnel locations from Gateway (paginated)."""
+        locations = await self._fetch_all_pages("/personnel/locations", "locations")
+        return {"locations": locations}
+
+    async def get_personnel_departments(self) -> Dict[str, Any]:
+        """Get personnel departments from Gateway (paginated)."""
+        departments = await self._fetch_all_pages("/personnel/departments", "departments")
+        return {"departments": departments}
+
+    async def get_personnel_positions(self) -> Dict[str, Any]:
+        """Get personnel positions from Gateway (paginated)."""
+        positions = await self._fetch_all_pages("/personnel/positions", "positions")
+        return {"positions": positions}
+
+    async def get_personnel_production_lines(self) -> Dict[str, Any]:
+        """Get personnel production lines from Gateway (paginated)."""
+        lines = await self._fetch_all_pages("/personnel/production-lines", "productionLines")
+        return {"productionLines": lines}
+
+    async def get_personnel_workstations(self) -> Dict[str, Any]:
+        """Get personnel workstations from Gateway (paginated)."""
+        workstations = await self._fetch_all_pages("/personnel/workstations", "workstations")
+        return {"workstations": workstations}
+
+    async def get_personnel_employees(self) -> Dict[str, Any]:
+        """Get personnel employees from Gateway (paginated)."""
+        employees = await self._fetch_all_pages("/personnel/employees", "employees")
+        return {"employees": employees}

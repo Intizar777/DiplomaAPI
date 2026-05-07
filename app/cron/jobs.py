@@ -6,7 +6,7 @@ import structlog
 
 from app.database import AsyncSessionLocal
 from app.models import SyncLog, SyncStatus
-from app.services import GatewayClient, KPIService, SalesService, OrderService, QualityService, ProductService, OutputService, SensorService, InventoryService
+from app.services import GatewayClient, KPIService, SalesService, OrderService, QualityService, ProductService, OutputService, SensorService, InventoryService, PersonnelService
 from app.config import settings
 from sqlalchemy import select, func
 
@@ -280,6 +280,27 @@ async def sync_inventory_task():
         except Exception as e:
             await complete_sync_log(db, log, SyncStatus.FAILED, error_message=str(e))
             logger.error("sync_inventory_task_failed", error=str(e))
+            raise
+        finally:
+            await gateway.close()
+
+
+async def sync_personnel_task():
+    """Sync personnel data from Gateway (full upsert each time)."""
+    logger.info("sync_personnel_task_started")
+    
+    async with AsyncSessionLocal() as db:
+        log = await create_sync_log(db, "personnel")
+        gateway = GatewayClient()
+        service = PersonnelService(db, gateway)
+        
+        try:
+            records = await service.sync_from_gateway()
+            await complete_sync_log(db, log, SyncStatus.COMPLETED, records)
+            logger.info("sync_personnel_task_completed", records_processed=records)
+        except Exception as e:
+            await complete_sync_log(db, log, SyncStatus.FAILED, error_message=str(e))
+            logger.error("sync_personnel_task_failed", error=str(e))
             raise
         finally:
             await gateway.close()

@@ -21,6 +21,7 @@ from app.routers import (
     output_router,
     sensors_router,
     inventory_router,
+    personnel_router,
 )
 
 # Configure structured logging
@@ -107,6 +108,7 @@ app.include_router(products_router)
 app.include_router(output_router)
 app.include_router(sensors_router)
 app.include_router(inventory_router)
+app.include_router(personnel_router)
 
 
 @app.get("/api/v1/docs", include_in_schema=False)
