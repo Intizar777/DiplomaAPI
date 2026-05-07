@@ -148,6 +148,43 @@ Track what was done each session, blockers, and next steps for continuity.
 
 ---
 
+## Session: 2026-05-07 (Personnel Sync — Trigger Integration)
+
+**Duration:** 30 minutes  
+**Completed by:** Claude Code
+
+### What Was Done
+
+**Sync Router Personnel Integration:**
+- ✅ Updated `app/routers/sync.py` — added `personnel` to all task lists:
+  - `_run_sync_task()` task_map import and mapping
+  - `GET /sync/status` tasks list (9 tasks including personnel)
+  - `POST /sync/trigger` tasks list (9 tasks including personnel)
+  - `POST /sync/trigger/{task_name}` valid_tasks list + docstring
+- ✅ Created `tests/integration/test_sync_routes.py` — 5 integration tests:
+  - `test_sync_status_includes_personnel` — verifies personnel appears in status response
+  - `test_sync_trigger_all_includes_personnel` — verifies /trigger includes personnel
+  - `test_sync_trigger_personnel_accepted` — verifies /trigger/personnel returns 200
+  - `test_sync_trigger_invalid_task_returns_400` — verifies invalid task returns error
+  - `test_sync_personnel_populates_database` — full E2E: mock gateway → sync service → DB verification via testcontainers
+
+### Current State
+
+- **Tests:** 144 passing (0 failing)
+- **Coverage:** Sync routes now tested; personnel E2E verified
+- **Active features:**
+  - feat-023: Personnel Sync and Endpoints (done)
+
+### Next Session Should
+
+1. ✅ Run `./init.sh` to verify environment
+2. ✅ Read AGENTS.md for working rules
+3. Continue feat-014: Add any remaining integration tests if gaps exist
+4. Continue feat-013: Improve type hints
+5. Consider v2 features (feat-019 to feat-022)
+
+---
+
 ## Previous Sessions
 
 ### Session 1 (2026-05-07 - Harness Initialization)

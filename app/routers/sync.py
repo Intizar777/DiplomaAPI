@@ -34,6 +34,7 @@ async def _run_sync_task(task_name: str):
         sync_output_task,
         sync_sensors_task,
         sync_inventory_task,
+        sync_personnel_task,
     )
     
     task_map = {
@@ -45,6 +46,7 @@ async def _run_sync_task(task_name: str):
         "output": sync_output_task,
         "sensors": sync_sensors_task,
         "inventory": sync_inventory_task,
+        "personnel": sync_personnel_task,
     }
     
     if task_name not in task_map:
@@ -72,7 +74,7 @@ async def get_sync_status(
     
     Returns current status, last run time, and statistics for each task.
     """
-    tasks = ["kpi", "sales", "orders", "quality", "products", "output", "sensors", "inventory"]
+    tasks = ["kpi", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "personnel"]
     task_statuses = []
     
     for task_name in tasks:
@@ -143,7 +145,7 @@ async def trigger_sync_all(
     Tasks run in background — API returns immediately.
     Check /sync/status for progress.
     """
-    tasks = ["kpi", "sales", "orders", "quality", "products", "output", "sensors", "inventory"]
+    tasks = ["kpi", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "personnel"]
     triggered = []
     skipped = []
     
@@ -170,10 +172,10 @@ async def trigger_sync_task(
     """
     Manually trigger a specific synchronization task.
     
-    Available tasks: kpi, sales, orders, quality, products, output, sensors, inventory
+    Available tasks: kpi, sales, orders, quality, products, output, sensors, inventory, personnel
     Tasks run in background — API returns immediately.
     """
-    valid_tasks = ["kpi", "sales", "orders", "quality", "products", "output", "sensors", "inventory"]
+    valid_tasks = ["kpi", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "personnel"]
     
     if task_name not in valid_tasks:
         raise HTTPException(
