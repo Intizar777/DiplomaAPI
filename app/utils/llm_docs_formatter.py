@@ -28,6 +28,60 @@ class OpenAPILLMFormatter:
         self.include_examples = include_examples
         self.include_deprecated = include_deprecated
         self.require_description = require_description
+        self._schemas_cache = {}
+    
+    def _format_schema(self, schema: Dict[str, Any], lines: List[str], indent: str = ""):
+        """
+        Format schema details recursively.
+        
+        Args:
+            schema: Schema dictionary
+            lines: List to append formatted lines to
+            indent: Current indentation level
+        """
+        # Handle $ref
+        if ref := schema.get("$ref"):
+            ref_name = ref.replace("#/components/schemas/", "")
+            lines.append(f"{indent}Ref: {ref_name}")
+            if ref_name in self._schemas_cache:
+                self._format_schema(self._schemas_cache[ref_name], lines, indent + "  ")
+            return
+        
+        # Type
+        schema_type = schema.get("type", "any")
+        lines.append(f"{indent}Type: {schema_type}")
+        
+        # Description
+        if description := schema.get("description"):
+            lines.append(f"{indent}Description: {description}")
+        
+        # Properties (for objects)
+        if properties := schema.get("properties"):
+            lines.append(f"{indent}Properties:")
+            required_fields = schema.get("required", [])
+            
+            for prop_name, prop_details in properties.items():
+                lines.append(f"{indent}  - {prop_name}:")
+                if prop_name in required_fields:
+                    lines.append(f"{indent}    Required: Yes")
+                self._format_schema(prop_details, lines, indent + "    ")
+        
+        # Items (for arrays)
+        if items := schema.get("items"):
+            lines.append(f"{indent}Items:")
+            self._format_schema(items, lines, indent + "  ")
+        
+        # Enum values
+        if enum := schema.get("enum"):
+            lines.append(f"{indent}Enum: {', '.join(map(str, enum))}")
+        
+        # Format (string formats like date-time, email, etc.)
+        if format_type := schema.get("format"):
+            lines.append(f"{indent}Format: {format_type}")
+        
+        # Example
+        if self.include_examples and (example := schema.get("example")):
+            lines.append(f"{indent}Example: {example}")
     
     def format(self, spec: Dict[str, Any]) -> str:
         """
@@ -40,6 +94,9 @@ class OpenAPILLMFormatter:
             Formatted documentation string
         """
         lines = []
+        
+        # Store schemas for $ref resolution
+        self._schemas_cache = spec.get("components", {}).get("schemas", {})
         
         # API Info
         info = spec.get("info", {})
@@ -90,8 +147,7 @@ class OpenAPILLMFormatter:
                             lines.append(f"  Description: {desc}")
                         lines.append(f"  Required: {'Yes' if param.get('required') else 'No'}")
                         if schema := param.get("schema"):
-                            if param_type := schema.get("type"):
-                                lines.append(f"  Type: {param_type}")
+                            self._format_schema(schema, lines, indent="  ")
                         if self.include_examples and (example := param.get("example")):
                             lines.append(f"  Example: {example}")
                 
@@ -102,7 +158,8 @@ class OpenAPILLMFormatter:
                     for content_type, content_details in content.items():
                         lines.append(f"  Content-Type: {content_type}")
                         if schema := content_details.get("schema"):
-                            lines.append(f"  Schema: {schema.get('$ref', 'inline')}")
+                            lines.append("  Schema:")
+                            self._format_schema(schema, lines, indent="    ")
                 
                 # Responses
                 responses = details.get("responses", {})
@@ -112,6 +169,12 @@ class OpenAPILLMFormatter:
                         lines.append(f"- {status_code}:")
                         if desc := response_details.get("description"):
                             lines.append(f"  Description: {desc}")
+                        content = response_details.get("content", {})
+                        for content_type, content_details in content.items():
+                            lines.append(f"  Content-Type: {content_type}")
+                            if schema := content_details.get("schema"):
+                                lines.append("  Schema:")
+                                self._format_schema(schema, lines, indent="    ")
                 
                 lines.append("")
         
@@ -119,43 +182,12 @@ class OpenAPILLMFormatter:
         lines.append("=== Schemas ===")
         lines.append("")
         
-        components = spec.get("components", {})
-        schemas = components.get("schemas", {})
-        
-        for schema_name, schema_details in schemas.items():
+        for schema_name, schema_details in self._schemas_cache.items():
             if self.require_description and not schema_details.get("description"):
                 continue
             
             lines.append(f"Schema: {schema_name}")
-            lines.append(f"Type: {schema_details.get('type', 'object')}")
-            
-            if description := schema_details.get("description"):
-                lines.append(f"Description: {description}")
-            
-            # Properties
-            properties = schema_details.get("properties", {})
-            if properties:
-                lines.append("Properties:")
-                required_fields = schema_details.get("required", [])
-                
-                for prop_name, prop_details in properties.items():
-                    if self.require_description and not prop_details.get("description"):
-                        continue
-                    
-                    lines.append(f"- {prop_name}:")
-                    lines.append(f"  Type: {prop_details.get('type', 'any')}")
-                    
-                    if description := prop_details.get("description"):
-                        lines.append(f"  Description: {description}")
-                    
-                    lines.append(f"  Required: {'Yes' if prop_name in required_fields else 'No'}")
-                    
-                    if self.include_examples and (example := prop_details.get("example")):
-                        lines.append(f"  Example: {example}")
-                    
-                    if enum := prop_details.get("enum"):
-                        lines.append(f"  Enum: {', '.join(map(str, enum))}")
-            
+            self._format_schema(schema_details, lines, indent="")
             lines.append("")
         
         return "\n".join(lines)
