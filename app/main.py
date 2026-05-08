@@ -291,3 +291,18 @@ async def swagger_json():
         description="Dashboard Analytics API for aggregating data from EFKO microservices",
         routes=app.routes,
     ))
+
+
+@app.get("/api/v1/docs-llm", include_in_schema=False)
+async def llm_docs():
+    """Return LLM-friendly documentation from OpenAPI spec."""
+    from app.utils.llm_docs_formatter import get_llm_docs
+    from fastapi.responses import PlainTextResponse
+    
+    docs = get_llm_docs(
+        app,
+        include_examples=True,
+        include_deprecated=False,
+        require_description=True,
+    )
+    return PlainTextResponse(docs)
