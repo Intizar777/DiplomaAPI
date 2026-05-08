@@ -345,7 +345,7 @@ class GatewayClient:
         endpoint: str,
         data_key: str,
         base_params: Optional[Dict[str, Any]] = None,
-        page_size: int = 100
+        page_size: int = 1000
     ) -> List[Dict[str, Any]]:
         """Fetch all pages from a paginated Gateway endpoint.
         
