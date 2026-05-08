@@ -58,6 +58,183 @@ async def _run_cleanup_task():
     await cleanup_old_data_task()
 
 
+async def _run_initial_sync():
+    """
+    Run initial bulk synchronization in background.
+    Syncs all tables in dependency order to avoid FK violations.
+    """
+    from app.database import AsyncSessionLocal
+    from app.models import SyncLog, SyncStatus
+    from app.services import (
+        ProductService, SensorService, SalesService,
+        InventoryService, OutputService, QualityService, OrderService
+    )
+
+    async with AsyncSessionLocal() as db:
+        log = SyncLog(
+            task_name="initial_sync",
+            status=SyncStatus.RUNNING.value,
+            started_at=datetime.utcnow(),
+            records_processed=0,
+            records_inserted=0,
+            records_updated=0
+        )
+        db.add(log)
+        await db.commit()
+        await db.refresh(log)
+
+        summary = {
+            "level_0": {},
+            "level_1": {},
+            "level_2": {},
+            "level_3": {},
+            "total_records": 0,
+            "errors": []
+        }
+
+        gateway = GatewayClient()
+        total_records = 0
+
+        try:
+            logger.info("initial_sync_started_background", task_id="initial_sync")
+
+            # Level 0: Reference tables (no FK dependencies)
+            try:
+                logger.info("initial_sync_phase_0", phase="reference_tables")
+
+                # UnitOfMeasure via Product service
+                product_service = ProductService(db, gateway)
+                count = 0
+                try:
+                    gateway_data = await gateway.get_units_of_measure()
+                    for unit_data in gateway_data.get("units", []):
+                        await product_service._sync_unit_of_measure(unit_data)
+                        count += 1
+                    await db.commit()
+                except Exception as e:
+                    logger.warning("initial_sync_units_error", error=str(e)[:100])
+                summary["level_0"]["units_of_measure"] = count
+                total_records += count
+
+                # SensorParameter via Sensor service
+                count = 0
+                try:
+                    sensor_service = SensorService(db, gateway)
+                    gateway_data = await gateway.get_sensor_parameters()
+                    for param_data in gateway_data.get("parameters", []):
+                        await sensor_service._sync_sensor_parameter(param_data)
+                        count += 1
+                    await db.commit()
+                except Exception as e:
+                    logger.warning("initial_sync_sensor_parameters_error", error=str(e)[:100])
+                summary["level_0"]["sensor_parameters"] = count
+                total_records += count
+
+                logger.info("initial_sync_phase_0_complete", units=summary["level_0"].get("units_of_measure", 0),
+                           params=summary["level_0"].get("sensor_parameters", 0))
+
+            except Exception as e:
+                error_msg = f"Level 0 error: {str(e)[:200]}"
+                logger.error("initial_sync_level_0_failed", error=error_msg)
+                summary["errors"].append(error_msg)
+
+            # Level 1: Tables depending on Level 0
+            try:
+                logger.info("initial_sync_phase_1", phase="dependent_on_level_0")
+
+                # Product (depends on UnitOfMeasure)
+                product_service = ProductService(db, gateway)
+                count = await product_service.sync_from_gateway(None, None)
+                summary["level_1"]["products"] = count
+                total_records += count
+                logger.info("initial_sync_products_synced", count=count)
+
+                # SaleRecord (depends on Customer via direct foreign key)
+                sales_service = SalesService(db, gateway)
+                count = await sales_service.sync_from_gateway(None, None)
+                summary["level_1"]["sale_records"] = count
+                total_records += count
+                logger.info("initial_sync_sale_records_synced", count=count)
+
+                # Sensor (depends on SensorParameter)
+                sensor_service = SensorService(db, gateway)
+                count = await sensor_service.sync_from_gateway(None, None)
+                summary["level_1"]["sensors"] = count
+                total_records += count
+                logger.info("initial_sync_sensors_synced", count=count)
+
+                # InventorySnapshot (depends on Warehouse via foreign key)
+                inventory_service = InventoryService(db, gateway)
+                count = await inventory_service.sync_from_gateway(None, None)
+                summary["level_1"]["inventory_snapshots"] = count
+                total_records += count
+                logger.info("initial_sync_inventory_synced", count=count)
+
+            except Exception as e:
+                error_msg = f"Level 1 error: {str(e)[:200]}"
+                logger.error("initial_sync_level_1_failed", error=error_msg)
+                summary["errors"].append(error_msg)
+
+            # Level 2: Tables depending on Level 1
+            try:
+                logger.info("initial_sync_phase_2", phase="dependent_on_level_1")
+
+                # QualityResult (depends on QualitySpec which depends on Product)
+                quality_service = QualityService(db, gateway)
+                count = await quality_service.sync_from_gateway(None, None)
+                summary["level_2"]["quality_results"] = count
+                total_records += count
+                logger.info("initial_sync_quality_synced", count=count)
+
+            except Exception as e:
+                error_msg = f"Level 2 error: {str(e)[:200]}"
+                logger.error("initial_sync_level_2_failed", error=error_msg)
+                summary["errors"].append(error_msg)
+
+            # Level 3: Data tables (no FK dependencies)
+            try:
+                logger.info("initial_sync_phase_3", phase="data_tables")
+
+                # OrderSnapshot
+                order_service = OrderService(db, gateway)
+                count = await order_service.sync_from_gateway(None, None)
+                summary["level_3"]["order_snapshots"] = count
+                total_records += count
+                logger.info("initial_sync_order_snapshots_synced", count=count)
+
+                # ProductionOutput
+                output_service = OutputService(db, gateway)
+                count = await output_service.sync_from_gateway(None, None)
+                summary["level_3"]["production_output"] = count
+                total_records += count
+                logger.info("initial_sync_production_output_synced", count=count)
+
+            except Exception as e:
+                error_msg = f"Level 3 error: {str(e)[:200]}"
+                logger.error("initial_sync_level_3_failed", error=error_msg)
+                summary["errors"].append(error_msg)
+
+            # Update sync log
+            log.status = SyncStatus.COMPLETED.value if not summary["errors"] else SyncStatus.FAILED.value
+            log.completed_at = datetime.utcnow()
+            log.records_processed = total_records
+            log.records_inserted = total_records
+            log.error_message = "; ".join(summary["errors"]) if summary["errors"] else None
+            await db.commit()
+
+            logger.info("initial_sync_completed_background",
+                       total_records=total_records,
+                       has_errors=bool(summary["errors"]),
+                       status=log.status)
+
+        except Exception as e:
+            logger.error("initial_sync_background_failed", error=str(e)[:200])
+            log.status = SyncStatus.FAILED.value
+            log.completed_at = datetime.utcnow()
+            log.error_message = str(e)[:500]
+            await db.commit()
+
+
 @router.get("/status", response_model=SyncStatusResponse)
 async def get_sync_status(
     db: AsyncSession = Depends(get_db)
@@ -319,160 +496,40 @@ async def get_running_tasks():
 
 
 @router.post("/initial_sync", response_model=dict)
-async def initial_sync(
-    db: AsyncSession = Depends(get_db),
-):
+async def initial_sync():
     """
-    Initial bulk synchronization endpoint.
+    Initial bulk synchronization endpoint (asynchronous).
 
-    Syncs all reference and data tables from Gateway in correct dependency order
-    to avoid foreign key constraint violations.
+    Triggers initial sync in background. Syncs all reference and data tables from Gateway
+    in correct dependency order to avoid foreign key constraint violations.
 
     Execution order:
-    1. Level 0: Reference tables (UnitOfMeasure, SensorParameter, Warehouse, Customer, Location)
-    2. Level 1: Tables depending on Level 0 (Product, Sensor, InventorySnapshot, SaleRecord, etc.)
-    3. Level 2: Tables depending on Level 1 (QualitySpec, QualityResult, SensorReading, etc.)
-    4. Level 3: Data tables (OrderSnapshot, ProductionOutput, AggregatedSales, etc.)
+    1. Level 0: Reference tables (UnitOfMeasure, SensorParameter)
+    2. Level 1: Tables depending on Level 0 (Product, Sensor, InventorySnapshot, SaleRecord)
+    3. Level 2: Tables depending on Level 1 (QualityResult)
+    4. Level 3: Data tables (OrderSnapshot, ProductionOutput)
 
-    Returns summary of records synced per table.
+    API returns immediately (202 Accepted). Check /sync/status for progress.
     """
-    from app.services import (
-        ProductService, SensorService, SalesService,
-        InventoryService, PersonnelService, OutputService,
-        QualityService, OrderService, KPIService
-    )
+    task_name = "initial_sync"
 
-    summary = {
-        "level_0": {},
-        "level_1": {},
-        "level_2": {},
-        "level_3": {},
-        "total_records": 0,
-        "errors": []
-    }
+    if task_name in _running_tasks:
+        return {
+            "status": "already_running",
+            "message": "Initial sync is already running",
+            "task_id": task_name
+        }
 
-    gateway = GatewayClient()
+    # Start background task
+    task = asyncio.create_task(_run_initial_sync())
+    _running_tasks[task_name] = task
+    # Clean up when done
+    task.add_done_callback(lambda t: _running_tasks.pop(task_name, None))
 
-    # Level 0: Reference tables (no FK dependencies)
-    try:
-        logger.info("initial_sync_phase_0", phase="reference_tables")
-
-        # UnitOfMeasure via Product service
-        product_service = ProductService(db, gateway)
-        count = 0
-        try:
-            gateway_data = await gateway.get_units_of_measure()
-            for unit_data in gateway_data.get("units", []):
-                await product_service._sync_unit_of_measure(unit_data)
-                count += 1
-            await db.commit()
-        except Exception as e:
-            logger.warning("initial_sync_units_error", error=str(e)[:100])
-        summary["level_0"]["units_of_measure"] = count
-
-        # SensorParameter via Sensor service
-        count = 0
-        try:
-            sensor_service = SensorService(db, gateway)
-            gateway_data = await gateway.get_sensor_parameters()
-            for param_data in gateway_data.get("parameters", []):
-                await sensor_service._sync_sensor_parameter(param_data)
-                count += 1
-            await db.commit()
-        except Exception as e:
-            logger.warning("initial_sync_sensor_parameters_error", error=str(e)[:100])
-        summary["level_0"]["sensor_parameters"] = count
-
-        logger.info("initial_sync_phase_0_complete", units=summary["level_0"].get("units_of_measure", 0),
-                   params=summary["level_0"].get("sensor_parameters", 0))
-
-    except Exception as e:
-        error_msg = f"Level 0 error: {str(e)[:200]}"
-        logger.error("initial_sync_level_0_failed", error=error_msg)
-        summary["errors"].append(error_msg)
-
-    # Level 1: Tables depending on Level 0
-    try:
-        logger.info("initial_sync_phase_1", phase="dependent_on_level_0")
-
-        # Product (depends on UnitOfMeasure)
-        product_service = ProductService(db, gateway)
-        count = await product_service.sync_from_gateway(None, None)
-        summary["level_1"]["products"] = count
-        logger.info("initial_sync_products_synced", count=count)
-
-        # SaleRecord (depends on Customer via direct foreign key)
-        sales_service = SalesService(db, gateway)
-        count = await sales_service.sync_from_gateway(None, None)
-        summary["level_1"]["sale_records"] = count
-        logger.info("initial_sync_sale_records_synced", count=count)
-
-        # Sensor (depends on SensorParameter)
-        sensor_service = SensorService(db, gateway)
-        count = await sensor_service.sync_from_gateway(None, None)
-        summary["level_1"]["sensors"] = count
-        logger.info("initial_sync_sensors_synced", count=count)
-
-        # InventorySnapshot (depends on Warehouse via foreign key)
-        inventory_service = InventoryService(db, gateway)
-        count = await inventory_service.sync_from_gateway(None, None)
-        summary["level_1"]["inventory_snapshots"] = count
-        logger.info("initial_sync_inventory_synced", count=count)
-
-    except Exception as e:
-        error_msg = f"Level 1 error: {str(e)[:200]}"
-        logger.error("initial_sync_level_1_failed", error=error_msg)
-        summary["errors"].append(error_msg)
-
-    # Level 2: Tables depending on Level 1
-    try:
-        logger.info("initial_sync_phase_2", phase="dependent_on_level_1")
-
-        # QualityResult (depends on QualitySpec which depends on Product)
-        quality_service = QualityService(db, gateway)
-        count = await quality_service.sync_from_gateway(None, None)
-        summary["level_2"]["quality_results"] = count
-        logger.info("initial_sync_quality_synced", count=count)
-
-    except Exception as e:
-        error_msg = f"Level 2 error: {str(e)[:200]}"
-        logger.error("initial_sync_level_2_failed", error=error_msg)
-        summary["errors"].append(error_msg)
-
-    # Level 3: Data tables (no FK dependencies)
-    try:
-        logger.info("initial_sync_phase_3", phase="data_tables")
-
-        # OrderSnapshot
-        order_service = OrderService(db, gateway)
-        count = await order_service.sync_from_gateway(None, None)
-        summary["level_3"]["order_snapshots"] = count
-        logger.info("initial_sync_order_snapshots_synced", count=count)
-
-        # ProductionOutput
-        output_service = OutputService(db, gateway)
-        count = await output_service.sync_from_gateway(None, None)
-        summary["level_3"]["production_output"] = count
-        logger.info("initial_sync_production_output_synced", count=count)
-
-    except Exception as e:
-        error_msg = f"Level 3 error: {str(e)[:200]}"
-        logger.error("initial_sync_level_3_failed", error=error_msg)
-        summary["errors"].append(error_msg)
-
-    # Calculate totals
-    for level in ["level_0", "level_1", "level_2", "level_3"]:
-        if isinstance(summary[level], dict):
-            for key, value in summary[level].items():
-                if isinstance(value, int):
-                    summary["total_records"] += value
-
-    logger.info("initial_sync_completed",
-               total_records=summary["total_records"],
-               has_errors=bool(summary["errors"]))
+    logger.info("initial_sync_triggered_background", task_id=task_name)
 
     return {
-        "status": "completed" if not summary["errors"] else "completed_with_errors",
-        "summary": summary,
-        "message": f"Initial sync complete. Total records synced: {summary['total_records']}"
+        "status": "initiated",
+        "message": "Initial sync started in background. Check /sync/status for progress.",
+        "task_id": task_name
     }
