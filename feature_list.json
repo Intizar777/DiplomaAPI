@@ -193,7 +193,15 @@
       "dependencies": ["feat-001", "feat-006"],
       "status": "done",
       "evidence": "app/messaging/ module with aio-pika consumer, dispatcher, 6 handlers; event_id UNIQUE constraints in DB; alembic migration applied; all tests (4/4) passing"
+    },
+    {
+      "id": "feat-025",
+      "name": "Line Master Dashboard - Wave 1",
+      "description": "Shift-level production dashboards for manufacturing line managers. GET /api/v1/dashboards/line-master/shift-progress (current shift metrics), /shift-comparison (historical trends), /defect-summary (quality by parameter)",
+      "dependencies": ["feat-001", "feat-002", "feat-005"],
+      "status": "done",
+      "evidence": "app/schemas/line_master_dashboard.py, app/services/line_master_dashboard_service.py, app/routers/line_master_dashboard.py, tests/unit/test_line_master_dashboard_service.py (8/8 passing)"
     }
   ],
-  "notes": "Core features (001-018) complete. Personnel sync (023) complete. Event-driven RabbitMQ consumer (024) complete with absolute idempotency. Type hints (013) and tests (014) in progress. Performance and auth features (019-022) planned for v2."
+  "notes": "Core features (001-018) complete. Personnel sync (023) complete. RabbitMQ consumer (024) complete. Wave 1 dashboards (025) complete. Type hints (013) and tests (014) in progress. Waves 2-5 dashboards planned. Performance and auth features (019-022) planned for v2."
 }

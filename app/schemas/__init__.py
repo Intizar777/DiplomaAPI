@@ -29,6 +29,11 @@ from app.schemas.personnel import (
     EmployeeResponse,
     PersonnelSummaryResponse,
 )
+from app.schemas.line_master_dashboard import (
+    ShiftProgressResponse,
+    ShiftComparisonResponse,
+    DefectSummaryResponse,
+)
 
 __all__ = [
     # Common
@@ -63,4 +68,8 @@ __all__ = [
     "WorkstationResponse",
     "EmployeeResponse",
     "PersonnelSummaryResponse",
+    # Line Master Dashboard
+    "ShiftProgressResponse",
+    "ShiftComparisonResponse",
+    "DefectSummaryResponse",
 ]
