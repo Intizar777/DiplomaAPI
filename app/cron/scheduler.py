@@ -1,9 +1,9 @@
 """
-APScheduler configuration and management with lifecycle logging.
+Async scheduler for data synchronization with lifecycle logging.
 """
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
+import asyncio
 import structlog
+from datetime import datetime, timedelta
 
 from app.config import settings
 from app.cron.jobs import (
@@ -14,15 +14,70 @@ from app.cron.jobs import (
 
 logger = structlog.get_logger()
 
-# Global scheduler instance
-scheduler: AsyncIOScheduler = None
+# Global scheduler state
+scheduler_task: asyncio.Task = None
+running = False
+
+
+async def run_scheduled_jobs():
+    """Run scheduled jobs in an infinite loop."""
+    global running
+    running = True
+    
+    while running:
+        try:
+            # Get current wall clock time
+            now = datetime.utcnow()
+            current_minute = now.minute
+            
+            logger.info("scheduler_check", current_minute=current_minute, current_time=now.isoformat())
+            
+            jobs_to_run = []
+            if current_minute == 0:
+                jobs_to_run.append(("kpi", sync_kpi_task))
+            elif current_minute == 5:
+                jobs_to_run.append(("sales", sync_sales_task))
+            elif current_minute == 10:
+                jobs_to_run.append(("orders", sync_orders_task))
+            elif current_minute == 15:
+                jobs_to_run.append(("quality", sync_quality_task))
+            elif current_minute == 20:
+                jobs_to_run.append(("products", sync_products_task))
+            elif current_minute == 25:
+                jobs_to_run.append(("output", sync_output_task))
+            elif current_minute == 30:
+                jobs_to_run.append(("sensors", sync_sensors_task))
+            elif current_minute == 35:
+                jobs_to_run.append(("inventory", sync_inventory_task))
+            elif current_minute == 40:
+                jobs_to_run.append(("personnel", sync_personnel_task))
+            
+            # Run jobs
+            for job_name, job_func in jobs_to_run:
+                logger.info("scheduler_job_start", job=job_name)
+                try:
+                    await job_func()
+                    logger.info("scheduler_job_completed", job=job_name)
+                except Exception as e:
+                    logger.error("scheduler_job_failed", job=job_name, error=str(e))
+            
+            # Sleep until next minute
+            logger.info("scheduler_sleep", seconds=60)
+            await asyncio.sleep(60)
+            
+        except asyncio.CancelledError:
+            logger.info("scheduler_cancelled")
+            break
+        except Exception as e:
+            logger.error("scheduler_error", error=str(e))
+            await asyncio.sleep(60)
 
 
 def start_scheduler():
-    """Start the APScheduler with configured jobs."""
-    global scheduler
+    """Start the async scheduler."""
+    global scheduler_task, running
 
-    if scheduler is not None and scheduler.running:
+    if running:
         logger.warning(
             "scheduler_lifecycle",
             phase="startup",
@@ -31,67 +86,32 @@ def start_scheduler():
         )
         return
 
-    scheduler = AsyncIOScheduler()
-
-    # Add jobs - run every hour at minute 0
-    jobs_config = [
-        (sync_kpi_task, CronTrigger(minute=0), "sync_kpi", "Sync KPI from Gateway"),
-        (sync_sales_task, CronTrigger(minute=5), "sync_sales", "Sync Sales from Gateway"),
-        (sync_orders_task, CronTrigger(minute=10), "sync_orders", "Sync Orders from Gateway"),
-        (sync_quality_task, CronTrigger(minute=15), "sync_quality", "Sync Quality from Gateway"),
-        (sync_products_task, CronTrigger(minute=20), "sync_products", "Sync Products from Gateway"),
-        (sync_output_task, CronTrigger(minute=25), "sync_output", "Sync Output from Gateway"),
-        (sync_sensors_task, CronTrigger(minute=30), "sync_sensors", "Sync Sensors from Gateway"),
-        (sync_inventory_task, CronTrigger(minute=35), "sync_inventory", "Sync Inventory from Gateway"),
-        (sync_personnel_task, CronTrigger(minute=40), "sync_personnel", "Sync Personnel from Gateway"),
-    ]
-
-    for func, trigger, job_id, name in jobs_config:
-        scheduler.add_job(
-            func,
-            trigger=trigger,
-            id=job_id,
-            name=name,
-            replace_existing=True,
-        )
-
-    # Cleanup job - run daily at 3:00 AM
-    scheduler.add_job(
-        cleanup_old_data_task,
-        trigger=CronTrigger(hour=3, minute=0),
-        id="cleanup_old_data",
-        name="Cleanup data older than retention period",
-        replace_existing=True,
-    )
-
-    scheduler.start()
-    registered_jobs = [job.id for job in scheduler.get_jobs()]
+    scheduler_task = asyncio.create_task(run_scheduled_jobs())
+    
     logger.info(
         "scheduler_lifecycle",
         phase="startup",
         action="start",
         state="running",
-        jobs=registered_jobs,
-        job_count=len(registered_jobs),
     )
 
 
 def stop_scheduler():
     """Stop the scheduler."""
-    global scheduler
+    global scheduler_task, running
 
-    if scheduler is not None and scheduler.running:
-        scheduler.shutdown()
-        logger.info(
-            "scheduler_lifecycle",
-            phase="shutdown",
-            action="stop",
-            state="stopped",
-        )
-    else:
-        logger.info(
-            "scheduler_lifecycle",
-            phase="shutdown",
-            action="stop",
-            state="not_running",
-        )
+    if scheduler_task and not scheduler_task.done():
+        scheduler_task.cancel()
+        try:
+            asyncio.run_coroutine_threadsafe(scheduler_task, asyncio.get_event_loop())
+        except:
+            pass
+    
+    running = False
+    
+    logger.info(
+        "scheduler_lifecycle",
+        phase="shutdown",
+        action="stop",
+        state="stopped",
+    )

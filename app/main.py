@@ -16,6 +16,7 @@ import structlog
 from app.config import settings
 from app.database import init_db, close_db
 from app.cron import start_scheduler, stop_scheduler
+from app.cron.scheduler import run_scheduled_jobs
 from app.logging_config import configure_logging
 from app.middleware import RequestLoggingMiddleware
 from app.messaging import start_consumer, stop_consumer
@@ -87,6 +88,8 @@ async def lifespan(app: FastAPI):
     # Start scheduler
     try:
         start_scheduler()
+        # Start the scheduler task in the background
+        asyncio.create_task(run_scheduled_jobs())
         logger.info(
             "lifecycle_startup_checkpoint",
             phase="startup",

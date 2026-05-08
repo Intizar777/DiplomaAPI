@@ -31,38 +31,35 @@ class GatewayClient:
         self.base_url = settings.gateway_url.rstrip("/")
         self.token: Optional[str] = None
         self.token_acquired_at: Optional[datetime] = None
-        self.client: Optional[httpx.AsyncClient] = None
     
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
-        if self.client is None:
-            timeout = httpx.Timeout(
-                connect=settings.gateway_timeout_connect,
-                read=settings.gateway_timeout_read,
-                write=10.0,
-                pool=10.0
-            )
-            
-            self.client = httpx.AsyncClient(
-                base_url=self.base_url,
-                timeout=timeout,
-                follow_redirects=True
-            )
-            
-            logger.info(
-                "gateway_client_initialized",
-                base_url=self.base_url,
-                timeout_connect=settings.gateway_timeout_connect,
-                timeout_read=settings.gateway_timeout_read,
-                max_retries=settings.gateway_max_retries
-            )
-        return self.client
+        # Create a new client each time to avoid connection pool issues
+        timeout = httpx.Timeout(
+            connect=settings.gateway_timeout_connect,
+            read=settings.gateway_timeout_read,
+            write=10.0,
+            pool=10.0
+        )
+        
+        client = httpx.AsyncClient(
+            base_url=self.base_url,
+            timeout=timeout,
+            follow_redirects=True
+        )
+        logger.info(
+            "gateway_client_initialized",
+            base_url=self.base_url,
+            timeout_connect=settings.gateway_timeout_connect,
+            timeout_read=settings.gateway_timeout_read,
+            max_retries=settings.gateway_max_retries
+        )
+        return client
     
     async def close(self):
-        """Close HTTP client."""
-        if self.client:
-            await self.client.aclose()
-            self.client = None
+        """Close HTTP client (no-op since client is created per-request)."""
+        # No-op since we create a new client for each request
+        pass
     
     async def login(self) -> str:
         """

@@ -24,16 +24,10 @@ _running_tasks: set = set()
 
 
 async def _run_sync_task(task_name: str):
-    """Run a sync task in background and log result."""
+    """Run a sync task with proper sync log creation."""
     from app.cron.jobs import (
-        sync_kpi_task,
-        sync_sales_task,
-        sync_orders_task,
-        sync_quality_task,
-        sync_products_task,
-        sync_output_task,
-        sync_sensors_task,
-        sync_inventory_task,
+        sync_kpi_task, sync_sales_task, sync_orders_task, sync_quality_task,
+        sync_products_task, sync_output_task, sync_sensors_task, sync_inventory_task,
         sync_personnel_task,
     )
     
@@ -53,16 +47,8 @@ async def _run_sync_task(task_name: str):
         logger.error("unknown_sync_task", task_name=task_name)
         return
     
-    _running_tasks.add(task_name)
-    
-    try:
-        logger.info("manual_sync_task_start", task_name=task_name)
-        await task_map[task_name]()
-        logger.info("manual_sync_task_completed", task_name=task_name)
-    except Exception as e:
-        logger.error("manual_sync_task_failed", task_name=task_name, error=str(e))
-    finally:
-        _running_tasks.discard(task_name)
+    # Call the cron job function directly - it handles its own sync log creation
+    await task_map[task_name]()
 
 
 @router.get("/status", response_model=SyncStatusResponse)
@@ -166,14 +152,13 @@ async def trigger_sync_all(
 
 @router.post("/trigger/{task_name}", response_model=SyncTriggerResponse)
 async def trigger_sync_task(
-    task_name: str,
-    background_tasks: BackgroundTasks
+    task_name: str
 ):
     """
     Manually trigger a specific synchronization task.
     
     Available tasks: kpi, sales, orders, quality, products, output, sensors, inventory, personnel
-    Tasks run in background — API returns immediately.
+    Tasks run synchronously for testing - API waits for completion.
     """
     valid_tasks = ["kpi", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "personnel"]
     
@@ -189,11 +174,19 @@ async def trigger_sync_task(
             triggered_tasks=[]
         )
     
-    background_tasks.add_task(_run_sync_task, task_name)
+    _running_tasks.add(task_name)
     
-    logger.info("sync_task_triggered", task_name=task_name)
+    try:
+        logger.info("manual_sync_task_start", task_name=task_name)
+        await _run_sync_task(task_name)
+        logger.info("manual_sync_task_completed", task_name=task_name)
+    except Exception as e:
+        logger.error("manual_sync_task_failed", task_name=task_name, error=str(e))
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+    finally:
+        _running_tasks.discard(task_name)
     
     return SyncTriggerResponse(
-        message=f"Task '{task_name}' triggered",
+        message=f"Task '{task_name}' completed",
         triggered_tasks=[task_name]
     )
