@@ -7,7 +7,7 @@
 **Access Token:**
 ```
 Header:    { "alg": "HS256", "typ": "JWT" }
-Payload:   { "sub": "user-id", "email": "...", "role": "ADMIN", "exp": 1234567890 }
+Payload:   { "sub": "user-id", "email": "...", "role": "admin", "exp": 1234567890 }
 Signature: HMACSHA256(base64(header) + "." + base64(payload), secret)
 ```
 
@@ -37,7 +37,7 @@ Response 201:
   "id": "user-id",
   "email": "user@example.com",
   "fullName": "Иванов Иван",
-  "role": "EMPLOYEE",  // default
+  "role": "employee",  // default
   "isActive": true
 }
 ```

@@ -4,11 +4,12 @@ Inventory business logic service.
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional, List, Dict
+from uuid import UUID
 
-from sqlalchemy import select, func, desc, cast, String
+from sqlalchemy import select, func, desc, cast, String, outerjoin
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import InventorySnapshot, Product
+from app.models import InventorySnapshot, Product, Warehouse
 from app.services.gateway_client import GatewayClient
 from app.utils.logging_utils import track_feature_path, log_data_flow
 import structlog
@@ -33,34 +34,37 @@ class InventoryService:
         latest_date_query = select(func.max(InventorySnapshot.snapshot_date))
         latest_result = await self.db.execute(latest_date_query)
         latest_date = latest_result.scalar()
-        
+
         if not latest_date:
             return {"items": [], "snapshot_date": None}
-        
-        # Join with Product to get product_name using source_system_id
+
+        # Join with Product and Warehouse to get enriched data
         query = select(
             InventorySnapshot,
-            Product.name.label("product_name")
+            Product.name.label("product_name"),
+            Warehouse.code.label("wh_code")
         ).outerjoin(
             Product, cast(InventorySnapshot.product_id, String) == Product.source_system_id
+        ).outerjoin(
+            Warehouse, InventorySnapshot.warehouse_id == Warehouse.id
         ).where(
             InventorySnapshot.snapshot_date == latest_date
-        ).order_by(InventorySnapshot.warehouse_code, Product.name)
-        
+        ).order_by(InventorySnapshot.warehouse_id, Product.name)
+
         if warehouse_code:
-            query = query.where(InventorySnapshot.warehouse_code == warehouse_code)
+            query = query.where(Warehouse.code == warehouse_code)
         if product_id:
             query = query.where(InventorySnapshot.product_id == product_id)
-        
+
         result = await self.db.execute(query)
         rows = result.all()
-        
+
         return {
             "items": [
                 {
                     "product_id": str(row.InventorySnapshot.product_id),
                     "product_name": row.product_name or row.InventorySnapshot.product_name,
-                    "warehouse_code": row.InventorySnapshot.warehouse_code,
+                    "warehouse_code": row.wh_code or "",
                     "lot_number": row.InventorySnapshot.lot_number,
                     "quantity": float(row.InventorySnapshot.quantity) if row.InventorySnapshot.quantity else 0,
                     "unit_of_measure": row.InventorySnapshot.unit_of_measure,
@@ -107,28 +111,84 @@ class InventoryService:
         
         return {"items": items, "product_id": product_id}
     
+    async def _sync_warehouse(self, warehouse_data: dict) -> Optional[UUID]:
+        """Sync a warehouse and return its ID."""
+        if not warehouse_data:
+            return None
+
+        warehouse_id_raw = warehouse_data.get("id")
+        try:
+            warehouse_id = UUID(warehouse_id_raw) if isinstance(warehouse_id_raw, str) else warehouse_id_raw
+        except (ValueError, AttributeError, TypeError):
+            logger.warning("invalid_warehouse_id_skipped", raw=warehouse_id_raw)
+            return None
+
+        code = warehouse_data.get("code")
+
+        # Try to find existing by code or id
+        if code:
+            existing = await self.db.execute(
+                select(Warehouse).where(Warehouse.code == code)
+            )
+            warehouse = existing.scalar_one_or_none()
+        else:
+            warehouse = None
+
+        if not warehouse and warehouse_id:
+            existing = await self.db.execute(
+                select(Warehouse).where(Warehouse.id == warehouse_id)
+            )
+            warehouse = existing.scalar_one_or_none()
+
+        if warehouse:
+            warehouse.code = code or warehouse.code
+            warehouse.name = warehouse_data.get("name", warehouse.name)
+            warehouse.location = warehouse_data.get("location", warehouse.location)
+            warehouse.capacity = warehouse_data.get("capacity", warehouse.capacity)
+            warehouse.is_active = warehouse_data.get("isActive", warehouse.is_active)
+            warehouse.source_system_id = warehouse_data.get("sourceSystemId", warehouse.source_system_id)
+        else:
+            warehouse = Warehouse(
+                id=warehouse_id,
+                code=code or f"warehouse_{warehouse_id}",
+                name=warehouse_data.get("name", ""),
+                location=warehouse_data.get("location", ""),
+                capacity=warehouse_data.get("capacity"),
+                is_active=warehouse_data.get("isActive", True),
+                source_system_id=warehouse_data.get("sourceSystemId"),
+            )
+            self.db.add(warehouse)
+
+        return warehouse.id
+
     @track_feature_path(feature_name="inventory.sync_from_gateway", log_result=True)
     async def sync_from_gateway(self, from_date=None, to_date=None) -> int:
         """Sync inventory from Gateway (snapshot current state)."""
         logger.info("syncing_inventory_from_gateway")
-        
+
         gateway_data = await self.gateway.get_inventory()
         inventory = gateway_data.get("inventory", [])
         logger.info("inventory_fetched_from_gateway", total_items=len(inventory))
-        
+
         # Get product name map for enrichment
         product_result = await self.db.execute(select(Product.id, Product.name))
         product_names = {row[0]: row[1] for row in product_result.all()}
-        
+
         records_processed = 0
         batch_size = 50
         batch = []
         snapshot_date = date.today()
-        
+
         for item_data in inventory:
             product_id = item_data.get("productId")
             product_name = product_names.get(product_id) if product_id else None
-            
+
+            # Sync Warehouse if present
+            warehouse_id = None
+            warehouse_data = item_data.get("warehouse")
+            if warehouse_data:
+                warehouse_id = await self._sync_warehouse(warehouse_data)
+
             # Parse last_updated
             last_updated_raw = item_data.get("lastUpdated")
             if isinstance(last_updated_raw, str):
@@ -138,11 +198,11 @@ class InventoryService:
                     last_updated = None
             else:
                 last_updated = None
-            
+
             snapshot = InventorySnapshot(
                 product_id=product_id,
                 product_name=product_name,
-                warehouse_code=item_data.get("warehouseCode", ""),
+                warehouse_id=warehouse_id,
                 lot_number=item_data.get("lotNumber"),
                 quantity=Decimal(str(item_data.get("quantity", 0))),
                 unit_of_measure=item_data.get("unitOfMeasure", ""),
@@ -150,7 +210,7 @@ class InventoryService:
                 snapshot_date=snapshot_date
             )
             batch.append(snapshot)
-            
+
             if len(batch) >= batch_size:
                 try:
                     self.db.add_all(batch)
@@ -161,7 +221,7 @@ class InventoryService:
                     await self.db.rollback()
                     logger.error("inventory_sync_batch_error", error=str(e)[:200])
                 batch = []
-        
+
         if batch:
             try:
                 self.db.add_all(batch)
@@ -170,7 +230,7 @@ class InventoryService:
             except Exception as e:
                 await self.db.rollback()
                 logger.error("inventory_sync_final_batch_error", error=str(e)[:200])
-        
+
         log_data_flow(
             source="inventory_service",
             target="database",

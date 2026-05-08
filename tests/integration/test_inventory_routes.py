@@ -11,6 +11,7 @@ import pytest
 import pytest_asyncio
 
 from app.models.inventory import InventorySnapshot
+from app.models.reference import Warehouse
 
 
 @pytest_asyncio.fixture
@@ -21,12 +22,32 @@ async def sample_inventory(session):
     product_b = uuid.uuid4()
     yesterday = today - timedelta(days=1)
 
+    # Create Warehouse records first
+    wh01 = Warehouse(
+        id=uuid.uuid4(),
+        code="WH-01",
+        name="Warehouse 1",
+        location="Location 1",
+        capacity=Decimal("10000"),
+        is_active=True,
+    )
+    wh02 = Warehouse(
+        id=uuid.uuid4(),
+        code="WH-02",
+        name="Warehouse 2",
+        location="Location 2",
+        capacity=Decimal("5000"),
+        is_active=True,
+    )
+    session.add_all([wh01, wh02])
+    await session.flush()
+
     snapshots = [
         # Latest snapshot (today)
         InventorySnapshot(
             product_id=product_a,
             product_name="Widget A",
-            warehouse_code="WH-01",
+            warehouse_id=wh01.id,
             lot_number="LOT-A-001",
             quantity=Decimal("500"),
             unit_of_measure="pcs",
@@ -36,7 +57,7 @@ async def sample_inventory(session):
         InventorySnapshot(
             product_id=product_a,
             product_name="Widget A",
-            warehouse_code="WH-02",
+            warehouse_id=wh02.id,
             lot_number="LOT-A-002",
             quantity=Decimal("300"),
             unit_of_measure="pcs",
@@ -46,7 +67,7 @@ async def sample_inventory(session):
         InventorySnapshot(
             product_id=product_b,
             product_name="Widget B",
-            warehouse_code="WH-01",
+            warehouse_id=wh01.id,
             lot_number="LOT-B-001",
             quantity=Decimal("200"),
             unit_of_measure="kg",
@@ -57,7 +78,7 @@ async def sample_inventory(session):
         InventorySnapshot(
             product_id=product_a,
             product_name="Widget A",
-            warehouse_code="WH-01",
+            warehouse_id=wh01.id,
             lot_number="LOT-A-OLD",
             quantity=Decimal("600"),
             unit_of_measure="pcs",
@@ -67,7 +88,7 @@ async def sample_inventory(session):
     ]
     session.add_all(snapshots)
     await session.commit()
-    return {"product_a": product_a, "product_b": product_b}
+    return {"product_a": product_a, "product_b": product_b, "wh01": wh01, "wh02": wh02}
 
 
 @pytest.mark.asyncio

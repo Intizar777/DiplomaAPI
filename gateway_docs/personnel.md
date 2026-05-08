@@ -1,5 +1,7 @@
 # Personnel Service
 
+> **⚠️ v1.2.0 Update:** Position-Department relationship refactored. Position no longer has `departmentId` foreign key. Department relationship is now: Position → Employee → Department. See [data models](../data/personnel-models.md) for details.
+> 
 > **⚠️ v1.1.0 Update:** Database schema normalized to 3NF. `Employee.locationId` removed. See [migration guide](../changes/v1.1.0-3nf-normalization.md) for details.
 
 ## Назначение
@@ -16,9 +18,10 @@
 
 ## Основные модули
 
+- `PostalAreasModule`: почтовые зоны и справочник почтовых индексов.
 - `DepartmentsModule`: подразделения и иерархия оргструктуры.
 - `LocationsModule`: локации с адресами.
-- `PositionsModule`: должности внутри подразделений.
+- `PositionsModule`: справочник должностей (связь с подразделением через Employee).
 - `ProductionLinesModule`: производственные линии и их связь с локациями.
 - `WorkstationsModule`: рабочие места и назначение сотрудников.
 - `EmployeesModule`: сотрудники, изменение данных и увольнение.
@@ -33,6 +36,72 @@
 Все запросы отправляются в exchange `efko.personnel.queries`, очередь `personnel-service.queries.queue`.
 
 Все RabbitRPC handlers работают через `ValidationPipe` и `personnelRpcErrorInterceptor`, логируют topic и request metadata (`correlationId`, `userId`, `userRole`).
+
+### Postal Areas flow
+
+#### PersonnelCreatePostalAreaCommand
+
+Создать почтовую зону.
+
+**Exchange:** `efko.personnel.commands`
+
+**Request Body:**
+
+```typescript
+{
+  postalCode: string;  // Почтовый индекс (уникальный)
+  city: string;        // Город
+  region: string;      // Регион
+}
+```
+
+**Response:**
+
+```typescript
+{
+  id: string;
+  postalCode: string;
+  city: string;
+  region: string;
+  createdAt: string;   // ISO datetime
+}
+```
+
+**Ошибки:** `POSTAL_CODE_ALREADY_EXISTS` -> `409`
+
+---
+
+#### PersonnelGetPostalAreasQuery
+
+Получить список почтовых зон.
+
+**Exchange:** `efko.personnel.queries`
+
+**Request Body:**
+
+```typescript
+{
+  offset?: number;  // Смещение для пагинации (default: 0)
+  limit?: number;   // Лимит записей (default: 20)
+}
+```
+
+**Response:**
+
+```typescript
+{
+  postalAreas: Array<{
+    id: string;
+    postalCode: string;
+    city: string;
+    region: string;
+    createdAt: string;
+  }>;
+  total: number;  // Общее количество записей
+}
+```
+
+---
 
 ### Offices flow
 
@@ -343,7 +412,6 @@
 {
   title: string;            // Название должности
   code: string;             // Уникальный код должности
-  departmentId: string;     // UUID подразделения
   sourceSystemId?: string;  // ID из внешней системы
 }
 ```
@@ -355,13 +423,13 @@
   id: string;
   title: string;
   code: string;
-  departmentId: string;
 }
 ```
 
 **Ошибки:** 
 - `POSITION_CODE_ALREADY_EXISTS` -> `409`
-- `DEPARTMENT_NOT_FOUND` -> `404`
+
+**Примечание:** После рефактора v1.2.0 должность больше не связана с подразделением напрямую. Связь Position → Department определяется через Employee: `position → employee → department`.
 
 ---
 
@@ -375,8 +443,7 @@
 ```typescript
 {
   id: string;
-  title?: string;
-  departmentId?: string;
+  title?: string;  // Обновить название должности
 }
 ```
 
@@ -387,7 +454,6 @@
   id: string;
   title: string;
   code: string;
-  departmentId: string;
 }
 ```
 
@@ -408,7 +474,7 @@
   departmentId: string;     // UUID подразделения
   positionId: string;       // UUID должности
   hireDate: string;         // Дата приема (ISO date)
-  employmentType: EmploymentType; // MAIN | PART_TIME
+  employmentType: EmploymentType; // main | part_time
   sourceSystemId?: string;  // ID из внешней системы
 }
 ```
@@ -422,7 +488,7 @@
   fullName: string;
   departmentId: string;
   positionId: string;
-  status: EmployeeStatus;  // ACTIVE | TERMINATED | ON_LEAVE
+  status: EmployeeStatus;  // active | terminated | on_leave
 }
 ```
 
@@ -490,7 +556,7 @@
 ```typescript
 {
   id: string;
-  status: EmployeeStatus;  // TERMINATED
+  status: EmployeeStatus;  // terminated
   terminationDate: string;
 }
 ```
@@ -621,8 +687,8 @@
     id: string;
     title: string;
     code: string;
-    departmentId: string;
   }>;
+  total: number;
 }
 ```
 
@@ -639,8 +705,8 @@
 {
   departmentId?: string;      // Фильтр по подразделению
   positionId?: string;        // Фильтр по должности
-  status?: EmployeeStatus;    // ACTIVE | TERMINATED | ON_LEAVE
-  employmentType?: EmploymentType;  // MAIN | PART_TIME
+  status?: EmployeeStatus;    // active | terminated | on_leave
+  employmentType?: EmploymentType;  // main | part_time
 }
 ```
 

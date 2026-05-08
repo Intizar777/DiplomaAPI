@@ -14,6 +14,9 @@
 
 ## Основные модули
 
+- `CustomersModule`: создание и выборка клиентов.
+- `WarehousesModule`: создание и выборка складов.
+- `QualitySpecModule`: создание и выборка спецификаций качества.
 - `ProductsModule`: создание и выборка продуктов.
 - `OrdersModule`: создание производственных заказов, смена статуса, чтение одного заказа и списка.
 - `OutputModule`: фиксация выпуска по партиям и выборка выпуска.
@@ -45,7 +48,7 @@
 {
   code: string;                    // Уникальный код продукта
   name: string;                    // Название продукта
-  category: ProductCategory;       // RAW_MATERIAL | SEMI_FINISHED | FINISHED_PRODUCT | PACKAGING
+  category: ProductCategory;       // raw_material | semi_finished | finished_product | packaging
   brand?: string;                  // Бренд (опционально)
   unitOfMeasure: string;           // Единица измерения (kg, l, piece и т.д.)
   shelfLifeDays?: number;          // Срок годности в днях (опционально)
@@ -71,6 +74,93 @@
 ```
 
 **Ошибки:** `PRODUCT_CODE_ALREADY_EXISTS` -> `409`
+
+---
+
+#### ProductionCreateCustomerCommand
+
+Создать клиента.
+
+**Exchange:** `efko.production.commands`  
+**Request Body:**
+
+```typescript
+{
+  name: string;  // Название клиента
+}
+```
+
+**Response:**
+
+```typescript
+{
+  id: string;
+  name: string;
+  createdAt: string;  // ISO datetime
+}
+```
+
+---
+
+#### ProductionCreateWarehouseCommand
+
+Создать склад.
+
+**Exchange:** `efko.production.commands`  
+**Request Body:**
+
+```typescript
+{
+  name: string;   // Название склада
+  code: string;   // Уникальный код склада
+}
+```
+
+**Response:**
+
+```typescript
+{
+  id: string;
+  name: string;
+  code: string;
+  createdAt: string;  // ISO datetime
+}
+```
+
+**Ошибки:** `WAREHOUSE_CODE_ALREADY_EXISTS` -> `409`
+
+---
+
+#### ProductionCreateQualitySpecCommand
+
+Создать спецификацию качества для продукта.
+
+**Exchange:** `efko.production.commands`  
+**Request Body:**
+
+```typescript
+{
+  productId: string;      // UUID продукта
+  parameterName: string;  // Название параметра (например, "влажность")
+  lowerLimit: number;     // Нижний предел
+  upperLimit: number;     // Верхний предел
+}
+```
+
+**Response:**
+
+```typescript
+{
+  id: string;
+  productId: string;
+  parameterName: string;
+  lowerLimit: number;
+  upperLimit: number;
+  createdAt: string;  // ISO datetime
+}
+```
+
+**Ошибки:** `PRODUCT_NOT_FOUND` -> `404`
 
 ---
 
@@ -100,7 +190,7 @@
   id: string;
   externalOrderId: string | null;
   productId: string;
-  status: OrderStatus;  // PLANNED | IN_PROGRESS | COMPLETED | CANCELLED
+  status: OrderStatus;  // planned | in_progress | completed | cancelled
 }
 ```
 
@@ -196,7 +286,7 @@
   lotNumber: string;
   productId: string;
   inSpec: boolean;        // Соответствует норме
-  qualityStatus: QualityStatus;  // APPROVED | REJECTED | PENDING
+  qualityStatus: QualityStatus;  // approved | rejected | pending
 }
 ```
 
@@ -248,7 +338,7 @@
   amount: number;        // Сумма продажи
   saleDate: string;      // Дата продажи (ISO date)
   region: string;        // Регион
-  channel: SaleChannel;  // RETAIL | WHOLESALE | HORECA | EXPORT
+  channel: SaleChannel;  // retail | wholesale | horeca | export
 }
 ```
 
@@ -279,7 +369,7 @@
   parameterName: string;       // Название параметра (temperature, pressure и т.д.)
   value: number;               // Значение показания
   unit: string;                // Единица измерения
-  quality: SensorQuality;      // GOOD | DEGRADED | BAD
+  quality: SensorQuality;      // good | degraded | bad
 }
 ```
 
@@ -327,6 +417,98 @@
     shelfLifeDays: number | null;
     requiresQualityCheck: boolean;
   }>;
+}
+```
+
+---
+
+#### ProductionGetCustomersQuery
+
+Получить список клиентов.
+
+**Exchange:** `efko.production.queries`  
+**Request Body:**
+
+```typescript
+{
+  offset?: number;  // Смещение для пагинации (default: 0)
+  limit?: number;   // Лимит записей (default: 20)
+}
+```
+
+**Response:**
+
+```typescript
+{
+  customers: Array<{
+    id: string;
+    name: string;
+    createdAt: string;
+  }>;
+  total: number;  // Общее количество записей
+}
+```
+
+---
+
+#### ProductionGetWarehousesQuery
+
+Получить список складов.
+
+**Exchange:** `efko.production.queries`  
+**Request Body:**
+
+```typescript
+{
+  offset?: number;  // Смещение для пагинации (default: 0)
+  limit?: number;   // Лимит записей (default: 20)
+}
+```
+
+**Response:**
+
+```typescript
+{
+  warehouses: Array<{
+    id: string;
+    name: string;
+    code: string;
+    createdAt: string;
+  }>;
+  total: number;  // Общее количество записей
+}
+```
+
+---
+
+#### ProductionGetQualitySpecsQuery
+
+Получить спецификации качества с опциональной фильтрацией по продукту.
+
+**Exchange:** `efko.production.queries`  
+**Request Body:**
+
+```typescript
+{
+  productId?: string;  // Фильтр по продукту (опционально)
+  offset?: number;     // Смещение для пагинации (default: 0)
+  limit?: number;      // Лимит записей (default: 20)
+}
+```
+
+**Response:**
+
+```typescript
+{
+  qualitySpecs: Array<{
+    id: string;
+    productId: string;
+    parameterName: string;
+    lowerLimit: number;
+    upperLimit: number;
+    createdAt: string;
+  }>;
+  total: number;  // Общее количество записей (с учётом фильтров)
 }
 ```
 
@@ -678,13 +860,16 @@
 
 PostgreSQL/Prisma, основные таблицы:
 
+- `customers`: название, код, регион, признак активности, `source_system_id`.
+- `warehouses`: название, код, локация, вместимость, признак активности, `source_system_id`.
+- `quality_specs`: продукт, название параметра, нижний и верхний пределы, признак активности.
 - `products`: код, категория, бренд, единица измерения, срок годности, признак обязательного контроля качества, `source_system_id`.
 - `production_orders`: внешний номер заказа, продукт, целевое/фактическое количество, линия, плановые и фактические даты, статус.
 - `production_output`: заказ, продукт, номер партии, количество, статус качества, дата выпуска, смена.
-- `sales`: внешний идентификатор продажи, продукт, клиент, количество, сумма, дата, регион, канал.
+- `sales`: внешний идентификатор продажи, продукт, клиент, количество, сумма, дата, канал.
 - `inventory`: продукт, склад, партия, количество, единица измерения, время последнего обновления.
-- `quality_results`: партия, продукт, параметр, значение, пределы, `in_spec`, решение, дата теста.
-- `sensor_readings`: устройство, линия, параметр, значение, единица, качество, время измерения.
+- `quality_results`: партия, продукт, параметр, значение, спецификация качества, решение, дата теста.
+- `sensor_readings`: датчик, значение, качество сигнала, время измерения.
 - `outbox_messages`: event type, payload, correlation id, статус отправки, retry counters, error message.
 
 ## Интеграции

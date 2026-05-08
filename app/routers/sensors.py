@@ -36,7 +36,7 @@ async def get_sensor_history(
     to_date = date_range.date_to or date.today()
     
     return await service.get_sensor_history(
-        production_line=production_line,
+        production_line_id=production_line,
         parameter_name=parameter_name,
         from_date=from_date,
         to_date=to_date,
@@ -67,4 +67,4 @@ async def get_sensor_stats(
     """
     Get aggregated statistics per parameter per line.
     """
-    return await service.get_sensor_stats(production_line=production_line)
+    return await service.get_sensor_stats(production_line_id=production_line)

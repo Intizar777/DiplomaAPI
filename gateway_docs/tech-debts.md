@@ -326,7 +326,7 @@
 
 **Расположение:** `apps/gateway/src/app/auth/auth.controller.ts` (декоратор @UseGuards)
 
-**Описание:** `@UseGuards(RoleGuard(UserRole.ADMIN))` закомментирован, endpoint доступен всем авторизованным пользователям.
+**Описание:** `@UseGuards(RoleGuard(UserRole.admin))` закомментирован, endpoint доступен всем авторизованным пользователям.
 
 **Риск:** Любой user может список всех пользователей (email, names, roles). Potential privacy/security issue.
 

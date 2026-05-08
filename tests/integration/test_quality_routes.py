@@ -11,6 +11,7 @@ import pytest
 import pytest_asyncio
 
 from app.models.quality import QualityResult
+from app.models.reference import QualitySpec
 
 
 @pytest_asyncio.fixture
@@ -18,6 +19,26 @@ async def sample_quality_results(session):
     """Insert quality test results for testing."""
     today = date.today()
     product_id = uuid.uuid4()
+
+    # Create QualitySpec records first
+    ph_spec = QualitySpec(
+        id=uuid.uuid4(),
+        product_id=product_id,
+        parameter_name="pH",
+        lower_limit=Decimal("6.5"),
+        upper_limit=Decimal("7.5"),
+        is_active=True,
+    )
+    viscosity_spec = QualitySpec(
+        id=uuid.uuid4(),
+        product_id=product_id,
+        parameter_name="viscosity",
+        lower_limit=Decimal("100"),
+        upper_limit=Decimal("200"),
+        is_active=True,
+    )
+    session.add_all([ph_spec, viscosity_spec])
+    await session.flush()
 
     results = [
         # Lot-001: all approved, in spec
@@ -27,8 +48,7 @@ async def sample_quality_results(session):
             product_name="Product Alpha",
             parameter_name="pH",
             result_value=Decimal("7.0"),
-            lower_limit=Decimal("6.5"),
-            upper_limit=Decimal("7.5"),
+            quality_spec_id=ph_spec.id,
             in_spec=True,
             decision="approved",
             test_date=today - timedelta(days=2),
@@ -39,8 +59,7 @@ async def sample_quality_results(session):
             product_name="Product Alpha",
             parameter_name="viscosity",
             result_value=Decimal("150"),
-            lower_limit=Decimal("100"),
-            upper_limit=Decimal("200"),
+            quality_spec_id=viscosity_spec.id,
             in_spec=True,
             decision="approved",
             test_date=today - timedelta(days=2),
@@ -52,8 +71,7 @@ async def sample_quality_results(session):
             product_name="Product Alpha",
             parameter_name="pH",
             result_value=Decimal("8.5"),
-            lower_limit=Decimal("6.5"),
-            upper_limit=Decimal("7.5"),
+            quality_spec_id=ph_spec.id,
             in_spec=False,
             decision="rejected",
             test_date=today - timedelta(days=1),
@@ -64,8 +82,7 @@ async def sample_quality_results(session):
             product_name="Product Alpha",
             parameter_name="viscosity",
             result_value=Decimal("180"),
-            lower_limit=Decimal("100"),
-            upper_limit=Decimal("200"),
+            quality_spec_id=viscosity_spec.id,
             in_spec=True,
             decision="rejected",
             test_date=today - timedelta(days=1),
@@ -77,8 +94,7 @@ async def sample_quality_results(session):
             product_name="Product Alpha",
             parameter_name="pH",
             result_value=Decimal("7.1"),
-            lower_limit=Decimal("6.5"),
-            upper_limit=Decimal("7.5"),
+            quality_spec_id=ph_spec.id,
             in_spec=True,
             decision="pending",
             test_date=today,

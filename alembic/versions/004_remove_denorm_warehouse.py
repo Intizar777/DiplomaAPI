@@ -1,7 +1,7 @@
 """Remove denormalized warehouse_code column from inventory_snapshots
 
 Revision ID: 004_remove_denormalized_warehouse_code
-Revises: 003_remove_denormalized_columns_from_sensor_readings
+Revises: 003_remove_denorm_sensors
 Create Date: 2026-05-08 12:15:00.000000+00:00
 
 After introducing warehouse_id FK, remove the denormalized warehouse_code.
@@ -11,8 +11,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = '004_remove_denormalized_warehouse_code'
-down_revision = '003_remove_denormalized_columns_from_sensor_readings'
+revision = '004_remove_denorm_warehouse'
+down_revision = '003_remove_denorm_sensors'
 branch_labels = None
 depends_on = None
 

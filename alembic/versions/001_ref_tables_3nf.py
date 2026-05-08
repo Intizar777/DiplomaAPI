@@ -16,7 +16,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = '001_add_reference_tables_3nf'
+revision = '001_ref_tables_3nf'
 down_revision = '4757d0526d42'
 branch_labels = None
 depends_on = None

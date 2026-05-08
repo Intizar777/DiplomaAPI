@@ -13,7 +13,7 @@
 | `email` | String @unique | Email (до 255 символов) |
 | `passwordHash` | String | Bcrypt хеш пароля |
 | `fullName` | String | Полное имя (до 150 символов) |
-| `role` | UserRole | Роль (ADMIN, MANAGER, ANALYST, SHIFT_MANAGER, EMPLOYEE) |
+| `role` | UserRole | Роль (admin, manager, analyst, shift_manager, employee) |
 | `isActive` | Boolean | Активен ли пользователь (default: true) |
 | `employeeId` | UUID? | Привязка к Employee (nullable) |
 | `createdAt` | DateTime | Дата создания |
@@ -32,7 +32,7 @@
   "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "email": "ivan.petrov@example.com",
   "fullName": "Иванов Иван Петрович",
-  "role": "MANAGER",
+  "role": "manager",
   "isActive": true,
   "employeeId": "c3d4e5f6-a7b8-9012-cdef-123456789012",
   "createdAt": "2026-05-01T10:00:00Z",

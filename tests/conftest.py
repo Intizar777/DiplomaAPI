@@ -82,13 +82,25 @@ async def client(session):
 @pytest_asyncio.fixture
 async def sample_products(session) -> list[Product]:
     """Insert 5 sample products for testing."""
+    from app.models.reference import UnitOfMeasure
+    import uuid as uuid_module
+
+    # Create UnitOfMeasure first
+    uom = UnitOfMeasure(
+        id=uuid_module.uuid4(),
+        code="PCS",
+        name="pieces",
+    )
+    session.add(uom)
+    await session.flush()
+
     products = [
         Product(
             code=f"PROD-{fake.bothify(text='###')}",
             name=fake.word(),
             category=fake.random_element(["Electronics", "Food", "Clothing"]),
             brand=fake.word(),
-            unit_of_measure="pcs",
+            unit_of_measure_id=uom.id,
             shelf_life_days=fake.random_int(min=30, max=365),
             requires_quality_check=fake.boolean(),
             source_system_id=fake.uuid4()

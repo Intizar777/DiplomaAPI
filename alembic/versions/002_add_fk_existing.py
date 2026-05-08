@@ -1,7 +1,7 @@
 """Add foreign keys to existing tables (3NF normalization)
 
 Revision ID: 002_add_foreign_keys_to_existing_tables
-Revises: 001_add_reference_tables_3nf
+Revises: 001_ref_tables_3nf
 Create Date: 2026-05-08 12:05:00.000000+00:00
 
 Changes to existing tables:
@@ -15,8 +15,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = '002_add_foreign_keys_to_existing_tables'
-down_revision = '001_add_reference_tables_3nf'
+revision = '002_add_fk_existing'
+down_revision = '001_ref_tables_3nf'
 branch_labels = None
 depends_on = None
 

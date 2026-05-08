@@ -1,7 +1,7 @@
 """Remove denormalized limit columns from quality_results
 
 Revision ID: 005_remove_denormalized_quality_limits
-Revises: 004_remove_denormalized_warehouse_code
+Revises: 004_remove_denorm_warehouse
 Create Date: 2026-05-08 12:20:00.000000+00:00
 
 After introducing quality_spec_id FK, remove denormalized lower_limit and upper_limit.
@@ -12,8 +12,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = '005_remove_denormalized_quality_limits'
-down_revision = '004_remove_denormalized_warehouse_code'
+revision = '005_remove_denorm_quality'
+down_revision = '004_remove_denorm_warehouse'
 branch_labels = None
 depends_on = None
 

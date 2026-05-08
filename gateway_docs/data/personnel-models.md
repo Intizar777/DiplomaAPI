@@ -19,7 +19,7 @@
 | `sourceSystemId` | String? | ID во внешней системе (1C) |
 | `createdAt`, `updatedAt` | DateTime | Временные метки |
 
-**Связи:** parent/children (саморекурсия), location, positions, headEmployee
+**Связи:** parent/children (саморекурсия), location, employees, headEmployee
 
 **Примеры:**
 ```
@@ -39,11 +39,10 @@
 | `id` | UUID | Уникальный ID |
 | `title` | String | Название должности (например, "Senior Developer") |
 | `code` | String @unique | Код должности |
-| `departmentId` | UUID | Какое подразделение (FK Department) |
 | `sourceSystemId` | String? | ID во внешней системе |
 | `createdAt` | DateTime | Дата создания |
 
-**Связи:** department (FK), employees (обратная связь)
+**Связи:** employees (обратная связь)
 
 **Примеры:** Engineer, Manager, Analyst, Director
 
@@ -59,17 +58,18 @@
 | `fullName` | String | Полное имя |
 | `dateOfBirth` | Date | Дата рождения |
 | `positionId` | UUID | Текущая должность (FK Position) |
+| `departmentId` | UUID | Текущее подразделение (FK Department) |
 | `workstationId` | UUID? | Рабочее место (FK Workstation, nullable) |
 | `hireDate` | Date | Дата приема на работу |
 | `terminationDate` | Date? | Дата увольнения (nullable) |
-| `employmentType` | EmploymentType | MAIN, PART_TIME |
-| `status` | EmployeeStatus | ACTIVE, TERMINATED, ON_LEAVE |
+| `employmentType` | EmploymentType | main, part_time |
+| `status` | EmployeeStatus | active, terminated, on_leave |
 | `sourceSystemId` | String? | ID в ZUP (1C-зарплата) |
 | `createdAt`, `updatedAt` | DateTime | Временные метки |
 
-**Связи:** position (FK), workstation (FK), user (обратная через User.employeeId)
+**Связи:** position (FK), department (FK), workstation (FK), headOfDepartments (обратная для Department.headEmployeeId)
 
-**Локация сотрудника:** Определяется через `workstation.location` или `position.department.location`
+**Локация сотрудника:** Определяется через `workstation.location` или `department.location` (или `department.parent.location` для иерархии)
 
 ## Workstation
 
@@ -83,7 +83,7 @@
 | `code` | String | Код (уникален в локации) |
 | `locationId` | UUID | Где находится (FK Location) |
 | `productionLineId` | UUID? | К какой линии привязано (nullable) |
-| `workstationType` | WorkstationType | OPERATOR_POST, CONTROL_POINT, LOADING_AREA, LAB_STATION, OFFICE_DESK |
+| `workstationType` | WorkstationType | operator_post, control_point, loading_area, lab_station, office_desk |
 | `sourceSystemId` | String? | ID в MES |
 | `createdAt`, `updatedAt` | DateTime | Временные метки |
 
@@ -99,7 +99,7 @@
 | `id` | UUID | Уникальный ID |
 | `name` | String | Название локации |
 | `code` | String @unique | Код локации |
-| `type` | LocationType | OFFICE, FACTORY |
+| `type` | LocationType | office, factory |
 | `streetAddress` | String | Адрес |
 | `postalAreaId` | UUID? | Почтовый индекс (FK PostalArea) |
 | `sourceSystemId` | String? | ID в 1C |
@@ -178,10 +178,10 @@ const workstations = await prisma.workstation.findMany({
 | Enum | Значения |
 |------|----------|
 | **DepartmentType** | DIVISION, DEPARTMENT, SECTION, UNIT |
-| **LocationType** | OFFICE, FACTORY |
-| **EmploymentType** | MAIN, PART_TIME |
-| **EmployeeStatus** | ACTIVE, TERMINATED, ON_LEAVE |
-| **WorkstationType** | OPERATOR_POST, CONTROL_POINT, LOADING_AREA, LAB_STATION, OFFICE_DESK |
+| **LocationType** | office, factory |
+| **EmploymentType** | main, part_time |
+| **EmployeeStatus** | active, terminated, on_leave |
+| **WorkstationType** | operator_post, control_point, loading_area, lab_station, office_desk |
 
 ---
 

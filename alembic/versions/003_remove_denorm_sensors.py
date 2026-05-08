@@ -1,7 +1,7 @@
 """Remove denormalized columns from sensor_readings table
 
 Revision ID: 003_remove_denormalized_columns_from_sensor_readings
-Revises: 002_add_foreign_keys_to_existing_tables
+Revises: 002_add_fk_existing
 Create Date: 2026-05-08 12:10:00.000000+00:00
 
 After introducing sensor_id FK, remove denormalized fields:
@@ -16,8 +16,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = '003_remove_denormalized_columns_from_sensor_readings'
-down_revision = '002_add_foreign_keys_to_existing_tables'
+revision = '003_remove_denorm_sensors'
+down_revision = '002_add_fk_existing'
 branch_labels = None
 depends_on = None
 

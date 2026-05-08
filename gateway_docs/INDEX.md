@@ -42,10 +42,17 @@
 
 ## ⚙️ Эксплуатация
 
-- [**Диагностика**](operations/troubleshooting.md) — Типовые проблемы и решения *(запланировано)*
+- [**Диагностика**](07-troubleshooting.md) — Типовые проблемы и решения
 - [**Логирование**](operations/logging.md) — Pino, структурированные логи, Loki *(запланировано)*
 - [**Health checks**](operations/health-checks.md) — Как проверить что всё работает *(запланировано)*
 - [**Мониторинг**](operations/monitoring.md) — Prometheus, Grafana, OpenTelemetry *(запланировано)*
+
+## 🧪 Тестирование
+
+- [**Руководство по тестированию**](09-testing.md) — Unit, Integration, E2E тесты
+- [**E2E Production тесты**](09-testing.md#e2e-testing-production-service) — Sensors, Quality, KPI endpoints
+- [**Как писать тесты**](09-testing.md#unit-tests) — Структура, примеры, mocking
+- [**Отладка тестов**](09-testing.md#debugging-тестов) — Debugging, troubleshooting
 
 ## 📱 Интеграция
 

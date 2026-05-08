@@ -53,7 +53,7 @@ GET /api/personnel/employees?offset=20&limit=20
 
 **С фильтрами и пагинацией:**
 ```bash
-GET /api/personnel/employees?status=ACTIVE&offset=0&limit=50
+GET /api/personnel/employees?status=active&offset=0&limit=50
 
 Response:
 {
@@ -64,8 +64,8 @@ Response:
 
 **Production endpoints (с пагинацией):**
 ```bash
-GET /api/production/products?category=FINISHED_PRODUCT&offset=0&limit=20
-GET /api/production/orders?status=IN_PROGRESS&offset=0&limit=20
+GET /api/production/products?category=finished_product&offset=0&limit=20
+GET /api/production/orders?status=in_progress&offset=0&limit=20
 GET /api/production/sales?region=Краснодарский+край&offset=0&limit=50
 GET /api/production/sensors?productionLineId=<id>&offset=0&limit=100
 GET /api/production/production-lines?isActive=true&offset=0&limit=20
@@ -73,7 +73,7 @@ GET /api/production/production-lines?isActive=true&offset=0&limit=20
 
 **Auth endpoints (с пагинацией, limit до 1000):**
 ```bash
-GET /api/auth/users?role=MANAGER&offset=0&limit=100
+GET /api/auth/users?role=manager&offset=0&limit=100
 
 Response:
 {
@@ -106,10 +106,10 @@ GET /api/personnel/employees?offset=240&limit=20
 
 ```bash
 # По типу
-GET /api/personnel/locations?type=OFFICE
+GET /api/personnel/locations?type=office
 
 # По статусу
-GET /api/personnel/employees?status=ACTIVE
+GET /api/personnel/employees?status=active
 
 # По диапазону дат
 GET /api/production/sales?from=2026-05-01&to=2026-05-07

@@ -119,11 +119,11 @@ const isValid = await bcrypt.compare(password, hash);
 
 | Роль | Код | Описание | Права |
 |------|-----|----------|-------|
-| Администратор | `ADMIN` | Полный доступ ко всем операциям | Все CRUD операции, управление пользователями |
-| Менеджер | `MANAGER` | Управление данными в доменах | CRUD в Personnel и Production |
-| Менеджер смены | `SHIFT_MANAGER` | Операционное управление | Чтение данных, создание смен |
-| Аналитик | `ANALYST` | Только чтение | Только GET запросы |
-| Сотрудник | `EMPLOYEE` | Базовый доступ | Только собственные данные |
+| Администратор | `admin` | Полный доступ ко всем операциям | Все CRUD операции, управление пользователями |
+| Менеджер | `manager` | Управление данными в доменах | CRUD в Personnel и Production |
+| Менеджер смены | `shift_manager` | Операционное управление | Чтение данных, создание смен |
+| Аналитик | `analyst` | Только чтение | Только GET запросы |
+| Сотрудник | `employee` | Базовый доступ | Только собственные данные |
 
 ### Реализация
 
@@ -136,9 +136,9 @@ const isValid = await bcrypt.compare(password, hash);
 @Controller('personnel')
 export class PersonnelController {
   @Get('employees')
-  @Auth(UserRole.ADMIN, UserRole.MANAGER)
+  @Auth(UserRole.admin, UserRole.manager)
   getEmployees() {
-    // Только ADMIN и MANAGER
+    // Только admin и manager
   }
 }
 ```
@@ -148,10 +148,10 @@ export class PersonnelController {
 `RoleGuard` проверяет роль пользователя:
 
 ```typescript
-@Auth(UserRole.ADMIN, UserRole.MANAGER)
+@Auth(UserRole.admin, UserRole.manager)
 @Post('departments')
 createDepartment() {
-  // Требуется ADMIN или MANAGER
+  // Требуется admin или manager
 }
 ```
 

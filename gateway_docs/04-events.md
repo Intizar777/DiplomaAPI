@@ -303,7 +303,7 @@ Downstream сервисы подписываются на соответству
 {
   id: string;               // UUID сотрудника
   terminationDate: string;  // Дата увольнения (ISO date)
-  status: EmployeeStatus;    // Статус (TERMINATED)
+  status: EmployeeStatus;    // Статус (terminated)
 }
 ```
 

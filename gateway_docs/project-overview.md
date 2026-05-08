@@ -55,11 +55,11 @@
 
 ### Personnel
 
-`personnel` владеет кадровыми агрегатами и использует Prisma-репозитории плюс shared outbox для надежной публикации доменных событий после записи состояния.
+`personnel` владеет кадровыми агрегатами и использует Prisma-репозитории плюс shared outbox для надежной публикации доменных событий после записи состояния. Сущности: подразделения, должности, сотрудники, шаблоны смен, локации, рабочие места, почтовые зоны.
 
 ### Production
 
-`production` владеет операционными производственными данными. Feature-модули покрывают продукты, заказы, выпуск, продажи, остатки, качество, датчики и KPI. Для событийного взаимодействия используется shared outbox поверх Prisma.
+`production` владеет операционными производственными данными. Feature-модули покрывают клиентов, склады, спецификации качества, продукты, заказы, выпуск, продажи, остатки, качество, датчики и KPI. Для событийного взаимодействия используется shared outbox поверх Prisma.
 
 ### ETL
 
@@ -75,8 +75,8 @@
 Проект использует polyglot persistence.
 
 - `auth-service` использует Prisma с моделями `User` и `RefreshToken`.
-- `personnel` использует Prisma с моделями `Department`, `Position`, `Employee`, `ShiftScheduleTemplate`, `OutboxMessage`.
-- `production` использует Prisma с моделями `Product`, `ProductionOrder`, `ProductionOutput`, `Sale`, `Inventory`, `QualityResult`, `SensorReading`, `OutboxMessage`.
+- `personnel` использует Prisma с моделями `Department`, `Position`, `Employee`, `Location`, `Workstation`, `ProductionLine`, `ShiftScheduleTemplate`, `PostalArea`, `OutboxMessage`.
+- `production` использует Prisma с моделями `Product`, `ProductionOrder`, `ProductionOutput`, `Sale`, `Customer`, `Warehouse`, `Inventory`, `QualitySpec`, `QualityResult`, `Sensor`, `SensorParameter`, `SensorReading`, `OutboxMessage`.
 - `etl` использует MongoDB через Mongoose как минимум для `RawImport` и `TransformationLog`, а также GridFS-подобное файловое хранение для импортируемых файлов.
 
 Prisma-сервисы получают datasource URLs из env через `prisma.config.ts`.

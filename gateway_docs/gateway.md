@@ -85,7 +85,7 @@
 - `register` и `login` имеют отдельные throttling-лимиты
 - `GET /auth/me` опирается на `AuthGuard`, который после валидации JWT догружает пользователя из `auth-service`
 - часть маршрутов ограничена ролями через `@Auth(...)`
-- `GET /users` в коде помечен как admin-only по Swagger/описанию, но decorator `@Auth(UserRole.ADMIN)` сейчас закомментирован
+- `GET /users` в коде помечен как admin-only по Swagger/описанию, но decorator `@Auth(UserRole.admin)` сейчас закомментирован
 
 ### Personnel API
 
@@ -99,7 +99,7 @@
 - сотрудников
 - шаблонов смен
 
-Маршруты защищены ролями `ADMIN`, `MANAGER`, `SHIFT_MANAGER`, `ANALYST` в зависимости от операции.
+Маршруты защищены ролями `admin`, `manager`, `shift_manager`, `analyst` в зависимости от операции.
 
 Ниже на gateway зарегистрированы HTTP маршруты для новых сущностей:
 - `/api/personnel/locations` — CRUD локаций
@@ -135,7 +135,7 @@
 
 Особенности:
 
-- требуется роль `ADMIN`
+- требуется роль `admin`
 - при file import используется `FileInterceptor`
 - максимальный размер файла: `20 MB`
 - проксируются `x-request-id`, `x-user-id`, `x-user-role` и входящий `Authorization`

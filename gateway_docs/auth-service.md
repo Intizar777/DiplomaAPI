@@ -386,7 +386,7 @@ Payload access token по коду включает:
   email: string;        // Email пользователя, должен быть уникальным
   password: string;     // Пароль (минимум 8 символов)
   fullName: string;     // Полное имя (формат: Фамилия Имя Отчество)
-  role?: UserRole;      // Роль (опционально, по умолчанию EMPLOYEE)
+  role?: UserRole;      // Роль (опционально, по умолчанию employee)
   employeeId?: string;  // UUID сотрудника (опционально)
 }
 ```

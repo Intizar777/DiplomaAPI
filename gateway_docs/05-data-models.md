@@ -63,7 +63,7 @@ Prisma клиент генерируется в `apps/<service>/src/generated/pr
 | `email` | String @unique | Email пользователя | `@db.VarChar(255)` |
 | `passwordHash` | String | Хеш пароля (bcrypt) | `@map("password_hash") @db.VarChar(255)` |
 | `fullName` | String | Полное имя пользователя | `@map("full_name") @db.VarChar(150)` |
-| `role` | UserRole | Роль пользователя | `@default(EMPLOYEE)` |
+| `role` | UserRole | Роль пользователя | `@default(employee)` |
 | `isActive` | Boolean | Статус активности | `@default(true) @map("is_active")` |
 | `employeeId` | UUID? | ID связанного сотрудника (nullable) | `@map("employee_id") @db.Uuid` |
 | `createdAt` | DateTime | Дата создания | `@default(now()) @map("created_at")` |
@@ -85,7 +85,7 @@ model User {
   email         String         @unique @db.VarChar(255)
   passwordHash  String         @map("password_hash") @db.VarChar(255)
   fullName      String         @map("full_name") @db.VarChar(150)
-  role          UserRole       @default(EMPLOYEE)
+  role          UserRole       @default(employee)
   isActive      Boolean        @default(true) @map("is_active")
   employeeId    String?        @map("employee_id") @db.Uuid
   createdAt     DateTime       @default(now()) @map("created_at")
@@ -176,6 +176,8 @@ enum UserRole {
 
 ## Personnel Service Models
 
+**Важно:** Модель `ProductionLine` в Personnel Service ***не существует***. Personnel использует `ProductionLineView` — представление, синхронизируемое из Production Service через RabbitMQ события (ProductionLineChangedEvent) и Cron. Подробнее: [ProductionLineView](#productionlineview-personnel).
+
 ### Department
 
 Модель подразделения организации.
@@ -203,8 +205,8 @@ enum UserRole {
 - `parent` — многие к одному с Department (саморекурсия)
 - `children` — один ко многим с Department (саморекурсия)
 - `location` — многие к одному с Location
-- `positions` — один ко многим с Position
-- `departmentProductionLines` — один ко многим с DepartmentProductionLine
+- `headEmployee` — многие к одному с Employee (руководитель подразделения)
+- `employees` — один ко многим с Employee (сотрудники подразделения)
 
 #### Индексы
 
@@ -228,11 +230,11 @@ model Department {
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
 
-  parent   Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id])
-  children Department[] @relation("DepartmentHierarchy")
-  location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
-  positions Position[]
-  departmentProductionLines DepartmentProductionLine[]
+  parent        Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id])
+  children      Department[] @relation("DepartmentHierarchy")
+  location      Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  headEmployee  Employee? @relation("DepartmentHead", fields: [headEmployeeId], references: [id], onDelete: SetNull)
+  employees     Employee[] @relation("DepartmentEmployees")
 
   @@index([parentId])
   @@index([locationId])
@@ -258,35 +260,31 @@ model Department {
 | `id` | UUID @id | Уникальный идентификатор | `@default(uuid())` |
 | `title` | String | Название должности | `@db.VarChar(150)` |
 | `code` | String @unique | Код должности | `@db.VarChar(20)` |
-| `departmentId` | UUID | ID подразделения | `@map("department_id") @db.Uuid` |
 | `sourceSystemId` | String? | ID в исходной системе | `@map("source_system_id") @db.VarChar(20)` |
 | `createdAt` | DateTime | Дата создания | `@default(now()) @map("created_at")` |
 
 #### Связи
 
-- `department` — многие к одному с Department
 - `employees` — один ко многим с Employee
+
+**Примечание:** Position больше не имеет прямую связь с Department. Связь между должностью и подразделением определяется через Employee: `position → employee → department`.
 
 #### Индексы
 
-- `departmentId` — индекс
 - `sourceSystemId` — индекс
 
 #### Prisma модель
 
 ```prisma
 model Position {
-  id           String   @id @default(uuid()) @db.Uuid
-  title        String   @db.VarChar(150)
-  code         String   @unique @db.VarChar(20)
-  departmentId String   @map("department_id") @db.Uuid
-  sourceSystemId String? @map("source_system_id") @db.VarChar(20)
-  createdAt    DateTime @default(now()) @map("created_at")
+  id             String   @id @default(uuid()) @db.Uuid
+  title          String   @db.VarChar(150)
+  code           String   @unique @db.VarChar(20)
+  sourceSystemId String?  @map("source_system_id") @db.VarChar(20)
+  createdAt      DateTime @default(now()) @map("created_at")
 
-  department Department @relation(fields: [departmentId], references: [id])
-  employees  Employee[]
+  employees Employee[]
 
-  @@index([departmentId])
   @@index([sourceSystemId])
   @@map("positions")
 }
@@ -310,11 +308,12 @@ model Position {
 | `fullName` | String | Полное имя | `@map("full_name") @db.VarChar(150)` |
 | `dateOfBirth` | DateTime | Дата рождения | `@map("date_of_birth") @db.Date` |
 | `positionId` | UUID | ID должности | `@map("position_id") @db.Uuid` |
+| `departmentId` | UUID | ID подразделения | `@map("department_id") @db.Uuid` |
 | `workstationId` | UUID? | ID рабочего места | `@map("workstation_id") @db.Uuid` |
 | `hireDate` | DateTime | Дата приема | `@map("hire_date") @db.Date` |
 | `terminationDate` | DateTime? | Дата увольнения | `@map("termination_date") @db.Date` |
 | `employmentType` | EmploymentType | Тип занятости | `@map("employment_type")` |
-| `status` | EmployeeStatus | Статус сотрудника | `@default(ACTIVE)` |
+| `status` | EmployeeStatus | Статус сотрудника | `@default(active)` |
 | `sourceSystemId` | String? @unique | ID в исходной системе | `@map("source_system_id") @db.VarChar(20)` |
 | `createdAt` | DateTime | Дата создания | `@default(now()) @map("created_at")` |
 | `updatedAt` | DateTime | Дата обновления | `@updatedAt @map("updated_at")` |
@@ -322,13 +321,16 @@ model Position {
 #### Связи
 
 - `position` — многие к одному с Position
+- `department` — многие к одному с Department
 - `workstation` — многие к одному с Workstation (опционально)
+- `headOfDepartments` — один ко многим с Department (для Employee который является руководителем)
 
-**Примечание по локации:** Локация сотрудника теперь определяется через рабочее место (`workstation.locationId`) или через структурное подразделение (`position.department.location`). Поле `locationId` удалено для нормализации схемы в третью нормальную форму (3NF).
+**Примечание по локации:** Локация сотрудника определяется через рабочее место (`workstation.location`) или через структурное подразделение (`department.location`).
 
 #### Индексы
 
 - `positionId` — индекс
+- `departmentId` — индекс
 - `workstationId` — индекс
 - `status` — индекс
 - `personnelNumber` — индекс
@@ -343,19 +345,23 @@ model Employee {
   fullName         String         @map("full_name") @db.VarChar(150)
   dateOfBirth      DateTime       @map("date_of_birth") @db.Date
   positionId       String         @map("position_id") @db.Uuid
+  departmentId     String         @map("department_id") @db.Uuid
   workstationId    String?        @map("workstation_id") @db.Uuid
   hireDate         DateTime       @map("hire_date") @db.Date
   terminationDate  DateTime?      @map("termination_date") @db.Date
   employmentType   EmploymentType @map("employment_type")
-  status           EmployeeStatus @default(ACTIVE)
+  status           EmployeeStatus @default(active)
   sourceSystemId   String?        @unique @map("source_system_id") @db.VarChar(20)
   createdAt        DateTime       @default(now()) @map("created_at")
   updatedAt        DateTime       @updatedAt @map("updated_at")
 
-  position    Position    @relation(fields: [positionId], references: [id])
-  workstation Workstation? @relation(fields: [workstationId], references: [id], onDelete: SetNull)
+  position             Position    @relation(fields: [positionId], references: [id])
+  department           Department  @relation("DepartmentEmployees", fields: [departmentId], references: [id])
+  workstation          Workstation? @relation(fields: [workstationId], references: [id], onDelete: SetNull)
+  headOfDepartments    Department[] @relation("DepartmentHead")
 
   @@index([positionId])
+  @@index([departmentId])
   @@index([workstationId])
   @@index([status])
   @@index([personnelNumber])
@@ -473,69 +479,13 @@ model Location {
 
 ---
 
-### ProductionLine
+### ProductionLine (только Production Service)
 
-Модель производственной линии.
-
-**Таблица:** `production_lines`  
-**Схема:** `apps/personnel/prisma/schema.prisma`
-
-#### Поля
-
-| Поле | Тип | Описание | Constraints |
-|------|-----|----------|-------------|
-| `id` | UUID @id | Уникальный идентификатор | `@default(uuid())` |
-| `name` | String | Название линии | `@db.VarChar(150)` |
-| `code` | String | Код линии | `@db.VarChar(20)` |
-| `locationId` | UUID | ID локации | `@map("location_id") @db.Uuid` |
-| `description` | String? | Описание | `@db.Text` |
-| `capacity` | Int? | Пропускная способность | |
-| `isActive` | Boolean | Активна | `@default(true) @map("is_active")` |
-| `sourceSystemId` | String? @unique | ID в исходной системе | `@map("source_system_id") @db.VarChar(20)` |
-| `createdAt` | DateTime | Дата создания | `@default(now()) @map("created_at")` |
-| `updatedAt` | DateTime | Дата обновления | `@updatedAt @map("updated_at")` |
-
-#### Связи
-
-- `location` — многие к одному с Location
-- `workstations` — один ко многим с Workstation
-- `departmentLines` — один ко многим с DepartmentProductionLine
-
-#### Индексы
-
-- Уникальный индекс на `(locationId, code)`
-- `locationId` — индекс
-- `sourceSystemId` — уникальный индекс
-
-#### Prisma модель
-
-```prisma
-model ProductionLine {
-  id             String   @id @default(uuid()) @db.Uuid
-  name           String   @db.VarChar(150)
-  code           String   @db.VarChar(20)
-  locationId     String   @map("location_id") @db.Uuid
-  description    String?  @db.Text
-  capacity       Int?
-  isActive       Boolean  @default(true) @map("is_active")
-  sourceSystemId String?  @unique @map("source_system_id") @db.VarChar(20)
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-
-  location       Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
-  workstations   Workstation[]
-  departmentLines DepartmentProductionLine[]
-
-  @@unique([locationId, code])
-  @@index([locationId])
-  @@index([sourceSystemId])
-  @@map("production_lines")
-}
-```
+**Примечание:** `ProductionLine` физически находится только в Production Service. В Personnel Service используется `ProductionLineView` — представление, синхронизируемое из Production. Подробнее: [ProductionLineView в personnel-models.md](./data/personnel-models.md#productionlineview).
 
 ---
 
-### Workstation
+### Product
 
 Модель рабочего места.
 
@@ -697,7 +647,7 @@ model ShiftScheduleTemplate {
 | `eventType` | String | Тип события | `@map("event_type") @db.VarChar(100)` |
 | `payload` | Json | Payload события | |
 | `correlationId` | String? | ID корреляции | `@map("correlation_id") @db.VarChar(100)` |
-| `status` | OutboxStatus | Статус | `@default(PENDING)` |
+| `status` | OutboxStatus | Статус | `@default(pending)` |
 | `retryCount` | Int | Количество попыток | `@default(0) @map("retry_count")` |
 | `errorMessage` | String? | Сообщение об ошибке | `@map("error_message")` |
 | `createdAt` | DateTime | Дата создания | `@default(now()) @map("created_at")` |
@@ -718,7 +668,7 @@ model OutboxMessage {
   eventType     String       @map("event_type") @db.VarChar(100)
   payload       Json
   correlationId String?      @map("correlation_id") @db.VarChar(100)
-  status        OutboxStatus @default(PENDING)
+  status        OutboxStatus @default(pending)
   retryCount    Int          @default(0) @map("retry_count")
   errorMessage  String?      @map("error_message")
   createdAt     DateTime     @default(now()) @map("created_at")
@@ -811,6 +761,43 @@ model OutboxMessage {
 
 ## Production Service Models
 
+### UnitOfMeasure
+
+Модель единицы измерения (3NF нормализация).
+
+**Таблица:** `units_of_measure`  
+**Схема:** `apps/production/prisma/schema.prisma`
+
+#### Поля
+
+| Поле | Тип | Описание | Constraints |
+|------|-----|----------|-------------|
+| `id` | UUID @id | Уникальный идентификатор | `@default(uuid())` |
+| `code` | String @unique | Код (кг, л, шт) | `@db.VarChar(20)` |
+| `name` | String | Название | `@db.VarChar(100)` |
+| `createdAt` | DateTime | Дата создания | `@default(now()) @map("created_at")` |
+
+#### Связи
+
+- `products` — один ко многим с Product
+
+#### Prisma модель
+
+```prisma
+model UnitOfMeasure {
+  id        String    @id @default(uuid()) @db.Uuid
+  code      String    @unique @db.VarChar(20)
+  name      String    @db.VarChar(100)
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  products Product[]
+
+  @@map("units_of_measure")
+}
+```
+
+---
+
 ### Product
 
 Модель продукта.
@@ -827,7 +814,7 @@ model OutboxMessage {
 | `name` | String | Название продукта | `@db.VarChar(200)` |
 | `category` | ProductCategory | Категория продукта | |
 | `brand` | String? | Бренд | `@db.VarChar(50)` |
-| `unitOfMeasure` | String | Единица измерения | `@map("unit_of_measure") @db.VarChar(10)` |
+| `unitOfMeasureId` | UUID | Единица измерения (FK) | `@map("unit_of_measure_id") @db.Uuid` |
 | `shelfLifeDays` | Int? | Срок хранения в днях | `@map("shelf_life_days")` |
 | `requiresQualityCheck` | Boolean | Требуется контроль качества | `@default(false) @map("requires_quality_check")` |
 | `sourceSystemId` | String? @unique | ID в исходной системе | `@map("source_system_id") @db.VarChar(20)` |
@@ -836,6 +823,7 @@ model OutboxMessage {
 
 #### Связи
 
+- `unitOfMeasure` — многие к одному с UnitOfMeasure
 - `orders` — один ко многим с ProductionOrder
 - `sales` — один ко многим с Sale
 - `inventory` — один ко многим с Inventory
@@ -858,7 +846,8 @@ model Product {
   name                 String          @db.VarChar(200)
   category             ProductCategory
   brand                String?         @db.VarChar(50)
-  unitOfMeasure        String          @map("unit_of_measure") @db.VarChar(10)
+  unitOfMeasureId      String          @map("unit_of_measure_id") @db.Uuid
+  unitOfMeasure        UnitOfMeasure   @relation(fields: [unitOfMeasureId], references: [id])
   shelfLifeDays        Int?            @map("shelf_life_days")
   requiresQualityCheck Boolean         @default(false) @map("requires_quality_check")
   sourceSystemId       String?         @unique @map("source_system_id") @db.VarChar(20)
@@ -898,7 +887,7 @@ model Product {
 | `targetQuantity` | Decimal | Целевое количество | `@map("target_quantity") @db.Decimal(15, 3)` |
 | `actualQuantity` | Decimal? | Фактическое количество | `@map("actual_quantity") @db.Decimal(15, 3)` |
 | `unitOfMeasure` | String | Единица измерения | `@map("unit_of_measure") @db.VarChar(10)` |
-| `status` | OrderStatus | Статус заказа | `@default(PLANNED)` |
+| `status` | OrderStatus | Статус заказа | `@default(planned)` |
 | `productionLine` | String | Производственная линия | `@map("production_line") @db.VarChar(50)` |
 | `plannedStart` | DateTime | Планируемое начало | `@map("planned_start")` |
 | `plannedEnd` | DateTime | Планируемое окончание | `@map("planned_end")` |
@@ -929,7 +918,7 @@ model ProductionOrder {
   targetQuantity  Decimal     @map("target_quantity") @db.Decimal(15, 3)
   actualQuantity  Decimal?    @map("actual_quantity") @db.Decimal(15, 3)
   unitOfMeasure   String      @map("unit_of_measure") @db.VarChar(10)
-  status          OrderStatus @default(PLANNED)
+  status          OrderStatus @default(planned)
   productionLine  String      @map("production_line") @db.VarChar(50)
   plannedStart    DateTime    @map("planned_start")
   plannedEnd      DateTime    @map("planned_end")
@@ -967,7 +956,7 @@ model ProductionOrder {
 | `productId` | UUID | ID продукта | `@map("product_id") @db.Uuid` |
 | `lotNumber` | String | Номер партии | `@map("lot_number") @db.VarChar(20)` |
 | `quantity` | Decimal | Количество | `@db.Decimal(15, 3)` |
-| `qualityStatus` | QualityStatus | Статус качества | `@default(PENDING) @map("quality_status")` |
+| `qualityStatus` | QualityStatus | Статус качества | `@default(pending) @map("quality_status")` |
 | `productionDate` | DateTime | Дата производства | `@map("production_date")` |
 | `shift` | String | Смена | `@db.VarChar(20)` |
 | `createdAt` | DateTime | Дата создания | `@default(now()) @map("created_at")` |
@@ -993,7 +982,7 @@ model ProductionOutput {
   productId      String        @map("product_id") @db.Uuid
   lotNumber      String        @map("lot_number") @db.VarChar(20)
   quantity       Decimal       @db.Decimal(15, 3)
-  qualityStatus  QualityStatus @default(PENDING) @map("quality_status")
+  qualityStatus  QualityStatus @default(pending) @map("quality_status")
   productionDate DateTime      @map("production_date")
   shift          String        @db.VarChar(20)
   createdAt      DateTime      @default(now()) @map("created_at")

@@ -12,15 +12,35 @@
 | `id` | UUID | Уникальный ID |
 | `code` | String @unique | Код продукта (например, "PRODUCT-001") |
 | `name` | String | Название продукта |
-| `category` | ProductCategory | RAW_MATERIAL, SEMI_FINISHED, FINISHED_PRODUCT, PACKAGING |
+| `category` | ProductCategory | raw_material, semi_finished, finished_product, packaging |
 | `brand` | String? | Бренд (optional) |
-| `unitOfMeasure` | String | Единица измерения (kg, л, шт, и т.д.) |
+| `unitOfMeasureId` | UUID | Единица измерения (FK UnitOfMeasure) |
+| `unitOfMeasure` | UnitOfMeasure? | Связанная единица измерения (id, code, name) |
 | `shelfLifeDays` | Int? | Срок хранения в днях (nullable) |
 | `requiresQualityCheck` | Boolean | Требуется ли контроль качества |
 | `sourceSystemId` | String? | ID в ERP |
 | `createdAt`, `updatedAt` | DateTime | Временные метки |
 
 **Связи:** orders, sales, inventory, qualitySpecs
+
+## UnitOfMeasure
+
+**Таблица:** `units_of_measure`  
+**Назначение:** Справочник единиц измерения (3NF нормализация)
+
+| Поле | Тип | Описание |
+|------|-----|---------|
+| `id` | UUID | Уникальный ID |
+| `code` | String @unique | Код (кг, л, шт) |
+| `name` | String | Название (Килограмм, Литр, Штука) |
+| `createdAt` | DateTime | Дата создания |
+
+**Связи:** products (обратная)
+
+**Примеры:**
+- kg, Килограмм
+- л, Литр
+- шт, Штука
 
 ## ProductionLine
 
@@ -55,7 +75,7 @@
 | `targetQuantity` | Decimal | Запланированное количество |
 | `actualQuantity` | Decimal? | Фактическое количество |
 | `unitOfMeasure` | String | Единица измерения |
-| `status` | OrderStatus | PLANNED, IN_PROGRESS, COMPLETED, CANCELLED |
+| `status` | OrderStatus | planned, in_progress, completed, cancelled |
 | `productionLineId` | UUID | Производственная линия (FK ProductionLine) |
 | `plannedStart`, `plannedEnd` | DateTime | Плановые даты |
 | `actualStart`, `actualEnd` | DateTime? | Фактические даты |
@@ -77,7 +97,7 @@
 | `orderId` | UUID | Производственный заказ (FK ProductionOrder) |
 | `lotNumber` | String | Номер партии |
 | `quantity` | Decimal | Количество |
-| `qualityStatus` | QualityStatus | PENDING, APPROVED, REJECTED |
+| `qualityStatus` | QualityStatus | pending, approved, rejected |
 | `productionDate` | DateTime | Дата производства |
 | `shift` | String | Смена |
 | `createdAt` | DateTime | Дата создания |
@@ -116,7 +136,7 @@
 | `lotNumber` | String | Номер партии |
 | `resultValue` | Decimal | Измеренное значение |
 | `qualitySpecId` | UUID | Спецификация для сравнения (FK QualitySpec) |
-| `qualityStatus` | QualityStatus | PENDING, APPROVED, REJECTED |
+| `qualityStatus` | QualityStatus | pending, approved, rejected |
 | `testDate` | DateTime | Когда проводился тест |
 | `createdAt` | DateTime | Дата создания записи |
 
@@ -166,7 +186,7 @@
 | `id` | UUID | Уникальный ID |
 | `sensorId` | UUID | Какой датчик (FK Sensor) |
 | `value` | Decimal | Значение |
-| `quality` | SensorQuality | GOOD, DEGRADED, BAD |
+| `quality` | SensorQuality | good, degraded, bad |
 | `recordedAt` | DateTime | Когда записано |
 | `createdAt` | DateTime | Дата создания |
 
@@ -203,7 +223,7 @@
 | `amount` | Decimal | Сумма в деньгах |
 | `saleDate` | Date | Дата продажи |
 | `region` | String | Регион доставки |
-| `channel` | SaleChannel | RETAIL, WHOLESALE, HORECA, EXPORT |
+| `channel` | SaleChannel | retail, wholesale, horeca, export |
 | `createdAt` | DateTime | Дата создания |
 
 **Связи:** product, customer
@@ -242,11 +262,11 @@
 
 | Enum | Значения |
 |------|----------|
-| **ProductCategory** | RAW_MATERIAL, SEMI_FINISHED, FINISHED_PRODUCT, PACKAGING |
-| **OrderStatus** | PLANNED, IN_PROGRESS, COMPLETED, CANCELLED |
-| **QualityStatus** | PENDING, APPROVED, REJECTED |
-| **SaleChannel** | RETAIL, WHOLESALE, HORECA, EXPORT |
-| **SensorQuality** | GOOD, DEGRADED, BAD |
+| **ProductCategory** | raw_material, semi_finished, finished_product, packaging |
+| **OrderStatus** | planned, in_progress, completed, cancelled |
+| **QualityStatus** | pending, approved, rejected |
+| **SaleChannel** | retail, wholesale, horeca, export |
+| **SensorQuality** | good, degraded, bad |
 
 ---
 

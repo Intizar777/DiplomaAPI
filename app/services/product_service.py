@@ -8,7 +8,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Product
+from app.models import Product, UnitOfMeasure
 from app.services.gateway_client import GatewayClient
 from app.utils.logging_utils import track_feature_path, log_data_flow
 import structlog
@@ -51,17 +51,61 @@ class ProductService:
         result = await self.db.execute(query)
         return {row[0]: row[1] for row in result.all()}
     
+    async def _sync_unit_of_measure(self, unit_data: dict) -> Optional[UUID]:
+        """Sync a unit of measure and return its ID."""
+        if not unit_data:
+            return None
+
+        unit_id_raw = unit_data.get("id")
+        try:
+            unit_id = UUID(unit_id_raw) if isinstance(unit_id_raw, str) else unit_id_raw
+        except (ValueError, AttributeError, TypeError):
+            logger.warning("invalid_unit_of_measure_id_skipped", raw=unit_id_raw)
+            return None
+
+        code = unit_data.get("code")
+
+        # Try to find existing by code or id
+        if code:
+            existing = await self.db.execute(
+                select(UnitOfMeasure).where(UnitOfMeasure.code == code)
+            )
+            unit = existing.scalar_one_or_none()
+        else:
+            unit = None
+
+        if not unit and unit_id:
+            existing = await self.db.execute(
+                select(UnitOfMeasure).where(UnitOfMeasure.id == unit_id)
+            )
+            unit = existing.scalar_one_or_none()
+
+        if unit:
+            unit.code = code or unit.code
+            unit.name = unit_data.get("name", unit.name)
+            unit.source_system_id = unit_data.get("sourceSystemId", unit.source_system_id)
+        else:
+            unit = UnitOfMeasure(
+                id=unit_id,
+                code=code or f"unit_{unit_id}",
+                name=unit_data.get("name", ""),
+                source_system_id=unit_data.get("sourceSystemId"),
+            )
+            self.db.add(unit)
+
+        return unit.id
+
     @track_feature_path(feature_name="products.sync_from_gateway", log_result=True)
     async def sync_from_gateway(self, from_date=None, to_date=None) -> int:
         """Sync products from Gateway (full upsert)."""
         logger.info("syncing_products_from_gateway")
-        
+
         gateway_data = await self.gateway.get_products()
         products = gateway_data.get("products", [])
         logger.info("products_fetched_from_gateway", total_products=len(products))
-        
+
         records_processed = 0
-        
+
         for product_data in products:
             product_id_raw = product_data.get("id")
             try:
@@ -70,7 +114,13 @@ class ProductService:
                 logger.warning("invalid_product_id_skipped", raw=product_id_raw)
                 continue
             code = product_data.get("code")
-            
+
+            # Sync UnitOfMeasure if present
+            unit_of_measure_id = None
+            unit_data = product_data.get("unitOfMeasure")
+            if unit_data:
+                unit_of_measure_id = await self._sync_unit_of_measure(unit_data)
+
             # Try to find existing product by code first (unique constraint), then by id
             if code:
                 existing = await self.db.execute(
@@ -79,20 +129,20 @@ class ProductService:
                 product = existing.scalar_one_or_none()
             else:
                 product = None
-            
+
             # If not found by code, try by id
             if not product and product_id:
                 existing = await self.db.execute(
                     select(Product).where(Product.id == product_id)
                 )
                 product = existing.scalar_one_or_none()
-            
+
             if product:
                 product.code = code or product.code
                 product.name = product_data.get("name", product.name)
                 product.category = product_data.get("category", product.category)
                 product.brand = product_data.get("brand", product.brand)
-                product.unit_of_measure = product_data.get("unitOfMeasure", product.unit_of_measure)
+                product.unit_of_measure_id = unit_of_measure_id
                 product.shelf_life_days = product_data.get("shelfLifeDays", product.shelf_life_days)
                 product.requires_quality_check = product_data.get("requiresQualityCheck", product.requires_quality_check)
                 product.source_system_id = product_data.get("sourceSystemId", product.source_system_id)
@@ -103,19 +153,19 @@ class ProductService:
                     name=product_data.get("name", ""),
                     category=product_data.get("category"),
                     brand=product_data.get("brand"),
-                    unit_of_measure=product_data.get("unitOfMeasure"),
+                    unit_of_measure_id=unit_of_measure_id,
                     shelf_life_days=product_data.get("shelfLifeDays"),
                     requires_quality_check=product_data.get("requiresQualityCheck", False),
                     source_system_id=product_data.get("sourceSystemId"),
                 )
                 self.db.add(product)
-            
+
             records_processed += 1
-            
+
             if records_processed % 100 == 0:
                 await self.db.flush()
                 logger.info("products_sync_batch", records_processed=records_processed)
-        
+
         log_data_flow(
             source="product_service",
             target="database",

@@ -74,7 +74,9 @@
 |-----------|-----------|----------------------|-------------------------------|------------------|------------------------------------------|----------------|
 | `Код` 🔑 | `code` | `Код → code` | `code: string` | `code`, `sourceSystemId` | `code`, `sourceSystemId` | `code VARCHAR(20)`, `source_system_id` |
 | `Наименование` | `name` | `Наименование → name` | `name: string` | `title: pos.name` | `title` | `title VARCHAR(150)` |
-| `Подразделение` 🔗 | `department.code` | `Подразделение → department` + nested `Код → code` | `department: ZupDepartmentRefDto { code }` | `departmentId: pos.department.code` | `departmentId: string` (code or UUID) | `department_id UUID FK` |
+| `Подразделение` 🔗 | `department.code` | `Подразделение → department` + nested `Код → code` | `department: ZupDepartmentRefDto { code }` | ⚠️ **NOT IMPORTED** (v1.2.0: Position no longer has departmentId) | — | — |
+
+**Примечание (v1.2.0):** Position больше не связана напрямую с Department. Relationship: Position → Employee → Department. Данные о подразделении для должности из источника игнорируются при импорте; связь определяется через сотрудника.
 
 ### 1.4 Шаблоны смен (`1c_zup / shift_templates`) — уже работает, включено для полноты
 

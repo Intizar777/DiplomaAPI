@@ -4,11 +4,12 @@ Quality business logic service.
 from datetime import date
 from decimal import Decimal
 from typing import Dict, List, Optional
+from uuid import UUID
 
 from sqlalchemy import select, func, desc, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import QualityResult, Product
+from app.models import QualityResult, Product, QualitySpec
 from app.schemas import QualitySummaryResponse, DefectTrendsResponse, QualityLotsResponse
 from app.services.gateway_client import GatewayClient
 from app.utils.logging_utils import track_feature_path, log_data_flow
@@ -23,7 +24,45 @@ class QualityService:
     def __init__(self, db: AsyncSession, gateway: Optional[GatewayClient] = None):
         self.db = db
         self.gateway = gateway
-    
+
+    async def _sync_quality_spec(self, product_id: UUID, parameter_name: str, spec_data: dict) -> Optional[UUID]:
+        """Sync a quality spec and return its ID."""
+        if not spec_data or not product_id or not parameter_name:
+            return None
+
+        spec_id_raw = spec_data.get("id")
+        try:
+            spec_id = UUID(spec_id_raw) if isinstance(spec_id_raw, str) else spec_id_raw
+        except (ValueError, AttributeError, TypeError):
+            logger.warning("invalid_quality_spec_id_skipped", raw=spec_id_raw)
+            return None
+
+        # Try to find existing by (product_id, parameter_name) unique constraint
+        existing = await self.db.execute(
+            select(QualitySpec).where(
+                QualitySpec.product_id == product_id,
+                QualitySpec.parameter_name == parameter_name
+            )
+        )
+        spec = existing.scalar_one_or_none()
+
+        if spec:
+            spec.lower_limit = Decimal(str(spec_data.get("lowerLimit", spec.lower_limit)))
+            spec.upper_limit = Decimal(str(spec_data.get("upperLimit", spec.upper_limit)))
+            spec.is_active = spec_data.get("isActive", spec.is_active)
+        else:
+            spec = QualitySpec(
+                id=spec_id,
+                product_id=product_id,
+                parameter_name=parameter_name,
+                lower_limit=Decimal(str(spec_data.get("lowerLimit", 0))),
+                upper_limit=Decimal(str(spec_data.get("upperLimit", 100))),
+                is_active=spec_data.get("isActive", True),
+            )
+            self.db.add(spec)
+
+        return spec.id
+
     async def get_quality_summary(
         self,
         from_date: date,
@@ -253,15 +292,26 @@ class QualityService:
                 test_date_parsed = test_date_raw
             else:
                 test_date_parsed = date.today()
-            
+
+            # Sync QualitySpec if present
+            quality_spec_id = None
+            product_id = result.get("productId")
+            parameter_name = result.get("parameterName", "")
+            spec_data = result.get("qualitySpec")
+            if product_id and parameter_name and spec_data:
+                try:
+                    product_uuid = UUID(product_id) if isinstance(product_id, str) else product_id
+                    quality_spec_id = await self._sync_quality_spec(product_uuid, parameter_name, spec_data)
+                except (ValueError, AttributeError, TypeError):
+                    logger.warning("invalid_product_id_for_spec", raw=product_id)
+
             quality_result = QualityResult(
                 lot_number=result.get("lotNumber", ""),
-                product_id=result.get("productId"),
+                product_id=product_id,
                 product_name=None,
-                parameter_name=result.get("parameterName", ""),
+                parameter_name=parameter_name,
                 result_value=result.get("resultValue"),
-                lower_limit=result.get("lowerLimit"),
-                upper_limit=result.get("upperLimit"),
+                quality_spec_id=quality_spec_id,
                 in_spec=result.get("inSpec", True),
                 decision=result.get("decision", "pending").lower(),
                 test_date=test_date_parsed
@@ -305,7 +355,6 @@ class QualityService:
         Hourly cron will overwrite with real values on next run.
         """
         from app.messaging.schemas import QualityResultRecordedPayload
-        from uuid import UUID
 
         # First check by event_id if provided (absolute idempotency)
         if event_id:
@@ -322,9 +371,20 @@ class QualityService:
         )
         quality = result.scalar_one_or_none()
 
+        # Sync QualitySpec if present
+        quality_spec_id = None
+        if hasattr(payload, 'qualitySpec') and payload.qualitySpec and hasattr(payload, 'product_id') and hasattr(payload, 'parameter_name'):
+            try:
+                product_uuid = UUID(payload.product_id) if isinstance(payload.product_id, str) else payload.product_id
+                quality_spec_id = await self._sync_quality_spec(product_uuid, payload.parameter_name, payload.qualitySpec)
+            except (ValueError, AttributeError, TypeError):
+                logger.warning("invalid_product_id_for_spec_event", raw=payload.product_id)
+
         if quality:
             quality.in_spec = payload.in_spec
             quality.decision = payload.quality_status.lower()
+            if quality_spec_id:
+                quality.quality_spec_id = quality_spec_id
             if event_id:
                 quality.event_id = UUID(event_id)
             logger.info(
@@ -337,6 +397,7 @@ class QualityService:
                 id=payload.id,
                 lot_number=payload.lot_number,
                 product_id=payload.product_id,
+                quality_spec_id=quality_spec_id,
                 in_spec=payload.in_spec,
                 decision=payload.quality_status.lower(),
                 parameter_name="from_event",

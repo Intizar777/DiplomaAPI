@@ -27,7 +27,7 @@
 - Логин (JWT + Refresh Token)
 - Обновление токенов (refresh)
 - Валидация JWT
-- Управление ролями (ADMIN, MANAGER, ANALYST, SHIFT_MANAGER, EMPLOYEE)
+- Управление ролями (admin, manager, analyst, shift_manager, employee)
 
 **RabbitMQ Queues:**
 - `auth-service.commands.queue` (register, change password)

@@ -8,7 +8,7 @@
 
 - Поднимает HTTP API с глобальным префиксом `api/v1`.
 - Основной контроллер расположен по маршруту `/etl`.
-- Для импорта и просмотра истории использует JWT/authz (`@Auth(UserRole.ADMIN)`).
+- Для импорта и просмотра истории использует JWT/authz (`@Auth(UserRole.admin)`).
 - Для доставки в downstream сервисы использует RabbitMQ request/reply.
 - Собственные события об импорте публикует в `efko.etl.events`.
 
@@ -26,7 +26,7 @@
 Base URL: `http://localhost:4200/api/v1`
 
 **Аутентификация:** Bearer accessToken (для всех эндпоинтов)  
-**Роль:** ADMIN (требуется для всех эндпоинтов)
+**Роль:** admin (требуется для всех эндпоинтов)
 
 Глобально включены `ValidationPipe`, `LoggingInterceptor`, `HttpExceptionFilter` и `RequestIdMiddleware`.
 
@@ -37,7 +37,7 @@ Base URL: `http://localhost:4200/api/v1`
 Импорт массива записей в JSON.
 
 **Authentication:** Bearer accessToken  
-**Role:** ADMIN  
+**Role:** admin  
 **CSRF:** Требуется для браузера
 
 **Request Body:**
@@ -94,7 +94,7 @@ curl -X POST http://localhost:4200/api/v1/etl/import \
 Импорт файла (xlsx или json) через multipart upload.
 
 **Authentication:** Bearer accessToken  
-**Role:** ADMIN  
+**Role:** admin  
 **CSRF:** Требуется для браузера  
 **Max file size:** 20 MB
 
@@ -142,7 +142,7 @@ curl -X POST http://localhost:4200/api/v1/etl/import/file \
 Получить список импортов.
 
 **Authentication:** Bearer accessToken  
-**Role:** ADMIN  
+**Role:** admin  
 **CSRF:** Не требуется
 
 **Query Parameters:**
@@ -185,7 +185,7 @@ curl -X GET "http://localhost:4200/api/v1/etl/imports?source_system=ZUP&limit=10
 Получить детали импорта.
 
 **Authentication:** Bearer accessToken  
-**Role:** ADMIN  
+**Role:** admin  
 **CSRF:** Не требуется
 
 **Response:**
@@ -228,7 +228,7 @@ curl -X GET http://localhost:4200/api/v1/etl/imports/507f1f77bcf86cd799439011 \
 Скачать исходный файл импорта.
 
 **Authentication:** Bearer accessToken  
-**Role:** ADMIN  
+**Role:** admin  
 **CSRF:** Не требуется
 
 **Response:**
@@ -253,7 +253,7 @@ curl -X GET http://localhost:4200/api/v1/etl/imports/507f1f77bcf86cd799439011/fi
 Повторить импорт (только для импортов со статусом `failed`).
 
 **Authentication:** Bearer accessToken  
-**Role:** ADMIN  
+**Role:** admin  
 **CSRF:** Требуется для браузера
 
 **Request Body:**

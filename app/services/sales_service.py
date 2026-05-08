@@ -4,11 +4,12 @@ Sales business logic service.
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import List, Optional, Literal, Dict
+from uuid import UUID
 
 from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import AggregatedSales, SalesTrends, SaleRecord, Product
+from app.models import AggregatedSales, SalesTrends, SaleRecord, Product, Customer
 from app.schemas import (
     SalesSummaryResponse,
     SalesTrendsResponse,
@@ -28,7 +29,55 @@ class SalesService:
     def __init__(self, db: AsyncSession, gateway: Optional[GatewayClient] = None):
         self.db = db
         self.gateway = gateway
-    
+
+    async def _sync_customer(self, customer_data: dict) -> Optional[UUID]:
+        """Sync a customer and return its ID."""
+        if not customer_data:
+            return None
+
+        customer_id_raw = customer_data.get("id")
+        try:
+            customer_id = UUID(customer_id_raw) if isinstance(customer_id_raw, str) else customer_id_raw
+        except (ValueError, AttributeError, TypeError):
+            logger.warning("invalid_customer_id_skipped", raw=customer_id_raw)
+            return None
+
+        code = customer_data.get("code")
+
+        # Try to find existing by code or id
+        if code:
+            existing = await self.db.execute(
+                select(Customer).where(Customer.code == code)
+            )
+            customer = existing.scalar_one_or_none()
+        else:
+            customer = None
+
+        if not customer and customer_id:
+            existing = await self.db.execute(
+                select(Customer).where(Customer.id == customer_id)
+            )
+            customer = existing.scalar_one_or_none()
+
+        if customer:
+            customer.code = code or customer.code
+            customer.name = customer_data.get("name", customer.name)
+            customer.region = customer_data.get("region", customer.region)
+            customer.is_active = customer_data.get("isActive", customer.is_active)
+            customer.source_system_id = customer_data.get("sourceSystemId", customer.source_system_id)
+        else:
+            customer = Customer(
+                id=customer_id,
+                code=code or f"customer_{customer_id}",
+                name=customer_data.get("name", ""),
+                region=customer_data.get("region", ""),
+                is_active=customer_data.get("isActive", True),
+                source_system_id=customer_data.get("sourceSystemId"),
+            )
+            self.db.add(customer)
+
+        return customer.id
+
     async def _aggregate_from_raw(
         self,
         from_date: date,
@@ -346,7 +395,13 @@ class SalesService:
                 for sale_data in raw_sales:
                     product_id = sale_data.get("productId")
                     product_name = product_names.get(product_id) if product_id else None
-                    
+
+                    # Sync Customer if present
+                    customer_id = None
+                    customer_data = sale_data.get("customer")
+                    if customer_data:
+                        customer_id = await self._sync_customer(customer_data)
+
                     # Parse sale_date
                     sale_date_raw = sale_data.get("saleDate", date.today())
                     if isinstance(sale_date_raw, str):
@@ -361,6 +416,7 @@ class SalesService:
                         external_id=sale_data.get("externalId"),
                         product_id=product_id,
                         product_name=product_name or sale_data.get("customerName"),
+                        customer_id=customer_id,
                         customer_name=sale_data.get("customerName"),
                         quantity=Decimal(str(sale_data.get("quantity", 0))),
                         amount=Decimal(str(sale_data.get("amount", 0))),
@@ -450,7 +506,6 @@ class SalesService:
     async def upsert_sale_from_event(self, payload: "SaleRecordedPayload", event_id: str = None) -> None:
         """Upsert sale record from sale.recorded event. Idempotent by event_id or external_id/id."""
         from app.messaging.schemas import SaleRecordedPayload
-        from uuid import UUID
 
         # First check by event_id if provided (absolute idempotency)
         if event_id:
@@ -473,10 +528,17 @@ class SalesService:
 
         record = result.scalar_one_or_none()
 
+        # Sync Customer if present
+        customer_id = None
+        if hasattr(payload, 'customer') and payload.customer:
+            customer_id = await self._sync_customer(payload.customer)
+
         if record:
             record.amount = Decimal(str(payload.amount))
             if payload.channel:
                 record.channel = payload.channel.lower()
+            if customer_id:
+                record.customer_id = customer_id
             if event_id:
                 record.event_id = UUID(event_id)
             logger.info("sale_updated_from_event", external_id=payload.external_id)
@@ -485,6 +547,7 @@ class SalesService:
                 id=payload.id,
                 external_id=payload.external_id,
                 product_id=payload.product_id,
+                customer_id=customer_id,
                 amount=Decimal(str(payload.amount)),
                 channel=payload.channel.lower() if payload.channel else None,
                 sale_date=date.today(),
