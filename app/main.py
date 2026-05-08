@@ -279,3 +279,15 @@ async def swagger_ui():
     """Redirect to main docs."""
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url="/docs")
+
+
+@app.get("/api/v1/swagger.json", include_in_schema=False)
+async def swagger_json():
+    """Return OpenAPI/Swagger JSON schema."""
+    from fastapi.openapi.utils import get_openapi
+    return JSONResponse(get_openapi(
+        title=settings.app_name,
+        version=settings.app_version,
+        description="Dashboard Analytics API for aggregating data from EFKO microservices",
+        routes=app.routes,
+    ))
