@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 from app.config import settings
 from app.cron.jobs import (
-    sync_kpi_task, sync_sales_task, sync_orders_task, sync_quality_task,
+    sync_kpi_task, sync_kpi_per_line_task, sync_sales_task, sync_orders_task, sync_quality_task,
     sync_products_task, sync_output_task, sync_sensors_task, sync_inventory_task,
     sync_personnel_task,
 )
@@ -35,6 +35,8 @@ async def run_scheduled_jobs():
             jobs_to_run = []
             if current_minute == 0:
                 jobs_to_run.append(("kpi", sync_kpi_task))
+            elif current_minute == 2:
+                jobs_to_run.append(("kpi_per_line", sync_kpi_per_line_task))
             elif current_minute == 5:
                 jobs_to_run.append(("sales", sync_sales_task))
             elif current_minute == 10:

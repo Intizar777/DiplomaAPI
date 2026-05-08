@@ -12,6 +12,7 @@ from app.services.sensor_service import SensorService
 from app.services.inventory_service import InventoryService
 from app.services.personnel_service import PersonnelService
 from app.services.line_master_dashboard_service import LineMasterDashboardService
+from app.services.gm_dashboard_service import GroupManagerDashboardService
 
 __all__ = [
     "GatewayClient",
@@ -25,4 +26,5 @@ __all__ = [
     "InventoryService",
     "PersonnelService",
     "LineMasterDashboardService",
+    "GroupManagerDashboardService",
 ]

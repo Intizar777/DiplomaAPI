@@ -71,10 +71,36 @@ async def compare_kpi(
 ):
     """
     Compare KPI between two periods.
-    
+
     Example: Compare current month vs previous month
     """
     return await service.compare_kpi_periods(
         period1_from, period1_to,
         period2_from, period2_to
     )
+
+
+@router.get("/per-line/current", response_model=KPIHistoryResponse)
+async def get_kpi_per_line_current(
+    service: KPIService = Depends(get_services)
+):
+    """
+    Get current KPI for all production lines (most recent data).
+    """
+    return await service.get_all_kpi(production_line=None)
+
+
+@router.get("/per-line/history", response_model=KPIHistoryResponse)
+async def get_kpi_per_line_history(
+    date_range: DateRangeParams = Depends(),
+    production_line: Optional[str] = Query(None, description="Filter by specific production line code"),
+    service: KPIService = Depends(get_services)
+):
+    """
+    Get KPI history by production line for a date range.
+    Omit production_line parameter to get data for all lines.
+    """
+    from_date = date_range.date_from or (date.today() - timedelta(days=30))
+    to_date = date_range.date_to or date.today()
+
+    return await service.get_kpi_history(from_date, to_date, production_line)

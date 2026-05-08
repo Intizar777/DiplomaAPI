@@ -27,13 +27,14 @@ _running_tasks: Dict[str, asyncio.Task] = {}
 async def _run_sync_task(task_name: str):
     """Run a sync task with proper sync log creation."""
     from app.cron.jobs import (
-        sync_kpi_task, sync_sales_task, sync_orders_task, sync_quality_task,
+        sync_kpi_task, sync_kpi_per_line_task, sync_sales_task, sync_orders_task, sync_quality_task,
         sync_products_task, sync_output_task, sync_sensors_task, sync_inventory_task,
         sync_personnel_task,
     )
 
     task_map = {
         "kpi": sync_kpi_task,
+        "kpi_per_line": sync_kpi_per_line_task,
         "sales": sync_sales_task,
         "orders": sync_orders_task,
         "quality": sync_quality_task,
@@ -526,6 +527,12 @@ async def _run_initial_sync():
                 total_records += count
                 logger.info("initial_sync_kpi_synced", count=count)
 
+                # KPI per production line (by individual line)
+                count = await kpi_service.sync_kpi_per_line(None, None)
+                summary["level_3"]["kpi_per_line"] = count
+                total_records += count
+                logger.info("initial_sync_kpi_per_line_synced", count=count)
+
             except Exception as e:
                 error_msg = f"Level 3 error: {str(e)[:200]}"
                 logger.error("initial_sync_level_3_failed", error=error_msg)
@@ -558,10 +565,10 @@ async def get_sync_status(
 ):
     """
     Get status of all synchronization tasks.
-    
+
     Returns current status, last run time, and statistics for each task.
     """
-    tasks = ["kpi", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "personnel"]
+    tasks = ["kpi", "kpi_per_line", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "personnel"]
     task_statuses = []
     
     for task_name in tasks:
@@ -631,7 +638,7 @@ async def trigger_sync_all():
     Check /sync/status for progress.
     Stop with POST /api/v1/sync/stop or /api/v1/sync/stop/all
     """
-    all_tasks = ["kpi", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "personnel"]
+    all_tasks = ["kpi", "kpi_per_line", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "personnel"]
     triggered = []
     skipped = []
 
@@ -661,10 +668,10 @@ async def trigger_sync_task(
     """
     Manually trigger a specific synchronization task.
 
-    Available tasks: kpi, sales, orders, quality, products, output, sensors, inventory, personnel
+    Available tasks: kpi, kpi_per_line, sales, orders, quality, products, output, sensors, inventory, personnel
     Tasks run as background tasks — API returns immediately.
     """
-    valid_tasks = ["kpi", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "personnel"]
+    valid_tasks = ["kpi", "kpi_per_line", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "personnel"]
 
     if task_name not in valid_tasks:
         raise HTTPException(
@@ -761,7 +768,7 @@ async def stop_task(task_name: str):
     """
     Stop a specific running task.
 
-    Example tasks: kpi, sales, orders, quality, products, output, sensors, inventory, personnel, cleanup
+    Example tasks: kpi, kpi_per_line, sales, orders, quality, products, output, sensors, inventory, personnel, cleanup
     """
     if task_name not in _running_tasks:
         return {

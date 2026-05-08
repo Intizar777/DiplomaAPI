@@ -201,7 +201,15 @@
       "dependencies": ["feat-001", "feat-002", "feat-005"],
       "status": "done",
       "evidence": "app/schemas/line_master_dashboard.py, app/services/line_master_dashboard_service.py, app/routers/line_master_dashboard.py, tests/unit/test_line_master_dashboard_service.py (8/8 passing)"
+    },
+    {
+      "id": "feat-026",
+      "name": "Group Manager Dashboard - Wave 2",
+      "description": "Strategic dashboards for group managers. GET /api/v1/dashboards/gm/oee-summary (OEE by production line vs 75% target), /plan-execution (plan vs actual quantities and fulfillment %), /downtime-ranking (Pareto ranking by delay hours). Data from AggregatedKPI and OrderSnapshot tables.",
+      "dependencies": ["feat-001", "feat-002", "feat-004", "feat-025"],
+      "status": "done",
+      "evidence": "app/schemas/gm_dashboard.py, app/services/gm_dashboard_service.py, app/routers/gm_dashboard.py, tests/unit/test_gm_dashboard_service.py (12/12 passing), tests/integration/test_gm_dashboard_routes.py (8/8 passing)"
     }
   ],
-  "notes": "Core features (001-018) complete. Personnel sync (023) complete. RabbitMQ consumer (024) complete. Wave 1 dashboards (025) complete. Type hints (013) and tests (014) in progress. Waves 2-5 dashboards planned. Performance and auth features (019-022) planned for v2."
+  "notes": "Core features (001-018) complete. Personnel sync (023) complete. RabbitMQ consumer (024) complete. Wave 1 dashboards (025) complete. Wave 2 dashboards (026) complete. Type hints (013) and tests (014) in progress. Waves 3-5 dashboards planned. Performance and auth features (019-022) planned for v2."
 }

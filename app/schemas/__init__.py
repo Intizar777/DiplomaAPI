@@ -34,6 +34,15 @@ from app.schemas.line_master_dashboard import (
     ShiftComparisonResponse,
     DefectSummaryResponse,
 )
+from app.schemas.gm_dashboard import (
+    OEEDataPoint,
+    OEELineItem,
+    OEESummaryResponse,
+    PlanExecutionLineItem,
+    PlanExecutionResponse,
+    DowntimeLineItem,
+    DowntimeRankingResponse,
+)
 
 __all__ = [
     # Common
@@ -72,4 +81,12 @@ __all__ = [
     "ShiftProgressResponse",
     "ShiftComparisonResponse",
     "DefectSummaryResponse",
+    # Group Manager Dashboard
+    "OEEDataPoint",
+    "OEELineItem",
+    "OEESummaryResponse",
+    "PlanExecutionLineItem",
+    "PlanExecutionResponse",
+    "DowntimeLineItem",
+    "DowntimeRankingResponse",
 ]

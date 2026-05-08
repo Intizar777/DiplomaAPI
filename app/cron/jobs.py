@@ -138,7 +138,7 @@ async def _run_sync_task(
 
 
 async def sync_kpi_task():
-    """Sync KPI data from Gateway."""
+    """Sync KPI data from Gateway (aggregated across all lines)."""
     today = date.today()
     monday = today - timedelta(days=today.weekday())
     sunday = monday + timedelta(days=6)
@@ -153,6 +153,79 @@ async def sync_kpi_task():
         from_date=from_date,
         to_date=to_date,
     )
+
+
+async def sync_kpi_per_line_task():
+    """Sync KPI data from Gateway for each production line."""
+    today = date.today()
+    monday = today - timedelta(days=today.weekday())
+    sunday = monday + timedelta(days=6)
+    from_date = sunday - timedelta(days=30)
+    to_date = sunday
+
+    from app.models import AggregatedKPI
+
+    logger.info(
+        "sync_task_started",
+        task="kpi_per_line",
+        phase="entry",
+        from_date=from_date.isoformat(),
+        to_date=to_date.isoformat(),
+    )
+
+    async with AsyncSessionLocal() as db:
+        log = await create_sync_log(db, "kpi_per_line")
+        gateway = GatewayClient()
+        service = KPIService(db, gateway)
+
+        try:
+            if not await _has_any_records(AggregatedKPI):
+                logger.info(
+                    "sync_task_checkpoint",
+                    task="kpi_per_line",
+                    checkpoint="initial_sync_detected",
+                    mode="full",
+                )
+                records = await service.sync_kpi_per_line(None, None)
+            else:
+                logger.info(
+                    "sync_task_checkpoint",
+                    task="kpi_per_line",
+                    checkpoint="incremental_sync",
+                    mode="incremental",
+                    from_date=from_date.isoformat(),
+                    to_date=to_date.isoformat(),
+                )
+                records = await service.sync_kpi_per_line(from_date, to_date)
+
+            await complete_sync_log(db, log, SyncStatus.COMPLETED, records)
+            logger.info(
+                "sync_task_completed",
+                task="kpi_per_line",
+                phase="exit",
+                status="success",
+                records_processed=records,
+            )
+        except Exception as e:
+            tb_str = traceback.format_exc()
+            error_msg = f"{type(e).__name__}: {e}"
+
+            await complete_sync_log(db, log, SyncStatus.FAILED, error_message=error_msg)
+
+            logger.error(
+                "sync_task_failed",
+                task="kpi_per_line",
+                phase="exit",
+                status="failed",
+                error_type=type(e).__name__,
+                error_message=str(e),
+                traceback=tb_str,
+                from_date=from_date.isoformat(),
+                to_date=to_date.isoformat(),
+            )
+            raise
+        finally:
+            await gateway.close()
 
 
 async def sync_sales_task():
