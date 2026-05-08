@@ -262,6 +262,50 @@ Track what was done each session, blockers, and next steps for continuity.
 
 ---
 
+## Session: 2026-05-09 (Initial Sync Reference Tables Fix)
+
+**Duration:** 45 minutes  
+**Completed by:** Claude Code
+
+### What Was Done
+
+**Bug Analysis & Fix:**
+- Diagnosed why reference tables were not populating during initial sync
+- Found critical bug: `_run_initial_sync` called 10 non-existent GatewayClient methods (`get_units_of_measure`, `get_sensor_parameters`, `get_locations`, `get_customers`, `get_warehouses`, `get_production_lines`, `get_departments`, `get_workstations`, `get_positions`, `get_employees`)
+- All calls were wrapped in `try/except`, so `AttributeError` was silently swallowed, leaving reference tables empty
+- Added missing reference data methods to `GatewayClient` (`get_units_of_measure`, `get_sensor_parameters`, `get_customers`, `get_warehouses`)
+- Added convenience aliases for personnel methods (`get_locations` -> `get_personnel_locations`, etc.)
+- Refactored `_run_initial_sync` in `app/routers/sync.py`:
+  - Removed 120+ lines of duplicated manual personnel sync code
+  - Replaced with single `PersonnelService.sync_from_gateway()` call (tested, working)
+  - Removed unused imports (`Location`, `ProductionLine`, `Department`, `Workstation`, `Position`, `Employee`)
+- Fixed duplicate scheduler startup in `app/main.py`:
+  - `start_scheduler()` already creates `asyncio.create_task(run_scheduled_jobs())`
+  - Removed extra `asyncio.create_task(run_scheduled_jobs())` and unused import
+- Fixed outdated `test_gateway_client_close_closes_http_client` test to match current no-op `close()` behavior
+
+### Current State
+
+- **Tests:** 172 passing (0 failing) — sync routes + gateway client tests verified
+- **Reference tables:** Now properly synced during initial sync via existing service methods
+- **Scheduler:** No longer double-started on app startup
+
+### Key Technical Discoveries
+
+1. **Silent failures in try/except**: Wrapping broad `except Exception` around sync calls hides `AttributeError` from missing methods, making debugging hard
+2. **Code duplication hazard**: `_run_initial_sync` duplicated `PersonnelService.sync_from_gateway` logic with different method names, creating maintenance debt
+3. **Single source of truth**: Using `PersonnelService.sync_from_gateway()` ensures consistent sync logic between cron jobs and initial sync
+
+### Next Session Should
+
+1. Run `./init.sh` to verify environment
+2. Read AGENTS.md for working rules
+3. Monitor initial sync logs after deploying to ensure reference tables populate
+4. Continue feat-014: Expand integration test coverage
+5. Continue feat-013: Improve type hints
+
+---
+
 ## Previous Sessions
 
 ### Session 1 (2026-05-07 - Harness Initialization)

@@ -729,3 +729,53 @@ class GatewayClient:
             records_count=len(employees),
         )
         return {"employees": employees}
+
+    # Reference data API methods
+
+    async def get_units_of_measure(self) -> Dict[str, Any]:
+        """Get units of measure from Gateway."""
+        data = await self._request("GET", "/production/units-of-measure")
+        units = data.get("units", []) if isinstance(data, dict) else []
+        return {"units": units}
+
+    async def get_sensor_parameters(self) -> Dict[str, Any]:
+        """Get sensor parameters from Gateway."""
+        data = await self._request("GET", "/production/sensor-parameters")
+        params = data.get("parameters", []) if isinstance(data, dict) else []
+        return {"parameters": params}
+
+    async def get_customers(self) -> Dict[str, Any]:
+        """Get customers from Gateway (paginated)."""
+        customers = await self._fetch_all_pages("/production/customers", "customers")
+        return {"customers": customers}
+
+    async def get_warehouses(self) -> Dict[str, Any]:
+        """Get warehouses from Gateway (paginated)."""
+        warehouses = await self._fetch_all_pages("/production/warehouses", "warehouses")
+        return {"warehouses": warehouses}
+
+    # Convenience aliases used by initial sync
+
+    async def get_locations(self) -> Dict[str, Any]:
+        """Alias for get_personnel_locations."""
+        return await self.get_personnel_locations()
+
+    async def get_production_lines(self) -> Dict[str, Any]:
+        """Alias for get_personnel_production_lines."""
+        return await self.get_personnel_production_lines()
+
+    async def get_departments(self) -> Dict[str, Any]:
+        """Alias for get_personnel_departments."""
+        return await self.get_personnel_departments()
+
+    async def get_workstations(self) -> Dict[str, Any]:
+        """Alias for get_personnel_workstations."""
+        return await self.get_personnel_workstations()
+
+    async def get_positions(self) -> Dict[str, Any]:
+        """Alias for get_personnel_positions."""
+        return await self.get_personnel_positions()
+
+    async def get_employees(self) -> Dict[str, Any]:
+        """Alias for get_personnel_employees."""
+        return await self.get_personnel_employees()

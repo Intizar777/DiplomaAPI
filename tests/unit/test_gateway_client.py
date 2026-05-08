@@ -293,17 +293,11 @@ async def test_gateway_client_request_handles_timeout(gateway_client):
 
 
 @pytest.mark.asyncio
-async def test_gateway_client_close_closes_http_client(gateway_client):
-    """Test that close properly closes HTTP client."""
-    # Directly set up a mock client to avoid patching _get_client
-    mock_client = AsyncMock()
-    gateway_client.client = mock_client
-
-    # Close should aclose the client
+async def test_gateway_client_close_is_noop(gateway_client):
+    """Test that close is a no-op (client is created per-request)."""
+    # Should not raise and should not fail
     await gateway_client.close()
-
-    mock_client.aclose.assert_called_once()
-    assert gateway_client.client is None
+    # No assertion needed — close is intentionally a no-op
 
 
 @pytest.mark.asyncio
