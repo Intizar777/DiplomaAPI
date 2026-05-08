@@ -37,7 +37,7 @@ async def get_products(
                 "name": p.name,
                 "category": p.category,
                 "brand": p.brand,
-                "unit_of_measure": p.unit_of_measure,
+                "unit_of_measure_id": str(p.unit_of_measure_id) if p.unit_of_measure_id else None,
                 "shelf_life_days": p.shelf_life_days,
                 "requires_quality_check": p.requires_quality_check,
             }
