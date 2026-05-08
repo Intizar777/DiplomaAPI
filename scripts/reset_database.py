@@ -29,7 +29,7 @@ logger = structlog.get_logger()
 
 async def reset_database():
     """Truncate all tables in the database."""
-    # Only truncate data tables, not reference/dimension tables
+    # Data tables (operational data)
     data_tables = [
         # Production & Quality
         "production_output",
@@ -49,7 +49,7 @@ async def reset_database():
         "sync_errors",
     ]
 
-    # Reference tables (keep these to avoid FK issues)
+    # Reference tables (synced from Gateway)
     ref_tables = [
         "products",
         "production_lines",
@@ -66,7 +66,8 @@ async def reset_database():
         "units_of_measure",
     ]
 
-    tables = data_tables
+    # Combine both for full reset (re-sync from Gateway)
+    tables = data_tables + ref_tables
 
     logger.warning("database_reset_started", tables_count=len(tables))
     truncated_count = 0
@@ -102,7 +103,8 @@ async def main():
     print("\n" + "=" * 60)
     print("⚠️  DATABASE RESET UTILITY")
     print("=" * 60)
-    print("\nThis will DELETE ALL DATA from (13 tables):")
+    print("\nThis will DELETE ALL DATA from (24 tables):")
+    print("\n📊 Data tables:")
     print("  ✓ Production data (production_output)")
     print("  ✓ Quality results")
     print("  ✓ Inventory snapshots")
@@ -110,15 +112,16 @@ async def main():
     print("  ✓ Sales (sale_records, aggregated_sales, sales_trends)")
     print("  ✓ Sensor readings")
     print("  ✓ Aggregated KPI")
-    print("  ✓ Sync logs")
-    print("\nThis WILL NOT touch (reference data):")
-    print("  - Products, ProductionLines, Workstations")
-    print("  - Sensors, QualitySpecs")
-    print("  - Employees, Departments, Customers, etc.")
+    print("  ✓ Sync logs & errors")
+    print("\n📋 Reference tables (synced from Gateway):")
+    print("  ✓ Products, ProductionLines, Workstations")
+    print("  ✓ Sensors, SensorParameters, QualitySpecs")
+    print("  ✓ Customers, Employees, Departments, Positions")
+    print("  ✓ Locations, Warehouses, UnitsOfMeasure")
     print("\nThis is useful for:")
+    print("  ✓ Full reset before re-sync with Gateway")
     print("  ✓ Testing cron triggers from scratch")
-    print("  ✓ Resetting to clean state")
-    print("  ✓ Development testing")
+    print("  ✓ Development/testing")
     print("\n" + "=" * 60)
 
     response = input("\nType 'yes' to confirm reset: ").strip().lower()
