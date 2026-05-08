@@ -180,6 +180,14 @@ class InventoryService:
         snapshot_date = date.today()
 
         for item_data in inventory:
+            # Extract and validate ID from Gateway
+            raw_id = item_data.get("id")
+            try:
+                inventory_id = UUID(raw_id) if isinstance(raw_id, str) else raw_id
+            except (ValueError, AttributeError, TypeError):
+                logger.warning("invalid_inventory_snapshot_id_skipped", raw=raw_id)
+                continue
+
             product_id = item_data.get("productId")
             product_name = product_names.get(product_id) if product_id else None
 
@@ -200,6 +208,7 @@ class InventoryService:
                 last_updated = None
 
             snapshot = InventorySnapshot(
+                id=inventory_id,
                 product_id=product_id,
                 product_name=product_name,
                 warehouse_id=warehouse_id,

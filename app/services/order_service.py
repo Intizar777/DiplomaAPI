@@ -179,6 +179,14 @@ class OrderService:
         
         batch = []
         for order in orders:
+            # Extract and validate snapshot ID from Gateway
+            raw_snapshot_id = order.get("snapshotId")
+            try:
+                snapshot_id = UUID(raw_snapshot_id) if isinstance(raw_snapshot_id, str) else raw_snapshot_id
+            except (ValueError, AttributeError, TypeError):
+                logger.warning("invalid_order_snapshot_id_skipped", raw=raw_snapshot_id)
+                continue
+
             # Parse ISO datetime strings to datetime objects
             def parse_dt(val):
                 if val and isinstance(val, str):
@@ -188,8 +196,9 @@ class OrderService:
                     except ValueError:
                         return None
                 return val
-            
+
             snapshot = OrderSnapshot(
+                id=snapshot_id,
                 order_id=order.get("id"),
                 external_order_id=order.get("externalOrderId"),
                 product_id=order.get("productId"),

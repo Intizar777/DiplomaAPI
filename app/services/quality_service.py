@@ -281,6 +281,14 @@ class QualityService:
         
         batch = []
         for result in results:
+            # Extract and validate ID from Gateway
+            raw_id = result.get("id")
+            try:
+                quality_result_id = UUID(raw_id) if isinstance(raw_id, str) else raw_id
+            except (ValueError, AttributeError, TypeError):
+                logger.warning("invalid_quality_result_id_skipped", raw=raw_id)
+                continue
+
             # Parse ISO datetime string to date
             test_date_raw = result.get("testDate", date.today())
             if isinstance(test_date_raw, str):
@@ -306,6 +314,7 @@ class QualityService:
                     logger.warning("invalid_product_id_for_spec", raw=product_id)
 
             quality_result = QualityResult(
+                id=quality_result_id,
                 lot_number=result.get("lotNumber", ""),
                 product_id=product_id,
                 product_name=None,

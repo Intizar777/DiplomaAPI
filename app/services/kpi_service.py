@@ -239,7 +239,15 @@ class KPIService:
             
             # Use ON CONFLICT DO UPDATE for upsert
             from sqlalchemy.dialects.postgresql import insert
+            raw_id = kpi_data.get("id")
+            try:
+                kpi_id = UUID(raw_id) if isinstance(raw_id, str) else raw_id
+            except (ValueError, AttributeError, TypeError):
+                logger.warning("invalid_aggregated_kpi_id_skipped", raw=raw_id)
+                kpi_id = None
+
             stmt = insert(AggregatedKPI).values(
+                id=kpi_id,
                 period_from=from_date,
                 period_to=to_date,
                 production_line=None,
@@ -283,7 +291,15 @@ class KPIService:
                     kpi_data = gateway_data.get("kpi", gateway_data)
                     
                     if kpi_data and kpi_data.get("totalOrders", 0) > 0:
+                        raw_id = kpi_data.get("id")
+                        try:
+                            kpi_id = UUID(raw_id) if isinstance(raw_id, str) else raw_id
+                        except (ValueError, AttributeError, TypeError):
+                            logger.warning("invalid_aggregated_kpi_id_skipped", raw=raw_id)
+                            continue
+
                         aggregated = AggregatedKPI(
+                            id=kpi_id,
                             period_from=month_start,
                             period_to=month_end,
                             production_line=None,
@@ -345,14 +361,14 @@ class KPIService:
             logger.warning("no_active_production_lines_found")
             return 0
 
-        line_codes = [pl.code for pl in production_lines if pl.code]
-        logger.info("kpi_sync_per_line_found_lines", lines_count=len(line_codes), lines=line_codes)
+        line_ids = [str(pl.id) for pl in production_lines]
+        logger.info("kpi_sync_per_line_found_lines", lines_count=len(line_ids), lines=line_ids)
 
         if from_date and to_date:
             # Incremental sync: fetch for each line (upsert)
-            for line_code in line_codes:
+            for line_id in line_ids:
                 try:
-                    gateway_data = await self.gateway.get_kpi(from_date, to_date, line_code)
+                    gateway_data = await self.gateway.get_kpi(from_date, to_date, production_line_id=line_id)
                     kpi_data = gateway_data.get("kpi", gateway_data)
 
                     if not kpi_data:
@@ -391,7 +407,7 @@ class KPIService:
                 except Exception as e:
                     logger.error(
                         "kpi_sync_per_line_error",
-                        line=line_code,
+                        line=line_id,
                         error=str(e)[:200]
                     )
 
@@ -411,12 +427,12 @@ class KPIService:
                 month_start = date(year, month, 1)
                 month_end = date(year, month, last_day)
 
-                for line_code in line_codes:
+                for line_id in line_ids:
                     try:
                         gateway_data = await self.gateway.get_kpi(
                             from_date=month_start,
                             to_date=month_end,
-                            production_line=line_code
+                            production_line_id=line_id
                         )
                         kpi_data = gateway_data.get("kpi", gateway_data)
 
@@ -424,7 +440,7 @@ class KPIService:
                             aggregated = AggregatedKPI(
                                 period_from=month_start,
                                 period_to=month_end,
-                                production_line=line_code,
+                                production_line=line_id,
                                 total_output=Decimal(str(kpi_data.get("totalOutput", 0))),
                                 defect_rate=Decimal(str(kpi_data.get("defectRate", 0))),
                                 completed_orders=kpi_data.get("completedOrders", 0),
@@ -437,7 +453,7 @@ class KPIService:
                         logger.error(
                             "kpi_sync_per_line_month_error",
                             month=month_start.isoformat(),
-                            line=line_code,
+                            line=line_id,
                             error=str(e)[:200]
                         )
 

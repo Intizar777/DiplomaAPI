@@ -336,7 +336,15 @@ class SalesService:
         summary = gateway_data.get("summary", gateway_data.get("regions", []))
         for item in summary:
             from sqlalchemy.dialects.postgresql import insert
+            raw_id = item.get("id")
+            try:
+                sales_id = UUID(raw_id) if isinstance(raw_id, str) else raw_id
+            except (ValueError, AttributeError, TypeError):
+                logger.warning("invalid_aggregated_sales_id_region_skipped", raw=raw_id)
+                continue
+
             stmt = insert(AggregatedSales).values(
+                id=sales_id,
                 period_from=period_from,
                 period_to=period_to,
                 group_by_type="region",
@@ -359,7 +367,15 @@ class SalesService:
         gateway_data_channel = await self.gateway.get_sales_summary(from_date, to_date, "channel")
         summary_channel = gateway_data_channel.get("summary", gateway_data_channel.get("channels", []))
         for item in summary_channel:
+            raw_id = item.get("id")
+            try:
+                sales_id = UUID(raw_id) if isinstance(raw_id, str) else raw_id
+            except (ValueError, AttributeError, TypeError):
+                logger.warning("invalid_aggregated_sales_id_channel_skipped", raw=raw_id)
+                continue
+
             stmt = insert(AggregatedSales).values(
+                id=sales_id,
                 period_from=period_from,
                 period_to=period_to,
                 group_by_type="channel",
@@ -393,6 +409,14 @@ class SalesService:
                 snapshot_date = date.today()
                 
                 for sale_data in raw_sales:
+                    # Extract and validate ID from Gateway
+                    raw_id = sale_data.get("id")
+                    try:
+                        sale_id = UUID(raw_id) if isinstance(raw_id, str) else raw_id
+                    except (ValueError, AttributeError, TypeError):
+                        logger.warning("invalid_sale_record_id_skipped", raw=raw_id)
+                        continue
+
                     product_id = sale_data.get("productId")
                     product_name = product_names.get(product_id) if product_id else None
 
@@ -411,8 +435,9 @@ class SalesService:
                             parsed_sale_date = date.today()
                     else:
                         parsed_sale_date = sale_date_raw
-                    
+
                     sale_record = SaleRecord(
+                        id=sale_id,
                         external_id=sale_data.get("externalId"),
                         product_id=product_id,
                         product_name=product_name or sale_data.get("customerName"),

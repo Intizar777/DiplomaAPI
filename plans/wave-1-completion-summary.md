@@ -1,8 +1,8 @@
-# Wave 1: Line Master Dashboard — Completion Summary
+# Dashboard Roadmap Completion Status
 
-**Status:** ✅ COMPLETE AND TESTED  
-**Date:** 2026-05-09  
-**Commit:** 691fa0a  
+**Status:** ✅ Waves 1 & 2 COMPLETE AND TESTED  
+**Last Updated:** 2026-05-09  
+**Latest Commit:** 39abdf4 (Group Manager dashboard Wave 2)  
 
 ---
 
@@ -106,47 +106,85 @@ Duration: 364.43s
 
 ---
 
-## What Still Needs to be Done (Per Plan)
+## Wave 2: Group Manager Strategic Dashboard — COMPLETE ✅
 
-### Wave 2: Group Manager Strategic Dashboard
-**Priority:** P1 (high business value)
+**Status:** ✅ DONE  
+**Commit:** 39abdf4 (feat: add Group Manager dashboard with per-line KPI sync)  
+**Tests:** 20/20 passing (12 unit + 8 integration)
 
-**Required endpoints:**
+### Delivered Endpoints
 ```
-GET /api/v1/dashboards/gm/oee-summary
-  → OEE by line (7/30/90 days), trend, vs target (75%)
+✅ GET /api/v1/dashboards/gm/oee-summary?period_days={7,30,90}
+   → OEE by line, ranked best-to-worst vs 75% target, trend sparklines
 
-GET /api/v1/dashboards/gm/plan-execution  
-  → Plan vs actual output by line, % fulfillment, monthly projection
+✅ GET /api/v1/dashboards/gm/plan-execution?date_from=...&date_to=...
+   → Plan vs actual quantities per line, fulfillment %, order status breakdown
 
-GET /api/v1/dashboards/gm/cost-structure
-  → Raw material, energy, depreciation, labor (aggregate)
-
-GET /api/v1/dashboards/gm/downtime-ranking
-  → Lines ranked by downtime, Pareto chart data, monthly trend
+✅ GET /api/v1/dashboards/gm/downtime-ranking?date_from=...&date_to=...
+   → Lines ranked by total delay hours (Pareto analysis), only completed orders
 ```
 
-**New data requirements:**
-- ⚠️ Energy consumption table (hourly by line) — NOT YET CREATED
-- ⚠️ Cost allocation table (material, labor, overhead) — NOT YET CREATED
-- ✅ ProductionOutput, QualityResult (exist)
-- ✅ ProductionLine, Workstation (exist)
-- ⚠️ Downtime calculation — need to infer from ProductionOutput timestamps or create StopTime table
+### Implementation Details
+- **Schemas:** `app/schemas/gm_dashboard.py` — 4 Pydantic models (OEELineItem, PlanExecutionLineItem, DowntimeLineItem + Response wrappers)
+- **Service:** `app/services/gm_dashboard_service.py` — 3 query methods with SQL aggregation (GROUP BY, CASE expressions)
+- **Routes:** `app/routers/gm_dashboard.py` — 3 endpoints with dependency injection
+- **Tests:**
+  - Unit: `tests/unit/test_gm_dashboard_service.py` (12 tests covering aggregation logic)
+  - Integration: `tests/integration/test_gm_dashboard_routes.py` (8 tests covering all endpoints + edge cases)
 
-**Approach:**
-1. Design schemas: `OEESummaryResponse`, `PlanExecutionResponse`, etc.
-2. Create service: `GroupManagerDashboardService` with OEE calculations
-3. Implement 4 endpoints under `/api/v1/dashboards/gm/`
-4. Write integration tests (10-12 tests)
+### Data Sources & Limitations
+- **OEE data:** Reads from `AggregatedKPI` table (seeded by cron KPI sync)
+- **Plan vs Actual:** Reads from `OrderSnapshot` table (order start/completion dates)
+- **Downtime:** Calculated from `OrderSnapshot.planned_end vs actual_end` (no separate StopTime table)
+- **⚠️ Cost Structure skipped:** Would require energy and material cost tables (not in Gateway)
+
+### Architecture Notes
+- Two-pass aggregation for OEE: (1) GROUP BY per line, (2) Fetch raw data points for trend
+- Downtime ranked worst-first (highest delay first)
+- NULL production_line field = all-lines aggregate in responses
+
+### Wave 2 Caveats & Limitations ⚠️
+
+1. **Cost Structure Endpoint Skipped**
+   - Original plan included `/cost-structure` for material + energy + labor aggregation
+   - **Reason:** No energy consumption or cost allocation tables in database/Gateway
+   - **Decision:** Deferred to Wave 4 (Finance Manager) if cost data becomes available
+
+2. **Downtime Calculation in Python**
+   - Delay hours calculated after fetch, not in SQL (line 226 of service)
+   - **Reason:** Different SQL dialects (PostgreSQL vs others) handle time intervals differently
+   - **Trade-off:** Simpler, portable code at cost of doing math post-query
+   - **Impact:** Works fine for <10K orders; would need optimization for >100K
+
+3. **OEE Estimation Only**
+   - Uses `AggregatedKPI.oee_estimate` (pre-calculated by KPI sync)
+   - Does NOT calculate availability × performance × quality from scratch
+   - **Reason:** No downtime events or detailed production metrics in base data
+   - **Sufficient for:** Group manager oversight; quality engineer dashboard (Wave 3) will have detailed metrics
+
+4. **No Pagination**
+   - All endpoints return complete result sets (no limit/offset)
+   - **Suitable for:** ~100 production lines; larger deployments would need pagination
+   - **Mitigation:** Wave 4+ can add cursor-based pagination if needed
 
 ---
+
+## What Still Needs to be Done
 
 ### Waves 3-5: Other Dashboards
 **Status:** Designed, not started
 
-- **Wave 3 (P2):** Quality Engineer — parameter trends, batch deviations, traceability
-- **Wave 4 (P3):** Finance Manager — cost breakdown, variance analysis, budget vs actual
-- **Wave 5 (P4):** Warehouse Manager — inventory levels, expiry alerts, shipment forecast
+- **Wave 3 (P2):** Quality Engineer Dashboard
+  - Parameter trend analysis, batch deviations, defect Pareto
+  - Endpoints: `/qe/parameter-trends`, `/qe/batch-analysis`, `/qe/defect-pareto`
+  
+- **Wave 4 (P3):** Finance Manager Dashboard  
+  - Cost breakdown, variance analysis, budget vs actual
+  - Endpoints: `/finance/cost-structure`, `/finance/variance`, `/finance/budget-comparison`
+  
+- **Wave 5 (P4):** Warehouse Manager Dashboard
+  - Inventory levels, expiry alerts, shipment forecast
+  - Endpoints: `/warehouse/inventory-levels`, `/warehouse/expiry-alerts`, `/warehouse/shipment-forecast`
 
 ---
 
@@ -221,30 +259,47 @@ GET /api/v1/dashboards/gm/downtime-ranking
 
 ---
 
-## Next Session Checklist
+## Next Session Checklist (Wave 3 Prep)
 
 ```
-Before Starting Wave 2:
+Before Starting Wave 3:
 [ ] Run ./init.sh to verify environment
-[ ] Run pytest tests/ -v to confirm Wave 1 still passes
-[ ] Read feature_list.json to see Wave 1 in "done" status
-[ ] Read this file (wave-1-completion-summary.md) to recall decisions
-[ ] Review dashboard_roadmap.md for Wave 2 scope
+[ ] Run pytest tests/ -v to confirm Waves 1-2 still pass (20+ dashboard tests)
+[ ] Read feature_list.json to see Wave 2 in "done" status (feat-026)
+[ ] Review CLAUDE.md patterns for service/schema/route consistency
+[ ] Read dashboard_roadmap.md for Wave 3 scope
 
-Wave 2 Prep:
-[ ] Decide: Energy & Cost data — create dummy tables or source from Gateway?
-[ ] Decide: Downtime calculation — use ProductionOutput gaps or create StopTime events?
-[ ] Design OEE formula (availability × performance × quality)
-[ ] Create schemas for gm/* endpoints
-[ ] Implement 4 endpoints + 10-12 tests
+Wave 3 (Quality Engineer Dashboard) Prep:
+[ ] Decide data sources:
+    - Parameter trends: QualityResult.parameter_name + test_date aggregation
+    - Batch deviations: ProductionLot vs QualityResult comparison
+    - Defect Pareto: Count defects by root cause (infer from parameter names?)
+[ ] Design schemas: ParameterTrendItem, BatchDeviationItem, DefectParetoItem + Response wrappers
+[ ] Create QualityEngineerDashboardService with 3 query methods
+[ ] Implement 3 endpoints under /api/v1/dashboards/qe/
+[ ] Write 12-15 tests (unit + integration mix)
+[ ] Update feature_list.json with feat-027 (wave 3)
 ```
 
 ---
 
 ## Summary
 
-**Wave 1 delivers a working Line Master Dashboard** with 3 REST endpoints for shift-level production and quality analytics. All code is tested, typed, and follows project patterns. No breaking changes to existing features.
+### Wave 1 (Complete ✅)
+**Line Master Dashboard** — 3 endpoints for shift-level analytics
+- 8 unit tests passing
+- Data from ProductionOutput + QualityResult tables
+- Ready for production
 
-**Ready for production. Commit: 691fa0a**
+### Wave 2 (Complete ✅)
+**Group Manager Dashboard** — 3 strategic endpoints for group-level oversight
+- 12 unit tests + 8 integration tests passing (20 total)
+- Data from AggregatedKPI + OrderSnapshot tables  
+- OEE tracking, plan execution, downtime Pareto
+- Ready for production
 
-**Next: Wave 2 (Group Manager Dashboard) when ready.**
+### Next Steps
+**Wave 3 (In Progress):** Quality Engineer Dashboard — parameter trends, batch analysis
+**Wave 4 & 5:** Finance & Warehouse dashboards (planned)
+
+**Current Status:** Both dashboards production-ready, ~30 dashboard tests passing. Core API stable. Next wave ready to start.**

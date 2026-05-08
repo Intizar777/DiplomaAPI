@@ -135,6 +135,14 @@ class OutputService:
         snapshot_date = date.today()
         
         for output_data in outputs:
+            # Extract and validate ID from Gateway
+            raw_id = output_data.get("id")
+            try:
+                output_id = UUID(raw_id) if isinstance(raw_id, str) else raw_id
+            except (ValueError, AttributeError, TypeError):
+                logger.warning("invalid_production_output_id_skipped", raw=raw_id)
+                continue
+
             # Parse production date
             prod_date_raw = output_data.get("productionDate", date.today())
             if isinstance(prod_date_raw, str):
@@ -144,11 +152,12 @@ class OutputService:
                     prod_date = date.today()
             else:
                 prod_date = prod_date_raw
-            
+
             product_id = output_data.get("productId")
             product_name = product_names.get(product_id) if product_id else None
-            
+
             output = ProductionOutput(
+                id=output_id,
                 order_id=output_data.get("orderId"),
                 product_id=product_id,
                 product_name=product_name,

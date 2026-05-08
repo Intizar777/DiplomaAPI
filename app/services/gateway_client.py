@@ -468,7 +468,7 @@ class GatewayClient:
         self,
         from_date: Optional[date] = None,
         to_date: Optional[date] = None,
-        production_line: Optional[str] = None
+        production_line_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Get production KPI from Gateway."""
         params = {}
@@ -476,8 +476,8 @@ class GatewayClient:
             params["from"] = from_date.isoformat()
         if to_date:
             params["to"] = to_date.isoformat()
-        if production_line:
-            params["productionLine"] = production_line
+        if production_line_id:
+            params["productionLineId"] = production_line_id
 
         data = await self._request("GET", "/production/kpi", params=params)
         kpi_data = data.get("kpi", []) if isinstance(data, dict) else []

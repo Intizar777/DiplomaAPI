@@ -283,6 +283,14 @@ class SensorService:
         snapshot_date = datetime.utcnow()
 
         for reading_data in readings:
+            # Extract and validate ID from Gateway
+            raw_id = reading_data.get("id")
+            try:
+                reading_id = UUID(raw_id) if isinstance(raw_id, str) else raw_id
+            except (ValueError, AttributeError, TypeError):
+                logger.warning("invalid_sensor_reading_id_skipped", raw=raw_id)
+                continue
+
             # Sync Sensor if present
             sensor_id = None
             sensor_data = reading_data.get("sensor")
@@ -302,6 +310,7 @@ class SensorService:
                 recorded_at = datetime.utcnow()
 
             reading = SensorReading(
+                id=reading_id,
                 sensor_id=sensor_id,
                 value=Decimal(str(reading_data.get("value", 0))) if reading_data.get("value") is not None else None,
                 quality=reading_data.get("quality", "").lower() if reading_data.get("quality") else None,
