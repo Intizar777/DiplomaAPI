@@ -61,13 +61,17 @@ async def _run_cleanup_task():
 async def _run_initial_sync():
     """
     Run initial bulk synchronization in background.
-    Syncs all tables in dependency order to avoid FK violations.
+    Syncs ALL tables in dependency order to avoid FK violations.
     """
     from app.database import AsyncSessionLocal
-    from app.models import SyncLog, SyncStatus
+    from app.models import (
+        SyncLog, SyncStatus, Location, Customer, Warehouse,
+        ProductionLine, Department, Workstation, Position, Employee
+    )
     from app.services import (
         ProductService, SensorService, SalesService,
-        InventoryService, OutputService, QualityService, OrderService
+        InventoryService, OutputService, QualityService, OrderService,
+        PersonnelService, KPIService
     )
 
     async with AsyncSessionLocal() as db:
@@ -130,8 +134,119 @@ async def _run_initial_sync():
                 summary["level_0"]["sensor_parameters"] = count
                 total_records += count
 
-                logger.info("initial_sync_phase_0_complete", units=summary["level_0"].get("units_of_measure", 0),
-                           params=summary["level_0"].get("sensor_parameters", 0))
+                # Location (needed by ProductionLine, Department, Workstation)
+                count = 0
+                try:
+                    personnel_service = PersonnelService(db, gateway)
+                    gateway_data = await gateway.get_locations()
+                    for location_data in gateway_data.get("locations", []):
+                        location_id = location_data.get("id")
+                        if location_id:
+                            existing = await db.execute(
+                                select(Location).where(Location.id == location_id)
+                            )
+                            location = existing.scalar_one_or_none()
+                            if location:
+                                location.code = location_data.get("code", location.code)
+                                location.name = location_data.get("name", location.name)
+                                location.type = location_data.get("type", location.type)
+                                location.address = location_data.get("address", location.address)
+                                location.is_active = location_data.get("isActive", location.is_active)
+                            else:
+                                location = Location(
+                                    id=location_id,
+                                    code=location_data.get("code"),
+                                    name=location_data.get("name"),
+                                    type=location_data.get("type"),
+                                    address=location_data.get("address"),
+                                    is_active=location_data.get("isActive", True)
+                                )
+                                db.add(location)
+                            count += 1
+                    await db.commit()
+                except Exception as e:
+                    logger.warning("initial_sync_locations_error", error=str(e)[:100])
+                summary["level_0"]["locations"] = count
+                total_records += count
+
+                # Customer (needed by SaleRecord)
+                count = 0
+                try:
+                    gateway_data = await gateway.get_customers()
+                    for customer_data in gateway_data.get("customers", []):
+                        customer_id = customer_data.get("id")
+                        code = customer_data.get("code")
+                        if customer_id:
+                            existing = await db.execute(
+                                select(Customer).where(
+                                    Customer.code == code if code else Customer.id == customer_id
+                                )
+                            )
+                            customer = existing.scalar_one_or_none()
+                            if customer:
+                                customer.code = code or customer.code
+                                customer.name = customer_data.get("name", customer.name)
+                                customer.region = customer_data.get("region", customer.region)
+                                customer.is_active = customer_data.get("isActive", customer.is_active)
+                            else:
+                                customer = Customer(
+                                    id=customer_id,
+                                    code=code,
+                                    name=customer_data.get("name"),
+                                    region=customer_data.get("region"),
+                                    is_active=customer_data.get("isActive", True)
+                                )
+                                db.add(customer)
+                            count += 1
+                    await db.commit()
+                except Exception as e:
+                    logger.warning("initial_sync_customers_error", error=str(e)[:100])
+                summary["level_0"]["customers"] = count
+                total_records += count
+
+                # Warehouse (needed by InventorySnapshot)
+                count = 0
+                try:
+                    gateway_data = await gateway.get_warehouses()
+                    for warehouse_data in gateway_data.get("warehouses", []):
+                        warehouse_id = warehouse_data.get("id")
+                        code = warehouse_data.get("code")
+                        if warehouse_id:
+                            existing = await db.execute(
+                                select(Warehouse).where(
+                                    Warehouse.code == code if code else Warehouse.id == warehouse_id
+                                )
+                            )
+                            warehouse = existing.scalar_one_or_none()
+                            if warehouse:
+                                warehouse.code = code or warehouse.code
+                                warehouse.name = warehouse_data.get("name", warehouse.name)
+                                warehouse.location = warehouse_data.get("location", warehouse.location)
+                                warehouse.capacity = warehouse_data.get("capacity", warehouse.capacity)
+                                warehouse.is_active = warehouse_data.get("isActive", warehouse.is_active)
+                            else:
+                                warehouse = Warehouse(
+                                    id=warehouse_id,
+                                    code=code,
+                                    name=warehouse_data.get("name"),
+                                    location=warehouse_data.get("location"),
+                                    capacity=warehouse_data.get("capacity"),
+                                    is_active=warehouse_data.get("isActive", True)
+                                )
+                                db.add(warehouse)
+                            count += 1
+                    await db.commit()
+                except Exception as e:
+                    logger.warning("initial_sync_warehouses_error", error=str(e)[:100])
+                summary["level_0"]["warehouses"] = count
+                total_records += count
+
+                logger.info("initial_sync_phase_0_complete",
+                           units=summary["level_0"].get("units_of_measure", 0),
+                           params=summary["level_0"].get("sensor_parameters", 0),
+                           locations=summary["level_0"].get("locations", 0),
+                           customers=summary["level_0"].get("customers", 0),
+                           warehouses=summary["level_0"].get("warehouses", 0))
 
             except Exception as e:
                 error_msg = f"Level 0 error: {str(e)[:200]}"
@@ -170,6 +285,113 @@ async def _run_initial_sync():
                 total_records += count
                 logger.info("initial_sync_inventory_synced", count=count)
 
+                # ProductionLine (depends on Location)
+                personnel_service = PersonnelService(db, gateway)
+                count = 0
+                try:
+                    gateway_data = await gateway.get_production_lines()
+                    for pline_data in gateway_data.get("productionLines", []):
+                        pline_id = pline_data.get("id")
+                        if pline_id:
+                            existing = await db.execute(
+                                select(ProductionLine).where(ProductionLine.id == pline_id)
+                            )
+                            pline = existing.scalar_one_or_none()
+                            if pline:
+                                pline.code = pline_data.get("code", pline.code)
+                                pline.name = pline_data.get("name", pline.name)
+                                pline.location_id = pline_data.get("locationId")
+                                pline.description = pline_data.get("description", pline.description)
+                                pline.is_active = pline_data.get("isActive", pline.is_active)
+                            else:
+                                pline = ProductionLine(
+                                    id=pline_id,
+                                    code=pline_data.get("code"),
+                                    name=pline_data.get("name"),
+                                    location_id=pline_data.get("locationId"),
+                                    description=pline_data.get("description"),
+                                    is_active=pline_data.get("isActive", True)
+                                )
+                                db.add(pline)
+                            count += 1
+                    await db.commit()
+                except Exception as e:
+                    logger.warning("initial_sync_production_lines_error", error=str(e)[:100])
+                summary["level_1"]["production_lines"] = count
+                total_records += count
+
+                # Department (depends on Location)
+                count = 0
+                try:
+                    gateway_data = await gateway.get_departments()
+                    for dept_data in gateway_data.get("departments", []):
+                        dept_id = dept_data.get("id")
+                        if dept_id:
+                            existing = await db.execute(
+                                select(Department).where(Department.id == dept_id)
+                            )
+                            dept = existing.scalar_one_or_none()
+                            if dept:
+                                dept.code = dept_data.get("code", dept.code)
+                                dept.name = dept_data.get("name", dept.name)
+                                dept.location_id = dept_data.get("locationId")
+                                dept.parent_id = dept_data.get("parentId")
+                                dept.type = dept_data.get("type", dept.type)
+                                dept.is_active = dept_data.get("isActive", dept.is_active)
+                            else:
+                                dept = Department(
+                                    id=dept_id,
+                                    code=dept_data.get("code"),
+                                    name=dept_data.get("name"),
+                                    location_id=dept_data.get("locationId"),
+                                    parent_id=dept_data.get("parentId"),
+                                    type=dept_data.get("type"),
+                                    is_active=dept_data.get("isActive", True)
+                                )
+                                db.add(dept)
+                            count += 1
+                    await db.commit()
+                except Exception as e:
+                    logger.warning("initial_sync_departments_error", error=str(e)[:100])
+                summary["level_1"]["departments"] = count
+                total_records += count
+
+                # Workstation (depends on Location and ProductionLine)
+                count = 0
+                try:
+                    gateway_data = await gateway.get_workstations()
+                    for ws_data in gateway_data.get("workstations", []):
+                        ws_id = ws_data.get("id")
+                        if ws_id:
+                            existing = await db.execute(
+                                select(Workstation).where(Workstation.id == ws_id)
+                            )
+                            ws = existing.scalar_one_or_none()
+                            if ws:
+                                ws.code = ws_data.get("code", ws.code)
+                                ws.name = ws_data.get("name", ws.name)
+                                ws.location_id = ws_data.get("locationId")
+                                ws.production_line_id = ws_data.get("productionLineId")
+                                ws.type = ws_data.get("type", ws.type)
+                                ws.is_active = ws_data.get("isActive", ws.is_active)
+                            else:
+                                ws = Workstation(
+                                    id=ws_id,
+                                    code=ws_data.get("code"),
+                                    name=ws_data.get("name"),
+                                    location_id=ws_data.get("locationId"),
+                                    production_line_id=ws_data.get("productionLineId"),
+                                    type=ws_data.get("type"),
+                                    is_active=ws_data.get("isActive", True)
+                                )
+                                db.add(ws)
+                            count += 1
+                    await db.commit()
+                except Exception as e:
+                    logger.warning("initial_sync_workstations_error", error=str(e)[:100])
+                summary["level_1"]["workstations"] = count
+                total_records += count
+
             except Exception as e:
                 error_msg = f"Level 1 error: {str(e)[:200]}"
                 logger.error("initial_sync_level_1_failed", error=error_msg)
@@ -185,6 +407,94 @@ async def _run_initial_sync():
                 summary["level_2"]["quality_results"] = count
                 total_records += count
                 logger.info("initial_sync_quality_synced", count=count)
+
+                # Position (depends on Department)
+                count = 0
+                try:
+                    gateway_data = await gateway.get_positions()
+                    for pos_data in gateway_data.get("positions", []):
+                        pos_id = pos_data.get("id")
+                        if pos_id:
+                            existing = await db.execute(
+                                select(Position).where(Position.id == pos_id)
+                            )
+                            pos = existing.scalar_one_or_none()
+                            if pos:
+                                pos.code = pos_data.get("code", pos.code)
+                                pos.name = pos_data.get("name", pos.name)
+                                pos.department_id = pos_data.get("departmentId")
+                                pos.level = pos_data.get("level", pos.level)
+                                pos.is_active = pos_data.get("isActive", pos.is_active)
+                            else:
+                                pos = Position(
+                                    id=pos_id,
+                                    code=pos_data.get("code"),
+                                    name=pos_data.get("name"),
+                                    department_id=pos_data.get("departmentId"),
+                                    level=pos_data.get("level"),
+                                    is_active=pos_data.get("isActive", True)
+                                )
+                                db.add(pos)
+                            count += 1
+                    await db.commit()
+                except Exception as e:
+                    logger.warning("initial_sync_positions_error", error=str(e)[:100])
+                summary["level_2"]["positions"] = count
+                total_records += count
+
+                # Employee (depends on Position and Workstation)
+                count = 0
+                try:
+                    gateway_data = await gateway.get_employees()
+                    for emp_data in gateway_data.get("employees", []):
+                        emp_id = emp_data.get("id")
+                        if emp_id:
+                            existing = await db.execute(
+                                select(Employee).where(Employee.id == emp_id)
+                            )
+                            emp = existing.scalar_one_or_none()
+                            if emp:
+                                emp.first_name = emp_data.get("firstName", emp.first_name)
+                                emp.last_name = emp_data.get("lastName", emp.last_name)
+                                emp.middle_name = emp_data.get("middleName", emp.middle_name)
+                                emp.employee_number = emp_data.get("employeeNumber", emp.employee_number)
+                                emp.position_id = emp_data.get("positionId")
+                                emp.workstation_id = emp_data.get("workstationId")
+                                emp.status = emp_data.get("status", emp.status)
+                                emp.email = emp_data.get("email", emp.email)
+                                emp.phone = emp_data.get("phone", emp.phone)
+                                emp.hire_date = emp_data.get("hireDate", emp.hire_date)
+                            else:
+                                from datetime import date
+                                hire_date_raw = emp_data.get("hireDate")
+                                if isinstance(hire_date_raw, str):
+                                    try:
+                                        hire_date = date.fromisoformat(hire_date_raw[:10])
+                                    except (ValueError, TypeError):
+                                        hire_date = None
+                                else:
+                                    hire_date = hire_date_raw
+
+                                emp = Employee(
+                                    id=emp_id,
+                                    first_name=emp_data.get("firstName", ""),
+                                    last_name=emp_data.get("lastName", ""),
+                                    middle_name=emp_data.get("middleName"),
+                                    employee_number=emp_data.get("employeeNumber"),
+                                    position_id=emp_data.get("positionId"),
+                                    workstation_id=emp_data.get("workstationId"),
+                                    status=emp_data.get("status"),
+                                    email=emp_data.get("email"),
+                                    phone=emp_data.get("phone"),
+                                    hire_date=hire_date
+                                )
+                                db.add(emp)
+                            count += 1
+                    await db.commit()
+                except Exception as e:
+                    logger.warning("initial_sync_employees_error", error=str(e)[:100])
+                summary["level_2"]["employees"] = count
+                total_records += count
 
             except Exception as e:
                 error_msg = f"Level 2 error: {str(e)[:200]}"
@@ -208,6 +518,13 @@ async def _run_initial_sync():
                 summary["level_3"]["production_output"] = count
                 total_records += count
                 logger.info("initial_sync_production_output_synced", count=count)
+
+                # KPI (AggregatedKPI - independent data)
+                kpi_service = KPIService(db, gateway)
+                count = await kpi_service.sync_from_gateway(None, None)
+                summary["level_3"]["kpi"] = count
+                total_records += count
+                logger.info("initial_sync_kpi_synced", count=count)
 
             except Exception as e:
                 error_msg = f"Level 3 error: {str(e)[:200]}"
