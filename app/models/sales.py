@@ -3,7 +3,7 @@ Sales aggregation models.
 """
 from datetime import date
 
-from sqlalchemy import Column, Date, DECIMAL, Integer, String, UniqueConstraint, Index
+from sqlalchemy import Column, Date, DECIMAL, Integer, String, UniqueConstraint, Index, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.models.base import Base, TimestampMixin, UUIDMixin
@@ -75,12 +75,14 @@ class SalesTrends(Base, UUIDMixin, TimestampMixin):
 class SaleRecord(Base, UUIDMixin, TimestampMixin):
     """
     Raw sales records (synced from Gateway).
+    Normalized: customer_id links to Customer table.
     """
     __tablename__ = "sale_records"
 
     external_id = Column(String(100), nullable=True, index=True)
     product_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     product_name = Column(String(255), nullable=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)
     customer_name = Column(String(255), nullable=True)
     quantity = Column(DECIMAL(15, 3), nullable=True)
     amount = Column(DECIMAL(15, 2), nullable=True)
@@ -92,6 +94,7 @@ class SaleRecord(Base, UUIDMixin, TimestampMixin):
 
     __table_args__ = (
         Index('idx_sale_records_product_date', 'product_id', 'sale_date'),
+        Index('idx_sale_records_customer_date', 'customer_id', 'sale_date'),
         Index('idx_sale_records_channel_date', 'channel', 'sale_date'),
     )
 

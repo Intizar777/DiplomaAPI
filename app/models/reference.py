@@ -1,0 +1,143 @@
+"""
+Reference data models (normalized dictionaries from Gateway).
+"""
+from sqlalchemy import Column, String, Integer, DECIMAL, Boolean, Index
+from sqlalchemy.dialects.postgresql import UUID
+
+from app.models.base import Base, TimestampMixin, UUIDMixin
+
+
+class UnitOfMeasure(Base, UUIDMixin, TimestampMixin):
+    """
+    Unit of measure reference (kg, liters, pieces, etc).
+    Synced from Gateway Production Service.
+    """
+    __tablename__ = "units_of_measure"
+
+    code = Column(String(20), nullable=False, unique=True, index=True)
+    name = Column(String(100), nullable=False)
+
+    source_system_id = Column(String(100), nullable=True, unique=True, index=True)
+
+    __table_args__ = (
+        Index('idx_unit_of_measure_code', 'code'),
+    )
+
+    def __repr__(self):
+        return f"<UnitOfMeasure(code={self.code}, name={self.name})>"
+
+
+class Warehouse(Base, UUIDMixin, TimestampMixin):
+    """
+    Warehouse reference data.
+    Synced from Gateway Production Service.
+    """
+    __tablename__ = "warehouses"
+
+    name = Column(String(150), nullable=False)
+    code = Column(String(20), nullable=False, unique=True, index=True)
+    location = Column(String(200), nullable=False)
+    capacity = Column(DECIMAL(15, 2), nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
+
+    source_system_id = Column(String(100), nullable=True, unique=True, index=True)
+
+    __table_args__ = (
+        Index('idx_warehouse_code', 'code'),
+        Index('idx_warehouse_active', 'is_active'),
+    )
+
+    def __repr__(self):
+        return f"<Warehouse(code={self.code}, name={self.name})>"
+
+
+class SensorParameter(Base, UUIDMixin, TimestampMixin):
+    """
+    Sensor parameter reference (Temperature, Pressure, Flow Rate, Humidity, etc).
+    Synced from Gateway Production Service.
+    """
+    __tablename__ = "sensor_parameters"
+
+    name = Column(String(100), nullable=False)  # на русском: Температура, Давление и т.д.
+    code = Column(String(20), nullable=False, unique=True, index=True)
+    unit = Column(String(20), nullable=False)  # °C, кПа, л/ч, %
+    description = Column(String(255), nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
+
+    __table_args__ = (
+        Index('idx_sensor_parameter_code', 'code'),
+        Index('idx_sensor_parameter_active', 'is_active'),
+    )
+
+    def __repr__(self):
+        return f"<SensorParameter(code={self.code}, name={self.name}, unit={self.unit})>"
+
+
+class Sensor(Base, UUIDMixin, TimestampMixin):
+    """
+    IoT Sensor device reference.
+    Synced from Gateway Production Service.
+    """
+    __tablename__ = "sensors"
+
+    device_id = Column(String(50), nullable=False, unique=True, index=True)
+    production_line_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    sensor_parameter_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
+
+    __table_args__ = (
+        Index('idx_sensor_device_id', 'device_id'),
+        Index('idx_sensor_production_line', 'production_line_id'),
+        Index('idx_sensor_parameter', 'sensor_parameter_id'),
+        Index('idx_sensor_active', 'is_active'),
+    )
+
+    def __repr__(self):
+        return f"<Sensor(device_id={self.device_id}, param_id={self.sensor_parameter_id})>"
+
+
+class Customer(Base, UUIDMixin, TimestampMixin):
+    """
+    Customer reference for sales.
+    Synced from Gateway Production Service.
+    """
+    __tablename__ = "customers"
+
+    name = Column(String(200), nullable=False)
+    code = Column(String(20), nullable=False, unique=True, index=True)
+    region = Column(String(100), nullable=False, index=True)
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
+
+    source_system_id = Column(String(100), nullable=True, unique=True, index=True)
+
+    __table_args__ = (
+        Index('idx_customer_code', 'code'),
+        Index('idx_customer_region', 'region'),
+        Index('idx_customer_active', 'is_active'),
+    )
+
+    def __repr__(self):
+        return f"<Customer(code={self.code}, name={self.name}, region={self.region})>"
+
+
+class QualitySpec(Base, UUIDMixin, TimestampMixin):
+    """
+    Quality specification for products (separated from test results for 3NF).
+    Synced from Gateway Production Service.
+    """
+    __tablename__ = "quality_specs"
+
+    product_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    parameter_name = Column(String(100), nullable=False)
+    lower_limit = Column(DECIMAL(15, 6), nullable=False)
+    upper_limit = Column(DECIMAL(15, 6), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
+
+    __table_args__ = (
+        Index('idx_quality_spec_product', 'product_id'),
+        Index('idx_quality_spec_product_param', 'product_id', 'parameter_name'),
+        Index('idx_quality_spec_active', 'is_active'),
+    )
+
+    def __repr__(self):
+        return f"<QualitySpec(product_id={self.product_id}, param={self.parameter_name})>"

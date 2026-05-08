@@ -12,6 +12,7 @@ from app.models.sensor import SensorReading
 from app.models.inventory import InventorySnapshot
 from app.models.sync_log import SyncLog, SyncError
 from app.models.personnel import Location, ProductionLine, Department, Position, Workstation, Employee
+from app.models.reference import UnitOfMeasure, Warehouse, SensorParameter, Sensor, Customer, QualitySpec
 
 __all__ = [
     "Base",
@@ -34,4 +35,10 @@ __all__ = [
     "Position",
     "Workstation",
     "Employee",
+    "UnitOfMeasure",
+    "Warehouse",
+    "SensorParameter",
+    "Sensor",
+    "Customer",
+    "QualitySpec",
 ]
