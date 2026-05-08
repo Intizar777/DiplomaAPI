@@ -30,7 +30,7 @@ async def _run_sync_task(task_name: str):
         sync_products_task, sync_output_task, sync_sensors_task, sync_inventory_task,
         sync_personnel_task,
     )
-    
+
     task_map = {
         "kpi": sync_kpi_task,
         "sales": sync_sales_task,
@@ -42,13 +42,19 @@ async def _run_sync_task(task_name: str):
         "inventory": sync_inventory_task,
         "personnel": sync_personnel_task,
     }
-    
+
     if task_name not in task_map:
         logger.error("unknown_sync_task", task_name=task_name)
         return
-    
+
     # Call the cron job function directly - it handles its own sync log creation
     await task_map[task_name]()
+
+
+async def _run_cleanup_task():
+    """Run data cleanup task."""
+    from app.cron.jobs import cleanup_old_data_task
+    await cleanup_old_data_task()
 
 
 @router.get("/status", response_model=SyncStatusResponse)
@@ -156,26 +162,26 @@ async def trigger_sync_task(
 ):
     """
     Manually trigger a specific synchronization task.
-    
+
     Available tasks: kpi, sales, orders, quality, products, output, sensors, inventory, personnel
     Tasks run synchronously for testing - API waits for completion.
     """
     valid_tasks = ["kpi", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "personnel"]
-    
+
     if task_name not in valid_tasks:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid task '{task_name}'. Valid tasks: {valid_tasks}"
         )
-    
+
     if task_name in _running_tasks:
         return SyncTriggerResponse(
             message=f"Task '{task_name}' is already running",
             triggered_tasks=[]
         )
-    
+
     _running_tasks.add(task_name)
-    
+
     try:
         logger.info("manual_sync_task_start", task_name=task_name)
         await _run_sync_task(task_name)
@@ -185,8 +191,42 @@ async def trigger_sync_task(
         raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
     finally:
         _running_tasks.discard(task_name)
-    
+
     return SyncTriggerResponse(
         message=f"Task '{task_name}' completed",
         triggered_tasks=[task_name]
     )
+
+
+@router.post("/cleanup", response_model=dict)
+async def trigger_cleanup():
+    """
+    Manually trigger data cleanup task.
+
+    Removes all records older than retention_days (from config).
+    Deletes from: orders, quality, output, sensors, inventory, sales, and sync logs.
+    Task runs synchronously - API waits for completion.
+    """
+    cleanup_task_name = "cleanup"
+
+    if cleanup_task_name in _running_tasks:
+        return {
+            "message": "Cleanup task is already running",
+            "status": "running"
+        }
+
+    _running_tasks.add(cleanup_task_name)
+
+    try:
+        logger.info("manual_cleanup_start")
+        await _run_cleanup_task()
+        logger.info("manual_cleanup_completed")
+        return {
+            "message": "Data cleanup completed successfully",
+            "status": "completed"
+        }
+    except Exception as e:
+        logger.error("manual_cleanup_failed", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
+    finally:
+        _running_tasks.discard(cleanup_task_name)

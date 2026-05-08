@@ -9,7 +9,7 @@ from app.config import settings
 from app.cron.jobs import (
     sync_kpi_task, sync_sales_task, sync_orders_task, sync_quality_task,
     sync_products_task, sync_output_task, sync_sensors_task, sync_inventory_task,
-    sync_personnel_task, cleanup_old_data_task,
+    sync_personnel_task,
 )
 
 logger = structlog.get_logger()
