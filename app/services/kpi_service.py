@@ -372,7 +372,7 @@ class KPIService:
                     kpi_data = gateway_data.get("kpi", gateway_data)
 
                     if not kpi_data:
-                        logger.debug("kpi_sync_no_data_for_line", line=line_code)
+                        logger.debug("kpi_sync_no_data_for_line", line=line_id)
                         continue
 
                     # Use ON CONFLICT DO UPDATE for upsert
@@ -380,7 +380,7 @@ class KPIService:
                     stmt = insert(AggregatedKPI).values(
                         period_from=from_date,
                         period_to=to_date,
-                        production_line=line_code,
+                        production_line=line_id,
                         total_output=Decimal(str(kpi_data.get("totalOutput", 0))),
                         defect_rate=Decimal(str(kpi_data.get("defectRate", 0))),
                         completed_orders=kpi_data.get("completedOrders", 0),
@@ -400,7 +400,7 @@ class KPIService:
                     records_processed += 1
                     logger.info(
                         "kpi_sync_per_line_upserted",
-                        line=line_code,
+                        line=line_id,
                         period_from=from_date.isoformat(),
                         period_to=to_date.isoformat()
                     )

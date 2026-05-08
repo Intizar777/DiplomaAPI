@@ -336,6 +336,129 @@ async def sync_personnel_task():
     )
 
 
+async def sync_references_task():
+    """Sync Level 0 reference tables from Gateway (full upsert each time)."""
+    from app.models import UnitOfMeasure, Warehouse, Customer
+    from app.services import ProductService, SensorService
+    from datetime import datetime
+
+    logger.info("sync_task_started", task="references", phase="entry")
+
+    async with AsyncSessionLocal() as db:
+        log = await create_sync_log(db, "references")
+        gateway = GatewayClient()
+        total = 0
+
+        try:
+            # UnitOfMeasure
+            product_service = ProductService(db, gateway)
+            count = 0
+            gateway_data = await gateway.get_units_of_measure()
+            for unit_data in gateway_data.get("units", []):
+                await product_service._sync_unit_of_measure(unit_data)
+                count += 1
+            await db.commit()
+            total += count
+            logger.info("sync_references_units_done", count=count)
+
+            # SensorParameter
+            sensor_service = SensorService(db, gateway)
+            count = 0
+            gateway_data = await gateway.get_sensor_parameters()
+            for param_data in gateway_data.get("parameters", []):
+                await sensor_service._sync_sensor_parameter(param_data)
+                count += 1
+            await db.commit()
+            total += count
+            logger.info("sync_references_sensor_params_done", count=count)
+
+            # Customer
+            count = 0
+            gateway_data = await gateway.get_customers()
+            for customer_data in gateway_data.get("customers", []):
+                customer_id = customer_data.get("id")
+                code = customer_data.get("code")
+                if not customer_id:
+                    continue
+                existing = await db.execute(
+                    select(Customer).where(
+                        Customer.code == code if code else Customer.id == customer_id
+                    )
+                )
+                customer = existing.scalar_one_or_none()
+                if customer:
+                    customer.code = code or customer.code
+                    customer.name = customer_data.get("name", customer.name)
+                    customer.region = customer_data.get("region", customer.region)
+                    customer.is_active = customer_data.get("isActive", customer.is_active)
+                else:
+                    db.add(Customer(
+                        id=customer_id,
+                        code=code,
+                        name=customer_data.get("name"),
+                        region=customer_data.get("region"),
+                        is_active=customer_data.get("isActive", True)
+                    ))
+                count += 1
+            await db.commit()
+            total += count
+            logger.info("sync_references_customers_done", count=count)
+
+            # Warehouse
+            count = 0
+            gateway_data = await gateway.get_warehouses()
+            for warehouse_data in gateway_data.get("warehouses", []):
+                warehouse_id = warehouse_data.get("id")
+                code = warehouse_data.get("code")
+                if not warehouse_id:
+                    continue
+                existing = await db.execute(
+                    select(Warehouse).where(
+                        Warehouse.code == code if code else Warehouse.id == warehouse_id
+                    )
+                )
+                warehouse = existing.scalar_one_or_none()
+                if warehouse:
+                    warehouse.code = code or warehouse.code
+                    warehouse.name = warehouse_data.get("name", warehouse.name)
+                    warehouse.location = warehouse_data.get("location", warehouse.location)
+                    warehouse.capacity = warehouse_data.get("capacity", warehouse.capacity)
+                    warehouse.is_active = warehouse_data.get("isActive", warehouse.is_active)
+                else:
+                    db.add(Warehouse(
+                        id=warehouse_id,
+                        code=code,
+                        name=warehouse_data.get("name"),
+                        location=warehouse_data.get("location"),
+                        capacity=warehouse_data.get("capacity"),
+                        is_active=warehouse_data.get("isActive", True)
+                    ))
+                count += 1
+            await db.commit()
+            total += count
+            logger.info("sync_references_warehouses_done", count=count)
+
+            await complete_sync_log(db, log, SyncStatus.COMPLETED, total)
+            logger.info("sync_task_completed", task="references", phase="exit", status="success", records_processed=total)
+
+        except Exception as e:
+            tb_str = traceback.format_exc()
+            error_msg = f"{type(e).__name__}: {e}"
+            await complete_sync_log(db, log, SyncStatus.FAILED, error_message=error_msg)
+            logger.error(
+                "sync_task_failed",
+                task="references",
+                phase="exit",
+                status="failed",
+                error_type=type(e).__name__,
+                error_message=str(e),
+                traceback=tb_str,
+            )
+            raise
+        finally:
+            await gateway.close()
+
+
 async def cleanup_old_data_task():
     """Cleanup old data based on retention settings."""
     from datetime import datetime, timedelta

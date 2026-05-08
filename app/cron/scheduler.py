@@ -9,7 +9,7 @@ from app.config import settings
 from app.cron.jobs import (
     sync_kpi_task, sync_kpi_per_line_task, sync_sales_task, sync_orders_task, sync_quality_task,
     sync_products_task, sync_output_task, sync_sensors_task, sync_inventory_task,
-    sync_personnel_task,
+    sync_personnel_task, sync_references_task,
 )
 
 logger = structlog.get_logger()
@@ -53,6 +53,8 @@ async def run_scheduled_jobs():
                 jobs_to_run.append(("inventory", sync_inventory_task))
             elif current_minute == 40:
                 jobs_to_run.append(("personnel", sync_personnel_task))
+            elif current_minute == 45:
+                jobs_to_run.append(("references", sync_references_task))
             
             # Run jobs
             for job_name, job_func in jobs_to_run:

@@ -44,6 +44,8 @@ Before marking a feature complete:
 
 **See implementation patterns** → See [docs/architecture-patterns.md](docs/architecture-patterns.md)
 
+**Understand Gateway API** → See [docs/llm-api-gateway.md](docs/llm-api-gateway.md)
+
 | Need | Link |
 |------|------|
 | Add endpoint | Pattern 1 in [docs/architecture-patterns.md](docs/architecture-patterns.md) |
@@ -95,5 +97,6 @@ git log --oneline -10                     # Recent commits
 - **AGENTS.md** — Project overview, startup workflow
 - **docs/architecture.md** — Three-layer design, domains, constraints
 - **docs/architecture-patterns.md** — 7 implementation patterns with examples
+- **docs/llm-api-gateway.md** — Gateway API services, entities, integration patterns (auth, personnel, production, ETL)
 - **feature_list.json** — Feature tracking
 - **progress.md** — Session logs
