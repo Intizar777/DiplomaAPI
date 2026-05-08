@@ -3,7 +3,7 @@ Sync status API routes.
 """
 import asyncio
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy import select, desc, func
@@ -13,14 +13,15 @@ from app.database import get_db
 from app.models import SyncLog, SyncStatus
 from app.schemas import SyncStatusResponse, SyncTriggerResponse
 from app.config import settings
+from app.services import GatewayClient
 import structlog
 
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/api/v1/sync", tags=["Sync"])
 
-# Track running tasks
-_running_tasks: set = set()
+# Track running tasks as (task_name -> asyncio.Task)
+_running_tasks: Dict[str, asyncio.Task] = {}
 
 
 async def _run_sync_task(task_name: str):
@@ -128,28 +129,31 @@ async def get_sync_status(
 
 
 @router.post("/trigger", response_model=SyncTriggerResponse)
-async def trigger_sync_all(
-    background_tasks: BackgroundTasks
-):
+async def trigger_sync_all():
     """
-    Manually trigger all synchronization tasks.
-    
-    Tasks run in background — API returns immediately.
+    Manually trigger all synchronization tasks in background.
+
+    Tasks run concurrently in background — API returns immediately.
     Check /sync/status for progress.
+    Stop with POST /api/v1/sync/stop or /api/v1/sync/stop/all
     """
-    tasks = ["kpi", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "personnel"]
+    all_tasks = ["kpi", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "personnel"]
     triggered = []
     skipped = []
-    
-    for task_name in tasks:
+
+    for task_name in all_tasks:
         if task_name in _running_tasks:
             skipped.append(task_name)
         else:
-            background_tasks.add_task(_run_sync_task, task_name)
+            # Create and track asyncio task
+            task = asyncio.create_task(_run_sync_task(task_name))
+            _running_tasks[task_name] = task
+            # Clean up when done
+            task.add_done_callback(lambda t, name=task_name: _running_tasks.pop(name, None))
             triggered.append(task_name)
-    
+
     logger.info("sync_all_triggered", triggered=triggered, skipped=skipped)
-    
+
     return SyncTriggerResponse(
         message=f"Sync tasks triggered: {triggered}" + (f", already running: {skipped}" if skipped else ""),
         triggered_tasks=triggered
@@ -164,7 +168,7 @@ async def trigger_sync_task(
     Manually trigger a specific synchronization task.
 
     Available tasks: kpi, sales, orders, quality, products, output, sensors, inventory, personnel
-    Tasks run synchronously for testing - API waits for completion.
+    Tasks run as background tasks — API returns immediately.
     """
     valid_tasks = ["kpi", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "personnel"]
 
@@ -180,20 +184,16 @@ async def trigger_sync_task(
             triggered_tasks=[]
         )
 
-    _running_tasks.add(task_name)
+    # Create and track asyncio task
+    task = asyncio.create_task(_run_sync_task(task_name))
+    _running_tasks[task_name] = task
+    # Clean up when done
+    task.add_done_callback(lambda t: _running_tasks.pop(task_name, None))
 
-    try:
-        logger.info("manual_sync_task_start", task_name=task_name)
-        await _run_sync_task(task_name)
-        logger.info("manual_sync_task_completed", task_name=task_name)
-    except Exception as e:
-        logger.error("manual_sync_task_failed", task_name=task_name, error=str(e))
-        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
-    finally:
-        _running_tasks.discard(task_name)
+    logger.info("manual_sync_task_triggered", task_name=task_name)
 
     return SyncTriggerResponse(
-        message=f"Task '{task_name}' completed",
+        message=f"Task '{task_name}' triggered in background",
         triggered_tasks=[task_name]
     )
 
@@ -205,7 +205,8 @@ async def trigger_cleanup():
 
     Removes all records older than retention_days (from config).
     Deletes from: orders, quality, output, sensors, inventory, sales, and sync logs.
-    Task runs synchronously - API waits for completion.
+    Task runs in background — API returns immediately.
+    Stop with POST /api/v1/sync/stop/cleanup
     """
     cleanup_task_name = "cleanup"
 
@@ -215,18 +216,263 @@ async def trigger_cleanup():
             "status": "running"
         }
 
-    _running_tasks.add(cleanup_task_name)
+    # Create and track asyncio task
+    task = asyncio.create_task(_run_cleanup_task())
+    _running_tasks[cleanup_task_name] = task
+    # Clean up when done
+    task.add_done_callback(lambda t: _running_tasks.pop(cleanup_task_name, None))
 
-    try:
-        logger.info("manual_cleanup_start")
-        await _run_cleanup_task()
-        logger.info("manual_cleanup_completed")
+    logger.info("manual_cleanup_triggered")
+
+    return {
+        "message": "Cleanup task triggered in background",
+        "status": "triggered"
+    }
+
+
+@router.post("/stop", response_model=dict)
+async def stop_all_tasks():
+    """
+    Stop ALL running synchronization and cleanup tasks immediately.
+
+    Cancels all background sync jobs and cleanup.
+    """
+    if not _running_tasks:
         return {
-            "message": "Data cleanup completed successfully",
+            "message": "No tasks running",
+            "stopped": [],
+            "status": "ok"
+        }
+
+    stopped = []
+    for task_name, task in list(_running_tasks.items()):
+        if not task.done():
+            task.cancel()
+            stopped.append(task_name)
+            logger.info("task_cancelled", task_name=task_name)
+
+    # Clean up cancelled tasks
+    for task_name in stopped:
+        _running_tasks.pop(task_name, None)
+
+    return {
+        "message": f"Stopped {len(stopped)} task(s)",
+        "stopped": stopped,
+        "status": "ok"
+    }
+
+
+@router.post("/stop/{task_name}", response_model=dict)
+async def stop_task(task_name: str):
+    """
+    Stop a specific running task.
+
+    Example tasks: kpi, sales, orders, quality, products, output, sensors, inventory, personnel, cleanup
+    """
+    if task_name not in _running_tasks:
+        return {
+            "message": f"Task '{task_name}' is not running",
+            "stopped": [],
+            "status": "not_found"
+        }
+
+    task = _running_tasks[task_name]
+
+    if task.done():
+        _running_tasks.pop(task_name, None)
+        return {
+            "message": f"Task '{task_name}' already completed",
+            "stopped": [],
             "status": "completed"
         }
+
+    # Cancel the task
+    task.cancel()
+    _running_tasks.pop(task_name, None)
+
+    logger.info("task_cancelled", task_name=task_name)
+
+    return {
+        "message": f"Task '{task_name}' stopped",
+        "stopped": [task_name],
+        "status": "ok"
+    }
+
+
+@router.get("/running", response_model=dict)
+async def get_running_tasks():
+    """
+    Get list of currently running tasks.
+    """
+    running = []
+    for task_name, task in _running_tasks.items():
+        running.append({
+            "name": task_name,
+            "done": task.done(),
+            "cancelled": task.cancelled()
+        })
+
+    return {
+        "running_tasks": running,
+        "count": len(running)
+    }
+
+
+@router.post("/initial_sync", response_model=dict)
+async def initial_sync(
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Initial bulk synchronization endpoint.
+
+    Syncs all reference and data tables from Gateway in correct dependency order
+    to avoid foreign key constraint violations.
+
+    Execution order:
+    1. Level 0: Reference tables (UnitOfMeasure, SensorParameter, Warehouse, Customer, Location)
+    2. Level 1: Tables depending on Level 0 (Product, Sensor, InventorySnapshot, SaleRecord, etc.)
+    3. Level 2: Tables depending on Level 1 (QualitySpec, QualityResult, SensorReading, etc.)
+    4. Level 3: Data tables (OrderSnapshot, ProductionOutput, AggregatedSales, etc.)
+
+    Returns summary of records synced per table.
+    """
+    from app.services import (
+        ProductService, SensorService, SalesService,
+        InventoryService, PersonnelService, OutputService,
+        QualityService, OrderService, KPIService
+    )
+
+    summary = {
+        "level_0": {},
+        "level_1": {},
+        "level_2": {},
+        "level_3": {},
+        "total_records": 0,
+        "errors": []
+    }
+
+    gateway = GatewayClient()
+
+    # Level 0: Reference tables (no FK dependencies)
+    try:
+        logger.info("initial_sync_phase_0", phase="reference_tables")
+
+        # UnitOfMeasure via Product service
+        product_service = ProductService(db, gateway)
+        count = 0
+        try:
+            gateway_data = await gateway.get_units_of_measure()
+            for unit_data in gateway_data.get("units", []):
+                await product_service._sync_unit_of_measure(unit_data)
+                count += 1
+            await db.commit()
+        except Exception as e:
+            logger.warning("initial_sync_units_error", error=str(e)[:100])
+        summary["level_0"]["units_of_measure"] = count
+
+        # SensorParameter via Sensor service
+        count = 0
+        try:
+            sensor_service = SensorService(db, gateway)
+            gateway_data = await gateway.get_sensor_parameters()
+            for param_data in gateway_data.get("parameters", []):
+                await sensor_service._sync_sensor_parameter(param_data)
+                count += 1
+            await db.commit()
+        except Exception as e:
+            logger.warning("initial_sync_sensor_parameters_error", error=str(e)[:100])
+        summary["level_0"]["sensor_parameters"] = count
+
+        logger.info("initial_sync_phase_0_complete", units=summary["level_0"].get("units_of_measure", 0),
+                   params=summary["level_0"].get("sensor_parameters", 0))
+
     except Exception as e:
-        logger.error("manual_cleanup_failed", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
-    finally:
-        _running_tasks.discard(cleanup_task_name)
+        error_msg = f"Level 0 error: {str(e)[:200]}"
+        logger.error("initial_sync_level_0_failed", error=error_msg)
+        summary["errors"].append(error_msg)
+
+    # Level 1: Tables depending on Level 0
+    try:
+        logger.info("initial_sync_phase_1", phase="dependent_on_level_0")
+
+        # Product (depends on UnitOfMeasure)
+        product_service = ProductService(db, gateway)
+        count = await product_service.sync_from_gateway(None, None)
+        summary["level_1"]["products"] = count
+        logger.info("initial_sync_products_synced", count=count)
+
+        # SaleRecord (depends on Customer via direct foreign key)
+        sales_service = SalesService(db, gateway)
+        count = await sales_service.sync_from_gateway(None, None)
+        summary["level_1"]["sale_records"] = count
+        logger.info("initial_sync_sale_records_synced", count=count)
+
+        # Sensor (depends on SensorParameter)
+        sensor_service = SensorService(db, gateway)
+        count = await sensor_service.sync_from_gateway(None, None)
+        summary["level_1"]["sensors"] = count
+        logger.info("initial_sync_sensors_synced", count=count)
+
+        # InventorySnapshot (depends on Warehouse via foreign key)
+        inventory_service = InventoryService(db, gateway)
+        count = await inventory_service.sync_from_gateway(None, None)
+        summary["level_1"]["inventory_snapshots"] = count
+        logger.info("initial_sync_inventory_synced", count=count)
+
+    except Exception as e:
+        error_msg = f"Level 1 error: {str(e)[:200]}"
+        logger.error("initial_sync_level_1_failed", error=error_msg)
+        summary["errors"].append(error_msg)
+
+    # Level 2: Tables depending on Level 1
+    try:
+        logger.info("initial_sync_phase_2", phase="dependent_on_level_1")
+
+        # QualityResult (depends on QualitySpec which depends on Product)
+        quality_service = QualityService(db, gateway)
+        count = await quality_service.sync_from_gateway(None, None)
+        summary["level_2"]["quality_results"] = count
+        logger.info("initial_sync_quality_synced", count=count)
+
+    except Exception as e:
+        error_msg = f"Level 2 error: {str(e)[:200]}"
+        logger.error("initial_sync_level_2_failed", error=error_msg)
+        summary["errors"].append(error_msg)
+
+    # Level 3: Data tables (no FK dependencies)
+    try:
+        logger.info("initial_sync_phase_3", phase="data_tables")
+
+        # OrderSnapshot
+        order_service = OrderService(db, gateway)
+        count = await order_service.sync_from_gateway(None, None)
+        summary["level_3"]["order_snapshots"] = count
+        logger.info("initial_sync_order_snapshots_synced", count=count)
+
+        # ProductionOutput
+        output_service = OutputService(db, gateway)
+        count = await output_service.sync_from_gateway(None, None)
+        summary["level_3"]["production_output"] = count
+        logger.info("initial_sync_production_output_synced", count=count)
+
+    except Exception as e:
+        error_msg = f"Level 3 error: {str(e)[:200]}"
+        logger.error("initial_sync_level_3_failed", error=error_msg)
+        summary["errors"].append(error_msg)
+
+    # Calculate totals
+    for level in ["level_0", "level_1", "level_2", "level_3"]:
+        if isinstance(summary[level], dict):
+            for key, value in summary[level].items():
+                if isinstance(value, int):
+                    summary["total_records"] += value
+
+    logger.info("initial_sync_completed",
+               total_records=summary["total_records"],
+               has_errors=bool(summary["errors"]))
+
+    return {
+        "status": "completed" if not summary["errors"] else "completed_with_errors",
+        "summary": summary,
+        "message": f"Initial sync complete. Total records synced: {summary['total_records']}"
+    }

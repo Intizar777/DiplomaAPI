@@ -62,7 +62,7 @@ async def get_sales_trends(
 @router.get("/top-products", response_model=TopProductsResponse)
 async def get_top_products(
     date_range: DateRangeParams = Depends(),
-    limit: int = Query(10, ge=1, le=100, description="Number of products to return"),
+    limit: int = Query(10, ge=1, le=1000, description="Number of products to return"),
     service: SalesService = Depends(get_services)
 ):
     """
