@@ -34,6 +34,7 @@ from app.routers import (
     line_master_dashboard_router,
     gm_dashboard_router,
     qe_dashboard_router,
+    finance_dashboard_router,
 )
 
 # Configure structured logging on module load
@@ -278,6 +279,7 @@ app.include_router(personnel_router)
 app.include_router(line_master_dashboard_router)
 app.include_router(gm_dashboard_router)
 app.include_router(qe_dashboard_router)
+app.include_router(finance_dashboard_router)
 
 
 @app.get("/api/v1/docs", include_in_schema=False)

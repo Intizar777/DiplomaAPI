@@ -14,6 +14,7 @@ from app.services.personnel_service import PersonnelService
 from app.services.line_master_dashboard_service import LineMasterDashboardService
 from app.services.gm_dashboard_service import GroupManagerDashboardService
 from app.services.qe_dashboard_service import QualityEngineerDashboardService
+from app.services.finance_dashboard_service import FinanceManagerDashboardService
 
 __all__ = [
     "GatewayClient",
@@ -29,4 +30,5 @@ __all__ = [
     "LineMasterDashboardService",
     "GroupManagerDashboardService",
     "QualityEngineerDashboardService",
+    "FinanceManagerDashboardService",
 ]

@@ -53,6 +53,17 @@ from app.schemas.qe_dashboard import (
     ParetoItem,
     DefectParetoResponse,
 )
+from app.schemas.finance_dashboard import (
+    GroupByType,
+    IntervalType,
+    SortBy,
+    SalesGroupItem,
+    SalesBreakdownResponse,
+    RevenueTrendPoint,
+    RevenueTrendResponse,
+    TopProductItem,
+    TopProductsResponse as FinanceTopProductsResponse,
+)
 
 __all__ = [
     # Common
@@ -108,4 +119,14 @@ __all__ = [
     "BatchAnalysisResponse",
     "ParetoItem",
     "DefectParetoResponse",
+    # Finance Manager Dashboard
+    "GroupByType",
+    "IntervalType",
+    "SortBy",
+    "SalesGroupItem",
+    "SalesBreakdownResponse",
+    "RevenueTrendPoint",
+    "RevenueTrendResponse",
+    "TopProductItem",
+    "FinanceTopProductsResponse",
 ]

@@ -177,7 +177,7 @@
       "dependencies": [],
       "status": "not_started",
       "evidence": "Planned for observability"
-    }
+    },
     {
       "id": "feat-023",
       "name": "Personnel Sync and Endpoints",
@@ -209,7 +209,23 @@
       "dependencies": ["feat-001", "feat-002", "feat-004", "feat-025"],
       "status": "done",
       "evidence": "app/schemas/gm_dashboard.py, app/services/gm_dashboard_service.py, app/routers/gm_dashboard.py, tests/unit/test_gm_dashboard_service.py (12/12 passing), tests/integration/test_gm_dashboard_routes.py (8/8 passing)"
+    },
+    {
+      "id": "feat-027",
+      "name": "Quality Engineer Dashboard - Wave 3",
+      "description": "Parameter-level quality analytics for QE. GET /api/v1/dashboards/qe/parameter-trends (daily trends + spec bands), /batch-analysis (deviating lots drill-down), /defect-pareto (Pareto chart with optional product_id filter). Data from quality_results + quality_specs + production_output.",
+      "dependencies": ["feat-001", "feat-002", "feat-005", "feat-025", "feat-026"],
+      "status": "done",
+      "evidence": "app/schemas/qe_dashboard.py, app/services/qe_dashboard_service.py, app/routers/qe_dashboard.py, tests/unit/test_qe_dashboard_service.py (9/9 passing), tests/integration/test_qe_dashboard_routes.py (6/6 passing). 187 total tests passing."
+    },
+    {
+      "id": "feat-028",
+      "name": "Finance Manager Dashboard - Wave 4",
+      "description": "Revenue and sales analytics for Finance Managers. GET /api/v1/dashboards/finance/sales-breakdown (breakdown by channel/region/product with share%), /revenue-trend (period-over-period growth with MoM%), /top-products (ranked by amount or quantity). Data from AggregatedSales, SalesTrends, SaleRecord tables.",
+      "dependencies": ["feat-001", "feat-003", "feat-027"],
+      "status": "done",
+      "evidence": "app/schemas/finance_dashboard.py, app/services/finance_dashboard_service.py, app/routers/finance_dashboard.py, tests/unit/test_finance_dashboard_service.py (9/9 passing), tests/integration/test_finance_dashboard_routes.py (10/10 passing). 206 total tests passing."
     }
   ],
-  "notes": "Core features (001-018) complete. Personnel sync (023) complete. RabbitMQ consumer (024) complete. Wave 1 dashboards (025) complete. Wave 2 dashboards (026) complete. Type hints (013) and tests (014) in progress. Waves 3-5 dashboards planned. Performance and auth features (019-022) planned for v2."
+  "notes": "Core features (001-018) complete. Personnel sync (023) complete. RabbitMQ consumer (024) complete. Wave 1 dashboards (025) complete. Wave 2 dashboards (026) complete. Wave 3 quality engineer dashboard (027) complete. Wave 4 finance manager dashboard (028) complete. Type hints (013) and tests (014) in progress. Wave 5 warehouse dashboard planned. Performance and auth features (019-022) planned for v2."
 }
