@@ -4,7 +4,7 @@ Quality business logic service.
 from datetime import date
 from decimal import Decimal
 from typing import Dict, List, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import select, func, desc, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,8 +34,9 @@ class QualityService:
         try:
             spec_id = UUID(spec_id_raw) if isinstance(spec_id_raw, str) else spec_id_raw
         except (ValueError, AttributeError, TypeError):
-            logger.warning("invalid_quality_spec_id_skipped", raw=spec_id_raw)
-            return None
+            spec_id = None
+        if spec_id is None:
+            spec_id = uuid4()
 
         # Try to find existing by (product_id, parameter_name) unique constraint
         existing = await self.db.execute(
@@ -279,6 +280,11 @@ class QualityService:
         
         logger.info("quality_filtered_by_date", filtered_results=len(results), from_date=from_date, to_date=to_date)
         
+        # Load product names for enrichment
+        product_names: Dict[UUID, str] = {}
+        product_result = await self.db.execute(select(Product.id, Product.name))
+        product_names = {row[0]: row[1] for row in product_result.all()}
+
         batch = []
         for result in results:
             # Extract and validate ID from Gateway
@@ -301,28 +307,41 @@ class QualityService:
             else:
                 test_date_parsed = date.today()
 
-            # Sync QualitySpec if present
+            # Sync QualitySpec — Gateway returns lowerLimit/upperLimit inline (not nested qualitySpec)
             quality_spec_id = None
             product_id = result.get("productId")
             parameter_name = result.get("parameterName", "")
-            spec_data = result.get("qualitySpec")
-            if product_id and parameter_name and spec_data:
+            if product_id and parameter_name and (result.get("lowerLimit") is not None or result.get("upperLimit") is not None):
+                spec_data = {
+                    "id": result.get("id"),
+                    "lowerLimit": result.get("lowerLimit"),
+                    "upperLimit": result.get("upperLimit"),
+                    "isActive": True,
+                }
                 try:
                     product_uuid = UUID(product_id) if isinstance(product_id, str) else product_id
                     quality_spec_id = await self._sync_quality_spec(product_uuid, parameter_name, spec_data)
                 except (ValueError, AttributeError, TypeError):
                     logger.warning("invalid_product_id_for_spec", raw=product_id)
 
+            # Enrich product_name
+            product_name = None
+            if product_id:
+                try:
+                    product_name = product_names.get(UUID(product_id) if isinstance(product_id, str) else product_id)
+                except (ValueError, AttributeError, TypeError):
+                    pass
+
             quality_result = QualityResult(
                 id=quality_result_id,
                 lot_number=result.get("lotNumber", ""),
                 product_id=product_id,
-                product_name=None,
+                product_name=product_name,
                 parameter_name=parameter_name,
                 result_value=result.get("resultValue"),
                 quality_spec_id=quality_spec_id,
                 in_spec=result.get("inSpec", True),
-                decision=result.get("decision", "pending").lower(),
+                decision=result.get("qualityStatus", "pending").lower(),
                 test_date=test_date_parsed
             )
             batch.append(quality_result)

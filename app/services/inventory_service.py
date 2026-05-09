@@ -191,11 +191,17 @@ class InventoryService:
             product_id = item_data.get("productId")
             product_name = product_names.get(product_id) if product_id else None
 
-            # Sync Warehouse if present
+            # Sync Warehouse: prefer nested object, fall back to warehouseId string
             warehouse_id = None
             warehouse_data = item_data.get("warehouse")
             if warehouse_data:
                 warehouse_id = await self._sync_warehouse(warehouse_data)
+            elif item_data.get("warehouseId"):
+                raw_wh_id = item_data.get("warehouseId")
+                try:
+                    warehouse_id = UUID(raw_wh_id)
+                except (ValueError, TypeError):
+                    pass
 
             # Parse last_updated
             last_updated_raw = item_data.get("lastUpdated")

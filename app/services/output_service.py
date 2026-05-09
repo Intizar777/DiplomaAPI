@@ -4,6 +4,7 @@ Output business logic service.
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional, List, Dict
+from uuid import UUID
 
 from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -202,7 +203,6 @@ class OutputService:
     async def upsert_from_event(self, payload: "OutputRecordedPayload", event_id: str = None) -> None:
         """Upsert production output from output.recorded event. Idempotent by event_id or lot_number."""
         from app.messaging.schemas import OutputRecordedPayload
-        from uuid import UUID
 
         # First check by event_id if provided (absolute idempotency)
         if event_id:

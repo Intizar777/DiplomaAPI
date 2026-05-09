@@ -3,11 +3,12 @@ Order business logic service.
 """
 from datetime import date, datetime
 from typing import Optional, Dict, List
+from uuid import UUID, uuid4
 
 from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import OrderSnapshot
+from app.models import OrderSnapshot, Product
 from app.schemas import OrderStatusSummaryResponse, OrderListResponse, OrderDetailResponse
 from app.services.gateway_client import GatewayClient
 from app.utils.logging_utils import track_feature_path, log_data_flow
@@ -176,16 +177,16 @@ class OrderService:
         
         orders = gateway_data.get("orders", [])
         logger.info("orders_fetched_from_gateway", total_orders=len(orders))
-        
+
+        # Load product names for enrichment
+        product_names: Dict[UUID, str] = {}
+        product_result = await self.db.execute(select(Product.id, Product.name))
+        product_names = {row[0]: row[1] for row in product_result.all()}
+
         batch = []
         for order in orders:
-            # Extract and validate snapshot ID from Gateway
-            raw_snapshot_id = order.get("snapshotId")
-            try:
-                snapshot_id = UUID(raw_snapshot_id) if isinstance(raw_snapshot_id, str) else raw_snapshot_id
-            except (ValueError, AttributeError, TypeError):
-                logger.warning("invalid_order_snapshot_id_skipped", raw=raw_snapshot_id)
-                continue
+            # Each sync creates a new snapshot; gateway ID → order_id
+            snapshot_id = uuid4()
 
             # Parse ISO datetime strings to datetime objects
             def parse_dt(val):
@@ -197,12 +198,20 @@ class OrderService:
                         return None
                 return val
 
+            product_id = order.get("productId")
+            product_name = None
+            if product_id:
+                try:
+                    product_name = product_names.get(UUID(product_id) if isinstance(product_id, str) else product_id)
+                except (ValueError, AttributeError, TypeError):
+                    pass
+
             snapshot = OrderSnapshot(
                 id=snapshot_id,
                 order_id=order.get("id"),
                 external_order_id=order.get("externalOrderId"),
-                product_id=order.get("productId"),
-                product_name=None,
+                product_id=product_id,
+                product_name=product_name,
                 target_quantity=order.get("targetQuantity"),
                 actual_quantity=order.get("actualQuantity"),
                 unit_of_measure=order.get("unitOfMeasure"),

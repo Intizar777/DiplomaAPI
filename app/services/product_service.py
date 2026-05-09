@@ -3,7 +3,7 @@ Product business logic service.
 """
 from datetime import date
 from typing import Optional, List, Dict
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,10 +51,24 @@ class ProductService:
         result = await self.db.execute(query)
         return {row[0]: row[1] for row in result.all()}
     
-    async def _sync_unit_of_measure(self, unit_data: dict) -> Optional[UUID]:
+    async def _sync_unit_of_measure(self, unit_data) -> Optional[UUID]:
         """Sync a unit of measure and return its ID."""
         if not unit_data:
             return None
+
+        # Gateway returns unitOfMeasure as a plain string (e.g. "kg", "liters")
+        if isinstance(unit_data, str):
+            code = unit_data.strip()
+            if not code:
+                return None
+            existing = await self.db.execute(
+                select(UnitOfMeasure).where(UnitOfMeasure.code == code)
+            )
+            unit = existing.scalar_one_or_none()
+            if not unit:
+                unit = UnitOfMeasure(id=uuid4(), code=code, name=code)
+                self.db.add(unit)
+            return unit.id
 
         unit_id_raw = unit_data.get("id")
         try:

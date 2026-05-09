@@ -273,7 +273,7 @@ class SensorService:
         """Sync sensor readings from Gateway."""
         logger.info("syncing_sensors_from_gateway", from_date=from_date, to_date=to_date)
 
-        gateway_data = await self.gateway.get_sensors(from_date=from_date, to_date=to_date)
+        gateway_data = await self.gateway.get_sensor_readings(from_date=from_date, to_date=to_date)
         readings = gateway_data.get("readings", [])
         logger.info("sensors_fetched_from_gateway", total_readings=len(readings))
 
@@ -291,11 +291,18 @@ class SensorService:
                 logger.warning("invalid_sensor_reading_id_skipped", raw=raw_id)
                 continue
 
-            # Sync Sensor if present
+            # Readings response contains sensorId (FK), not a nested sensor object
             sensor_id = None
-            sensor_data = reading_data.get("sensor")
-            if sensor_data:
-                sensor_id = await self._sync_sensor(sensor_data)
+            raw_sensor_id = reading_data.get("sensorId")
+            if raw_sensor_id:
+                try:
+                    sensor_uuid = UUID(raw_sensor_id) if isinstance(raw_sensor_id, str) else raw_sensor_id
+                    existing = await self.db.execute(select(Sensor).where(Sensor.id == sensor_uuid))
+                    sensor = existing.scalar_one_or_none()
+                    if sensor:
+                        sensor_id = sensor.id
+                except (ValueError, AttributeError, TypeError):
+                    pass
 
             # Parse recorded_at
             recorded_at_raw = reading_data.get("recordedAt", datetime.utcnow())
