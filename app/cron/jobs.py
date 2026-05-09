@@ -337,7 +337,11 @@ async def sync_personnel_task():
 
 
 async def sync_references_task():
-    """Sync Level 0 reference tables from Gateway (full upsert each time)."""
+    """Sync Level 0 reference tables from Gateway (full upsert each time).
+
+    Each reference type is wrapped in its own try/except so that a failure
+    in one (e.g. 404 on a missing endpoint) does not kill the entire task.
+    """
     from app.models import UnitOfMeasure, Warehouse, Customer
     from app.services import ProductService, SensorService
     from datetime import datetime
@@ -348,34 +352,49 @@ async def sync_references_task():
         log = await create_sync_log(db, "references")
         gateway = GatewayClient()
         total = 0
+        errors = []
 
+        # UnitOfMeasure
         try:
-            # UnitOfMeasure
             product_service = ProductService(db, gateway)
             count = 0
             gateway_data = await gateway.get_units_of_measure()
-            for unit_data in gateway_data.get("units", []):
+            units = gateway_data.get("units", [])
+            logger.info("sync_references_units_fetched", count=len(units))
+            for unit_data in units:
                 await product_service._sync_unit_of_measure(unit_data)
                 count += 1
             await db.commit()
             total += count
             logger.info("sync_references_units_done", count=count)
+        except Exception as e:
+            logger.warning("sync_references_units_error", error=str(e)[:200])
+            errors.append(f"units: {e}")
 
-            # SensorParameter
+        # SensorParameter (endpoint may not exist; parameters sync via sensors)
+        try:
             sensor_service = SensorService(db, gateway)
             count = 0
             gateway_data = await gateway.get_sensor_parameters()
-            for param_data in gateway_data.get("parameters", []):
+            params = gateway_data.get("parameters", [])
+            logger.info("sync_references_sensor_params_fetched", count=len(params))
+            for param_data in params:
                 await sensor_service._sync_sensor_parameter(param_data)
                 count += 1
             await db.commit()
             total += count
             logger.info("sync_references_sensor_params_done", count=count)
+        except Exception as e:
+            logger.warning("sync_references_sensor_params_error", error=str(e)[:200])
+            errors.append(f"sensor_params: {e}")
 
-            # Customer
+        # Customer
+        try:
             count = 0
             gateway_data = await gateway.get_customers()
-            for customer_data in gateway_data.get("customers", []):
+            customers = gateway_data.get("customers", [])
+            logger.info("sync_references_customers_fetched", count=len(customers))
+            for customer_data in customers:
                 customer_id = customer_data.get("id")
                 code = customer_data.get("code")
                 if not customer_id:
@@ -403,11 +422,17 @@ async def sync_references_task():
             await db.commit()
             total += count
             logger.info("sync_references_customers_done", count=count)
+        except Exception as e:
+            logger.warning("sync_references_customers_error", error=str(e)[:200])
+            errors.append(f"customers: {e}")
 
-            # Warehouse
+        # Warehouse
+        try:
             count = 0
             gateway_data = await gateway.get_warehouses()
-            for warehouse_data in gateway_data.get("warehouses", []):
+            warehouses = gateway_data.get("warehouses", [])
+            logger.info("sync_references_warehouses_fetched", count=len(warehouses))
+            for warehouse_data in warehouses:
                 warehouse_id = warehouse_data.get("id")
                 code = warehouse_data.get("code")
                 if not warehouse_id:
@@ -437,26 +462,31 @@ async def sync_references_task():
             await db.commit()
             total += count
             logger.info("sync_references_warehouses_done", count=count)
-
-            await complete_sync_log(db, log, SyncStatus.COMPLETED, total)
-            logger.info("sync_task_completed", task="references", phase="exit", status="success", records_processed=total)
-
         except Exception as e:
-            tb_str = traceback.format_exc()
-            error_msg = f"{type(e).__name__}: {e}"
-            await complete_sync_log(db, log, SyncStatus.FAILED, error_message=error_msg)
-            logger.error(
-                "sync_task_failed",
-                task="references",
-                phase="exit",
-                status="failed",
-                error_type=type(e).__name__,
-                error_message=str(e),
-                traceback=tb_str,
+            logger.warning("sync_references_warehouses_error", error=str(e)[:200])
+            errors.append(f"warehouses: {e}")
+
+        # Finalize
+        if errors:
+            await complete_sync_log(
+                db, log, SyncStatus.FAILED,
+                records_processed=total,
+                error_message="; ".join(errors)
             )
-            raise
-        finally:
-            await gateway.close()
+            logger.info(
+                "sync_task_completed_with_errors",
+                task="references", phase="exit", status="partial",
+                records_processed=total, errors=errors
+            )
+        else:
+            await complete_sync_log(db, log, SyncStatus.COMPLETED, total)
+            logger.info(
+                "sync_task_completed",
+                task="references", phase="exit", status="success",
+                records_processed=total
+            )
+
+        await gateway.close()
 
 
 async def cleanup_old_data_task():

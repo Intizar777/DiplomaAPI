@@ -733,16 +733,48 @@ class GatewayClient:
     # Reference data API methods
 
     async def get_units_of_measure(self) -> Dict[str, Any]:
-        """Get units of measure from Gateway."""
+        """Get units of measure from Gateway.
+
+        Gateway returns either a direct array or {data: [...]}.
+        """
         data = await self._request("GET", "/production/units-of-measure")
-        units = data.get("units", []) if isinstance(data, dict) else []
-        return {"units": units}
+        if isinstance(data, list):
+            return {"units": data}
+        if isinstance(data, dict):
+            # Try common wrapper keys, fallback to direct dict values
+            for key in ("units", "data", "items", "list"):
+                if key in data:
+                    return {"units": data[key]}
+            # If response is a single object, wrap it
+            if "id" in data:
+                return {"units": [data]}
+        return {"units": []}
 
     async def get_sensor_parameters(self) -> Dict[str, Any]:
-        """Get sensor parameters from Gateway."""
-        data = await self._request("GET", "/production/sensor-parameters")
-        params = data.get("parameters", []) if isinstance(data, dict) else []
-        return {"parameters": params}
+        """Get sensor parameters from Gateway.
+
+        Note: Standalone endpoint may not exist. Sensor parameters are
+        typically embedded in sensor data. Returns empty list with warning.
+        """
+        try:
+            data = await self._request("GET", "/production/sensor-parameters")
+            if isinstance(data, list):
+                return {"parameters": data}
+            if isinstance(data, dict):
+                for key in ("parameters", "data", "items", "list"):
+                    if key in data:
+                        return {"parameters": data[key]}
+                if "id" in data:
+                    return {"parameters": [data]}
+            return {"parameters": []}
+        except GatewayError as e:
+            if "404" in str(e):
+                logger.warning(
+                    "gateway_sensor_parameters_endpoint_not_found",
+                    detail="Sensor parameters endpoint does not exist; parameters will be synced via sensor data"
+                )
+                return {"parameters": []}
+            raise
 
     async def get_customers(self) -> Dict[str, Any]:
         """Get customers from Gateway (paginated)."""

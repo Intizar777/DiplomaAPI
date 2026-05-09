@@ -112,7 +112,9 @@ async def _run_initial_sync():
                 count = 0
                 try:
                     gateway_data = await gateway.get_units_of_measure()
-                    for unit_data in gateway_data.get("units", []):
+                    units = gateway_data.get("units", [])
+                    logger.info("initial_sync_units_fetched", count=len(units))
+                    for unit_data in units:
                         await product_service._sync_unit_of_measure(unit_data)
                         count += 1
                     await db.commit()
@@ -121,12 +123,14 @@ async def _run_initial_sync():
                 summary["level_0"]["units_of_measure"] = count
                 total_records += count
 
-                # SensorParameter via Sensor service
+                # SensorParameter via Sensor service (endpoint may not exist)
                 count = 0
                 try:
                     sensor_service = SensorService(db, gateway)
                     gateway_data = await gateway.get_sensor_parameters()
-                    for param_data in gateway_data.get("parameters", []):
+                    params = gateway_data.get("parameters", [])
+                    logger.info("initial_sync_sensor_params_fetched", count=len(params))
+                    for param_data in params:
                         await sensor_service._sync_sensor_parameter(param_data)
                         count += 1
                     await db.commit()
@@ -139,7 +143,9 @@ async def _run_initial_sync():
                 count = 0
                 try:
                     gateway_data = await gateway.get_customers()
-                    for customer_data in gateway_data.get("customers", []):
+                    customers = gateway_data.get("customers", [])
+                    logger.info("initial_sync_customers_fetched", count=len(customers))
+                    for customer_data in customers:
                         customer_id = customer_data.get("id")
                         code = customer_data.get("code")
                         if customer_id:
@@ -174,7 +180,9 @@ async def _run_initial_sync():
                 count = 0
                 try:
                     gateway_data = await gateway.get_warehouses()
-                    for warehouse_data in gateway_data.get("warehouses", []):
+                    warehouses = gateway_data.get("warehouses", [])
+                    logger.info("initial_sync_warehouses_fetched", count=len(warehouses))
+                    for warehouse_data in warehouses:
                         warehouse_id = warehouse_data.get("id")
                         code = warehouse_data.get("code")
                         if warehouse_id:
@@ -444,7 +452,7 @@ async def trigger_sync_task(
     """
     Manually trigger a specific synchronization task.
 
-    Available tasks: kpi, kpi_per_line, sales, orders, quality, products, output, sensors, inventory, personnel
+    Available tasks: kpi, kpi_per_line, sales, orders, quality, products, output, sensors, inventory, personnel, references
     Tasks run as background tasks — API returns immediately.
     """
     valid_tasks = ["kpi", "kpi_per_line", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "personnel", "references"]
