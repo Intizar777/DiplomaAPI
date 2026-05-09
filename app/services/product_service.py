@@ -68,6 +68,7 @@ class ProductService:
             if not unit:
                 unit = UnitOfMeasure(id=uuid4(), code=code, name=code)
                 self.db.add(unit)
+                await self.db.flush()
             return unit.id
 
         unit_id_raw = unit_data.get("id")
@@ -106,6 +107,7 @@ class ProductService:
                 source_system_id=unit_data.get("sourceSystemId"),
             )
             self.db.add(unit)
+            await self.db.flush()
 
         return unit.id
 

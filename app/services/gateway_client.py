@@ -636,27 +636,6 @@ class GatewayClient:
         )
         return data
     
-    async def get_sensor_list(
-        self,
-        production_line: Optional[str] = None,
-        parameter_name: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Get sensor devices from Gateway (paginated)."""
-        params = {}
-        if production_line:
-            params["productionLine"] = production_line
-        if parameter_name:
-            params["parameterName"] = parameter_name
-
-        sensors = await self._fetch_all_pages("/production/sensors", "sensors", params)
-        log_data_flow(
-            source="gateway_api",
-            target="sensor_service",
-            operation="fetch_sensor_list",
-            records_count=len(sensors),
-        )
-        return {"sensors": sensors}
-
     async def get_sensor_readings(
         self,
         production_line: Optional[str] = None,
@@ -665,10 +644,13 @@ class GatewayClient:
         from_date: Optional[date] = None,
         to_date: Optional[date] = None
     ) -> Dict[str, Any]:
-        """Get sensor readings from Gateway (paginated)."""
+        """Get sensor readings from Gateway (paginated).
+
+        GET /production/sensors returns {readings: [...], total: N}
+        """
         params = {}
         if production_line:
-            params["productionLine"] = production_line
+            params["productionLineId"] = production_line
         if parameter_name:
             params["parameterName"] = parameter_name
         if quality:
@@ -678,7 +660,7 @@ class GatewayClient:
         if to_date:
             params["to"] = to_date.isoformat()
 
-        readings = await self._fetch_all_pages("/production/sensor-readings", "readings", params)
+        readings = await self._fetch_all_pages("/production/sensors", "readings", params)
         log_data_flow(
             source="gateway_api",
             target="sensor_service",
