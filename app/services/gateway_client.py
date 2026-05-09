@@ -404,7 +404,13 @@ class GatewayClient:
                 else:
                     raise
             
-            records = response.get(data_key, [])
+            # Handle both dict-wrapped and direct-array responses
+            if isinstance(response, list):
+                records = response
+            elif isinstance(response, dict):
+                records = response.get(data_key, [])
+            else:
+                records = []
             
             if not records:
                 logger.info(
@@ -480,7 +486,13 @@ class GatewayClient:
             params["productionLineId"] = production_line_id
 
         data = await self._request("GET", "/production/kpi", params=params)
-        kpi_data = data.get("kpi", []) if isinstance(data, dict) else []
+        # Handle both dict-wrapped {"kpi": [...]} and direct array responses
+        if isinstance(data, list):
+            kpi_data = data
+        elif isinstance(data, dict):
+            kpi_data = data.get("kpi", [])
+        else:
+            kpi_data = []
         log_data_flow(
             source="gateway_api",
             target="kpi_service",
@@ -584,7 +596,13 @@ class GatewayClient:
             params["inSpec"] = str(in_spec).lower()
 
         data = await self._request("GET", "/production/quality", params=params)
-        quality_data = data.get("quality", []) if isinstance(data, dict) else []
+        # Handle both dict-wrapped {"quality": [...]} and direct array responses
+        if isinstance(data, list):
+            quality_data = data
+        elif isinstance(data, dict):
+            quality_data = data.get("quality", [])
+        else:
+            quality_data = []
         log_data_flow(
             source="gateway_api",
             target="quality_service",
@@ -627,7 +645,13 @@ class GatewayClient:
             params["brand"] = brand
 
         data = await self._request("GET", "/production/products", params=params)
-        products = data.get("products", []) if isinstance(data, dict) else []
+        # Handle both dict-wrapped {"products": [...]} and direct array responses
+        if isinstance(data, list):
+            products = data
+        elif isinstance(data, dict):
+            products = data.get("products", [])
+        else:
+            products = []
         log_data_flow(
             source="gateway_api",
             target="product_service",
@@ -686,7 +710,13 @@ class GatewayClient:
             params["warehouseCode"] = warehouse_code
         
         data = await self._request("GET", "/production/inventory", params=params)
-        items = data.get("inventory", data.get("items", []))
+        # Handle dict-wrapped {"inventory": [...], "items": [...]} and direct array
+        if isinstance(data, list):
+            items = data
+        elif isinstance(data, dict):
+            items = data.get("inventory", data.get("items", []))
+        else:
+            items = []
         log_data_flow(
             source="gateway_api",
             target="inventory_service",

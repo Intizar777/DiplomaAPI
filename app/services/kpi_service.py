@@ -231,7 +231,13 @@ class KPIService:
         if from_date and to_date:
             # Incremental sync: single period (upsert)
             gateway_data = await self.gateway.get_kpi(from_date, to_date)
-            kpi_data = gateway_data.get("kpi", gateway_data)
+            # Handle both dict-wrapped {"kpi": {...}} and direct dict/list
+            if isinstance(gateway_data, list) and gateway_data:
+                kpi_data = gateway_data[0]
+            elif isinstance(gateway_data, dict):
+                kpi_data = gateway_data.get("kpi", gateway_data)
+            else:
+                kpi_data = None
             
             if not kpi_data:
                 logger.warning("kpi_sync_no_data_from_gateway")
@@ -288,7 +294,13 @@ class KPIService:
                 
                 try:
                     gateway_data = await self.gateway.get_kpi(from_date=month_start, to_date=month_end)
-                    kpi_data = gateway_data.get("kpi", gateway_data)
+                    # Handle both dict-wrapped {"kpi": {...}} and direct dict/list
+                    if isinstance(gateway_data, list) and gateway_data:
+                        kpi_data = gateway_data[0]
+                    elif isinstance(gateway_data, dict):
+                        kpi_data = gateway_data.get("kpi", gateway_data)
+                    else:
+                        kpi_data = None
                     
                     if kpi_data and kpi_data.get("totalOrders", 0) > 0:
                         raw_id = kpi_data.get("id")
@@ -369,7 +381,13 @@ class KPIService:
             for line_id in line_ids:
                 try:
                     gateway_data = await self.gateway.get_kpi(from_date, to_date, production_line_id=line_id)
-                    kpi_data = gateway_data.get("kpi", gateway_data)
+                    # Handle both dict-wrapped {"kpi": {...}} and direct dict/list
+                    if isinstance(gateway_data, list) and gateway_data:
+                        kpi_data = gateway_data[0]
+                    elif isinstance(gateway_data, dict):
+                        kpi_data = gateway_data.get("kpi", gateway_data)
+                    else:
+                        kpi_data = None
 
                     if not kpi_data:
                         logger.debug("kpi_sync_no_data_for_line", line=line_id)
@@ -434,7 +452,13 @@ class KPIService:
                             to_date=month_end,
                             production_line_id=line_id
                         )
-                        kpi_data = gateway_data.get("kpi", gateway_data)
+                        # Handle both dict-wrapped {"kpi": {...}} and direct dict/list
+                        if isinstance(gateway_data, list) and gateway_data:
+                            kpi_data = gateway_data[0]
+                        elif isinstance(gateway_data, dict):
+                            kpi_data = gateway_data.get("kpi", gateway_data)
+                        else:
+                            kpi_data = None
 
                         if kpi_data and kpi_data.get("totalOrders", 0) > 0:
                             aggregated = AggregatedKPI(

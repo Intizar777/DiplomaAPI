@@ -332,8 +332,13 @@ class SalesService:
         
         records_processed = 0
         
-        # Gateway returns summary data
-        summary = gateway_data.get("summary", gateway_data.get("regions", []))
+        # Gateway returns summary data: dict-wrapped or direct array
+        if isinstance(gateway_data, list):
+            summary = gateway_data
+        elif isinstance(gateway_data, dict):
+            summary = gateway_data.get("summary", gateway_data.get("regions", []))
+        else:
+            summary = []
         for item in summary:
             from sqlalchemy.dialects.postgresql import insert
             raw_id = item.get("id")
@@ -365,7 +370,12 @@ class SalesService:
         
         # Also fetch by channel
         gateway_data_channel = await self.gateway.get_sales_summary(from_date, to_date, "channel")
-        summary_channel = gateway_data_channel.get("summary", gateway_data_channel.get("channels", []))
+        if isinstance(gateway_data_channel, list):
+            summary_channel = gateway_data_channel
+        elif isinstance(gateway_data_channel, dict):
+            summary_channel = gateway_data_channel.get("summary", gateway_data_channel.get("channels", []))
+        else:
+            summary_channel = []
         for item in summary_channel:
             raw_id = item.get("id")
             try:

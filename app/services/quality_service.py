@@ -254,8 +254,13 @@ class QualityService:
         records_processed = 0
         batch_size = 50
         
-        # Gateway returns results under "results" key
-        all_results = gateway_data.get("results", gateway_data.get("quality", []))
+        # Gateway returns results under "results" or "quality" key, or direct array
+        if isinstance(gateway_data, list):
+            all_results = gateway_data
+        elif isinstance(gateway_data, dict):
+            all_results = gateway_data.get("results", gateway_data.get("quality", []))
+        else:
+            all_results = []
         logger.info("quality_fetched_from_gateway", total_results=len(all_results))
         
         # Filter by date range locally since Gateway doesn't support from/to for quality

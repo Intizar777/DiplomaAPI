@@ -167,7 +167,13 @@ class InventoryService:
         logger.info("syncing_inventory_from_gateway")
 
         gateway_data = await self.gateway.get_inventory()
-        inventory = gateway_data.get("inventory", [])
+        # Handle both dict-wrapped {"inventory": [...]} and direct array
+        if isinstance(gateway_data, list):
+            inventory = gateway_data
+        elif isinstance(gateway_data, dict):
+            inventory = gateway_data.get("inventory", gateway_data.get("items", []))
+        else:
+            inventory = []
         logger.info("inventory_fetched_from_gateway", total_items=len(inventory))
 
         # Get product name map for enrichment
