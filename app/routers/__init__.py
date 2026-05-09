@@ -14,6 +14,7 @@ from app.routers.inventory import router as inventory_router
 from app.routers.personnel import router as personnel_router
 from app.routers.line_master_dashboard import router as line_master_dashboard_router
 from app.routers.gm_dashboard import router as gm_dashboard_router
+from app.routers.qe_dashboard import router as qe_dashboard_router
 
 __all__ = [
     "kpi_router",
@@ -29,4 +30,5 @@ __all__ = [
     "personnel_router",
     "line_master_dashboard_router",
     "gm_dashboard_router",
+    "qe_dashboard_router",
 ]

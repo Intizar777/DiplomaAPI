@@ -13,6 +13,7 @@ from app.services.inventory_service import InventoryService
 from app.services.personnel_service import PersonnelService
 from app.services.line_master_dashboard_service import LineMasterDashboardService
 from app.services.gm_dashboard_service import GroupManagerDashboardService
+from app.services.qe_dashboard_service import QualityEngineerDashboardService
 
 __all__ = [
     "GatewayClient",
@@ -27,4 +28,5 @@ __all__ = [
     "PersonnelService",
     "LineMasterDashboardService",
     "GroupManagerDashboardService",
+    "QualityEngineerDashboardService",
 ]

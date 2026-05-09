@@ -43,6 +43,16 @@ from app.schemas.gm_dashboard import (
     DowntimeLineItem,
     DowntimeRankingResponse,
 )
+from app.schemas.qe_dashboard import (
+    TrendDataPoint,
+    ParameterTrendItem,
+    ParameterTrendsResponse,
+    DeviationItem,
+    BatchAnalysisItem,
+    BatchAnalysisResponse,
+    ParetoItem,
+    DefectParetoResponse,
+)
 
 __all__ = [
     # Common
@@ -89,4 +99,13 @@ __all__ = [
     "PlanExecutionResponse",
     "DowntimeLineItem",
     "DowntimeRankingResponse",
+    # Quality Engineer Dashboard
+    "TrendDataPoint",
+    "ParameterTrendItem",
+    "ParameterTrendsResponse",
+    "DeviationItem",
+    "BatchAnalysisItem",
+    "BatchAnalysisResponse",
+    "ParetoItem",
+    "DefectParetoResponse",
 ]
