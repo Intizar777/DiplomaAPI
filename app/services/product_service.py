@@ -71,14 +71,23 @@ class ProductService:
                 await self.db.flush()
             return unit.id
 
-        unit_id_raw = unit_data.get("id")
+        # Handle Pydantic models and dictionaries
+        if hasattr(unit_data, '__dict__'):  # Pydantic model or dataclass
+            unit_id_raw = getattr(unit_data, 'id', None)
+            code = getattr(unit_data, 'code', None)
+            name = getattr(unit_data, 'name', '')
+            source_system_id = getattr(unit_data, 'sourceSystemId', None)
+        else:  # Dictionary
+            unit_id_raw = unit_data.get("id")
+            code = unit_data.get("code")
+            name = unit_data.get("name", "")
+            source_system_id = unit_data.get("sourceSystemId")
+
         try:
             unit_id = UUID(unit_id_raw) if isinstance(unit_id_raw, str) else unit_id_raw
         except (ValueError, AttributeError, TypeError):
             logger.warning("invalid_unit_of_measure_id_skipped", raw=unit_id_raw)
             return None
-
-        code = unit_data.get("code")
 
         # Try to find existing by code or id
         if code:
@@ -97,14 +106,14 @@ class ProductService:
 
         if unit:
             unit.code = code or unit.code
-            unit.name = unit_data.get("name", unit.name)
-            unit.source_system_id = unit_data.get("sourceSystemId", unit.source_system_id)
+            unit.name = name or unit.name
+            unit.source_system_id = source_system_id or unit.source_system_id
         else:
             unit = UnitOfMeasure(
                 id=unit_id,
                 code=code or f"unit_{unit_id}",
-                name=unit_data.get("name", ""),
-                source_system_id=unit_data.get("sourceSystemId"),
+                name=name or "",
+                source_system_id=source_system_id,
             )
             self.db.add(unit)
             await self.db.flush()

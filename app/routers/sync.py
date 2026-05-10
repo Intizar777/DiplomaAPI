@@ -112,7 +112,7 @@ async def _run_initial_sync():
                 count = 0
                 try:
                     gateway_data = await gateway.get_units_of_measure()
-                    units = gateway_data.get("units", [])
+                    units = gateway_data.unitsOfMeasure
                     logger.info("initial_sync_units_fetched", count=len(units))
                     for unit_data in units:
                         await product_service._sync_unit_of_measure(unit_data)
@@ -143,30 +143,27 @@ async def _run_initial_sync():
                 count = 0
                 try:
                     gateway_data = await gateway.get_customers()
-                    customers = gateway_data.get("customers", [])
+                    customers = gateway_data.customers
                     logger.info("initial_sync_customers_fetched", count=len(customers))
                     for customer_data in customers:
-                        customer_id = customer_data.get("id")
-                        code = customer_data.get("code")
+                        customer_id = customer_data.id
+                        code = getattr(customer_data, "code", None) or str(customer_id)[:8]
                         if customer_id:
                             existing = await db.execute(
-                                select(Customer).where(
-                                    Customer.code == code if code else Customer.id == customer_id
-                                )
+                                select(Customer).where(Customer.id == customer_id)
                             )
                             customer = existing.scalar_one_or_none()
                             if customer:
-                                customer.code = code or customer.code
-                                customer.name = customer_data.get("name", customer.name)
-                                customer.region = customer_data.get("region", customer.region)
-                                customer.is_active = customer_data.get("isActive", customer.is_active)
+                                customer.name = customer_data.name
+                                customer.region = getattr(customer_data, "region", "Unknown")
+                                customer.is_active = getattr(customer_data, "isActive", True)
                             else:
                                 customer = Customer(
                                     id=customer_id,
                                     code=code,
-                                    name=customer_data.get("name"),
-                                    region=customer_data.get("region"),
-                                    is_active=customer_data.get("isActive", True)
+                                    name=customer_data.name,
+                                    region=getattr(customer_data, "region", "Unknown"),
+                                    is_active=getattr(customer_data, "isActive", True)
                                 )
                                 db.add(customer)
                             count += 1
@@ -180,32 +177,30 @@ async def _run_initial_sync():
                 count = 0
                 try:
                     gateway_data = await gateway.get_warehouses()
-                    warehouses = gateway_data.get("warehouses", [])
+                    warehouses = gateway_data.warehouses
                     logger.info("initial_sync_warehouses_fetched", count=len(warehouses))
                     for warehouse_data in warehouses:
-                        warehouse_id = warehouse_data.get("id")
-                        code = warehouse_data.get("code")
+                        warehouse_id = warehouse_data.id
+                        code = warehouse_data.code
                         if warehouse_id:
                             existing = await db.execute(
-                                select(Warehouse).where(
-                                    Warehouse.code == code if code else Warehouse.id == warehouse_id
-                                )
+                                select(Warehouse).where(Warehouse.id == warehouse_id)
                             )
                             warehouse = existing.scalar_one_or_none()
                             if warehouse:
                                 warehouse.code = code or warehouse.code
-                                warehouse.name = warehouse_data.get("name", warehouse.name)
-                                warehouse.location = warehouse_data.get("location", warehouse.location)
-                                warehouse.capacity = warehouse_data.get("capacity", warehouse.capacity)
-                                warehouse.is_active = warehouse_data.get("isActive", warehouse.is_active)
+                                warehouse.name = warehouse_data.name
+                                warehouse.location = getattr(warehouse_data, "location", "Unknown")
+                                warehouse.capacity = getattr(warehouse_data, "capacity", 0)
+                                warehouse.is_active = getattr(warehouse_data, "isActive", True)
                             else:
                                 warehouse = Warehouse(
                                     id=warehouse_id,
                                     code=code,
-                                    name=warehouse_data.get("name"),
-                                    location=warehouse_data.get("location"),
-                                    capacity=warehouse_data.get("capacity"),
-                                    is_active=warehouse_data.get("isActive", True)
+                                    name=warehouse_data.name,
+                                    location=getattr(warehouse_data, "location", "Unknown"),
+                                    capacity=getattr(warehouse_data, "capacity", 0),
+                                    is_active=getattr(warehouse_data, "isActive", True)
                                 )
                                 db.add(warehouse)
                             count += 1

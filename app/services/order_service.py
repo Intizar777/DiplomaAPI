@@ -227,7 +227,8 @@ class OrderService:
             
             if len(batch) >= batch_size:
                 try:
-                    self.db.add_all(batch)
+                    for snapshot in batch:
+                        await self.db.merge(snapshot)
                     await self.db.commit()
                     records_processed += len(batch)
                     logger.info("orders_sync_batch", records_processed=records_processed)
@@ -235,11 +236,12 @@ class OrderService:
                     await self.db.rollback()
                     logger.error("orders_sync_batch_error", error=str(e)[:200])
                 batch = []
-        
+
         # Commit remaining records
         if batch:
             try:
-                self.db.add_all(batch)
+                for snapshot in batch:
+                    await self.db.merge(snapshot)
                 await self.db.commit()
                 records_processed += len(batch)
             except Exception as e:

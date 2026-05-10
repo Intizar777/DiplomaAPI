@@ -421,7 +421,8 @@ class SalesService:
 
                     if len(batch) >= batch_size:
                         try:
-                            self.db.add_all(batch)
+                            for record in batch:
+                                await self.db.merge(record)
                             await self.db.commit()
                             records_processed += len(batch)
                         except Exception as e:
@@ -431,7 +432,8 @@ class SalesService:
 
                 if batch:
                     try:
-                        self.db.add_all(batch)
+                        for record in batch:
+                            await self.db.merge(record)
                         await self.db.commit()
                         records_processed += len(batch)
                     except Exception as e:

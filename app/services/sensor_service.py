@@ -169,14 +169,27 @@ class SensorService:
         if not param_data:
             return None
 
-        param_id_raw = param_data.get("id")
+        # Handle Pydantic models and dictionaries
+        if hasattr(param_data, '__dict__'):  # Pydantic model or dataclass
+            param_id_raw = getattr(param_data, 'id', None)
+            code = getattr(param_data, 'code', None)
+            name = getattr(param_data, 'name', '')
+            unit = getattr(param_data, 'unit', '')
+            description = getattr(param_data, 'description', None)
+            is_active = getattr(param_data, 'isActive', True)
+        else:  # Dictionary
+            param_id_raw = param_data.get("id")
+            code = param_data.get("code")
+            name = param_data.get("name", "")
+            unit = param_data.get("unit", "")
+            description = param_data.get("description")
+            is_active = param_data.get("isActive", True)
+
         try:
             param_id = UUID(param_id_raw) if isinstance(param_id_raw, str) else param_id_raw
         except (ValueError, AttributeError, TypeError):
             logger.warning("invalid_sensor_parameter_id_skipped", raw=param_id_raw)
             return None
-
-        code = param_data.get("code")
 
         # Try to find existing by code or id
         if code:
@@ -195,18 +208,18 @@ class SensorService:
 
         if param:
             param.code = code or param.code
-            param.name = param_data.get("name", param.name)
-            param.unit = param_data.get("unit", param.unit)
-            param.description = param_data.get("description", param.description)
-            param.is_active = param_data.get("isActive", param.is_active)
+            param.name = name or param.name
+            param.unit = unit or param.unit
+            param.description = description or param.description
+            param.is_active = is_active
         else:
             param = SensorParameter(
                 id=param_id,
                 code=code or f"param_{param_id}",
-                name=param_data.get("name", ""),
-                unit=param_data.get("unit", ""),
-                description=param_data.get("description"),
-                is_active=param_data.get("isActive", True),
+                name=name or "",
+                unit=unit or "",
+                description=description,
+                is_active=is_active,
             )
             self.db.add(param)
 
@@ -319,7 +332,7 @@ class SensorService:
 
             if len(batch) >= batch_size:
                 try:
-                    self.db.add_all(batch)
+                    for item in batch: await self.db.merge(item)
                     await self.db.commit()
                     records_processed += len(batch)
                     logger.info("sensors_sync_batch", records_processed=records_processed)
@@ -330,7 +343,7 @@ class SensorService:
 
         if batch:
             try:
-                self.db.add_all(batch)
+                for item in batch: await self.db.merge(item)
                 await self.db.commit()
                 records_processed += len(batch)
             except Exception as e:

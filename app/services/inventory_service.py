@@ -210,7 +210,7 @@ class InventoryService:
 
             if len(batch) >= batch_size:
                 try:
-                    self.db.add_all(batch)
+                    for item in batch: await self.db.merge(item)
                     await self.db.commit()
                     records_processed += len(batch)
                     logger.info("inventory_sync_batch", records_processed=records_processed)
@@ -221,7 +221,7 @@ class InventoryService:
 
         if batch:
             try:
-                self.db.add_all(batch)
+                for item in batch: await self.db.merge(item)
                 await self.db.commit()
                 records_processed += len(batch)
             except Exception as e:

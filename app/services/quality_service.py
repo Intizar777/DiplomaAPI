@@ -328,7 +328,7 @@ class QualityService:
             
             if len(batch) >= batch_size:
                 try:
-                    self.db.add_all(batch)
+                    for item in batch: await self.db.merge(item)
                     await self.db.commit()
                     records_processed += len(batch)
                 except Exception as e:
@@ -339,7 +339,7 @@ class QualityService:
         # Commit remaining records
         if batch:
             try:
-                self.db.add_all(batch)
+                for item in batch: await self.db.merge(item)
                 await self.db.commit()
                 records_processed += len(batch)
             except Exception as e:
