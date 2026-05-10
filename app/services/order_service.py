@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import OrderSnapshot, Product
+from app.models import OrderSnapshot, Product, ProductionLine
 from app.schemas import OrderStatusSummaryResponse, OrderListResponse, OrderDetailResponse
 from app.services.gateway_client import GatewayClient
 from app.utils.logging_utils import track_feature_path, log_data_flow
@@ -43,17 +43,22 @@ class OrderService:
         
         result = await self.db.execute(query)
         records = result.scalars().all()
-        
+
+        # Load production line names for enrichment
+        line_result = await self.db.execute(select(ProductionLine.id, ProductionLine.name))
+        line_names: Dict[str, str] = {str(row[0]): row[1] for row in line_result.all()}
+
         # Count by status
         by_status = {"planned": 0, "in_progress": 0, "completed": 0, "cancelled": 0}
         by_line: Dict[str, Dict[str, int]] = {}
-        
+
         for record in records:
             status = record.status.lower()
             if status in by_status:
                 by_status[status] += 1
-            
-            line = record.production_line or "unknown"
+
+            raw = record.production_line or "unknown"
+            line = line_names.get(raw, raw)
             if line not in by_line:
                 by_line[line] = {"planned": 0, "in_progress": 0, "completed": 0, "cancelled": 0}
             if status in by_line[line]:
