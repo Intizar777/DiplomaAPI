@@ -13,11 +13,17 @@ from app.schemas.orders import (
     OrderStatusSummaryResponse,
     OrderListResponse,
     OrderDetailResponse,
+    PlanExecutionLineItem,
+    PlanExecutionResponse,
+    DowntimeLineItem,
+    DowntimeResponse,
 )
 from app.schemas.quality import (
     QualitySummaryResponse,
     DefectTrendsResponse,
     QualityLotsResponse,
+    LotDeviationItem,
+    LotDeviationsResponse,
 )
 from app.schemas.sync import SyncStatusResponse, SyncTriggerResponse
 from app.schemas.personnel import (
@@ -83,10 +89,16 @@ __all__ = [
     "OrderStatusSummaryResponse",
     "OrderListResponse",
     "OrderDetailResponse",
+    "PlanExecutionLineItem",
+    "PlanExecutionResponse",
+    "DowntimeLineItem",
+    "DowntimeResponse",
     # Quality
     "QualitySummaryResponse",
     "DefectTrendsResponse",
     "QualityLotsResponse",
+    "LotDeviationItem",
+    "LotDeviationsResponse",
     # Sync
     "SyncStatusResponse",
     "SyncTriggerResponse",

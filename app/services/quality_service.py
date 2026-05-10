@@ -6,11 +6,20 @@ from decimal import Decimal
 from typing import Dict, List, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import QualityResult, QualitySpec, Product
-from app.schemas import QualitySummaryResponse, DefectTrendsResponse, QualityLotsResponse
+from app.models.output import ProductionOutput
+from app.models.orders import OrderSnapshot
+from app.schemas import QualitySummaryResponse, DefectTrendsResponse, QualityLotsResponse, LotDeviationItem, LotDeviationsResponse
+from app.schemas.qe_dashboard import (
+    TrendDataPoint,
+    ParameterTrendItem,
+    ParameterTrendsResponse,
+    ParetoItem,
+    DefectParetoResponse,
+)
 from app.services.gateway_client import GatewayClient
 from app.utils.logging_utils import track_feature_path, log_data_flow
 import structlog
@@ -231,7 +240,249 @@ class QualityService:
             period_from=from_date,
             period_to=to_date
         )
-    
+
+    async def get_parameter_trends(
+        self,
+        from_date: date,
+        to_date: date,
+        production_line: Optional[str] = None,
+    ) -> ParameterTrendsResponse:
+        """Daily quality parameter trends with spec limits, optionally filtered by production line."""
+        query = (
+            select(
+                QualityResult.parameter_name,
+                QualityResult.test_date,
+                func.avg(QualityResult.result_value).label("avg_value"),
+                func.count(QualityResult.id).label("test_count"),
+                func.sum(case((QualityResult.in_spec == False, 1), else_=0)).label("out_of_spec_count"),  # noqa: E712
+                func.max(QualitySpec.lower_limit).label("lower_limit"),
+                func.max(QualitySpec.upper_limit).label("upper_limit"),
+            )
+            .outerjoin(QualitySpec, QualitySpec.id == QualityResult.quality_spec_id)
+            .where(
+                QualityResult.test_date >= from_date,
+                QualityResult.test_date <= to_date,
+            )
+        )
+        if production_line:
+            lot_subquery = (
+                select(ProductionOutput.lot_number)
+                .join(OrderSnapshot, ProductionOutput.order_id == OrderSnapshot.order_id)
+                .where(OrderSnapshot.production_line == production_line)
+                .distinct()
+                .scalar_subquery()
+            )
+            query = query.where(QualityResult.lot_number.in_(lot_subquery))
+
+        query = query.group_by(
+            QualityResult.parameter_name, QualityResult.test_date
+        ).order_by(QualityResult.parameter_name, QualityResult.test_date)
+
+        result = await self.db.execute(query)
+        rows = result.all()
+
+        param_points: Dict[str, List[TrendDataPoint]] = {}
+        for row in rows:
+            param = row.parameter_name
+            test_count = int(row.test_count or 0)
+            out_of_spec = int(row.out_of_spec_count or 0)
+            out_of_spec_pct = (
+                (Decimal(str(out_of_spec)) / Decimal(str(test_count)) * 100).quantize(Decimal("0.01"))
+                if test_count > 0
+                else Decimal("0.00")
+            )
+            point = TrendDataPoint(
+                test_date=row.test_date,
+                avg_value=Decimal(str(row.avg_value or 0)).quantize(Decimal("0.0001")),
+                test_count=test_count,
+                out_of_spec_count=out_of_spec,
+                out_of_spec_pct=out_of_spec_pct,
+                lower_limit=Decimal(str(row.lower_limit)) if row.lower_limit is not None else None,
+                upper_limit=Decimal(str(row.upper_limit)) if row.upper_limit is not None else None,
+            )
+            if param not in param_points:
+                param_points[param] = []
+            param_points[param].append(point)
+
+        parameters: List[ParameterTrendItem] = []
+        for param_name, points in param_points.items():
+            total_tests = sum(p.test_count for p in points)
+            total_oos = sum(p.out_of_spec_count for p in points)
+            overall_pct = (
+                (Decimal(str(total_oos)) / Decimal(str(total_tests)) * 100).quantize(Decimal("0.01"))
+                if total_tests > 0
+                else Decimal("0.00")
+            )
+            parameters.append(
+                ParameterTrendItem(
+                    parameter_name=param_name,
+                    total_tests=total_tests,
+                    total_out_of_spec=total_oos,
+                    overall_out_of_spec_pct=overall_pct,
+                    trend=points,
+                )
+            )
+
+        logger.info(
+            "parameter_trends_calculated",
+            from_date=str(from_date),
+            to_date=str(to_date),
+            production_line=production_line,
+            parameter_count=len(parameters),
+        )
+        return ParameterTrendsResponse(period_from=from_date, period_to=to_date, parameters=parameters)
+
+    async def get_lot_deviations(self, lot_number: str) -> Optional[LotDeviationsResponse]:
+        """Return out-of-spec parameter deviations for a specific lot."""
+        quality_query = (
+            select(
+                QualityResult.parameter_name,
+                QualityResult.result_value,
+                QualitySpec.lower_limit,
+                QualitySpec.upper_limit,
+            )
+            .outerjoin(QualitySpec, QualitySpec.id == QualityResult.quality_spec_id)
+            .where(
+                QualityResult.lot_number == lot_number,
+                QualityResult.in_spec == False,  # noqa: E712
+            )
+        )
+        result = await self.db.execute(quality_query)
+        rows = result.all()
+
+        if not rows:
+            # Check if lot exists at all
+            exists = await self.db.execute(
+                select(QualityResult.lot_number).where(QualityResult.lot_number == lot_number).limit(1)
+            )
+            if not exists.scalar_one_or_none():
+                return None
+            return LotDeviationsResponse(
+                lot_number=lot_number,
+                product_name=None,
+                shift=None,
+                fail_count=0,
+                deviations=[],
+            )
+
+        deviations: List[LotDeviationItem] = []
+        for row in rows:
+            result_val = Decimal(str(row.result_value or 0))
+            lower = Decimal(str(row.lower_limit)) if row.lower_limit is not None else None
+            upper = Decimal(str(row.upper_limit)) if row.upper_limit is not None else None
+            if lower is not None and upper is not None:
+                magnitude = (
+                    (result_val - upper).quantize(Decimal("0.0001"))
+                    if result_val > upper
+                    else (lower - result_val).quantize(Decimal("0.0001"))
+                )
+            else:
+                magnitude = Decimal("0.0000")
+            deviations.append(
+                LotDeviationItem(
+                    parameter_name=row.parameter_name,
+                    result_value=result_val,
+                    lower_limit=lower,
+                    upper_limit=upper,
+                    deviation_magnitude=magnitude,
+                )
+            )
+
+        # Get production metadata from ProductionOutput
+        output_result = await self.db.execute(
+            select(ProductionOutput.product_name, ProductionOutput.shift)
+            .where(ProductionOutput.lot_number == lot_number)
+            .order_by(desc(ProductionOutput.production_date))
+            .limit(1)
+        )
+        output_row = output_result.one_or_none()
+        product_name = output_row.product_name if output_row else None
+        shift = output_row.shift if output_row else None
+
+        return LotDeviationsResponse(
+            lot_number=lot_number,
+            product_name=product_name,
+            shift=shift,
+            fail_count=len(deviations),
+            deviations=deviations,
+        )
+
+    async def get_defect_pareto(
+        self,
+        from_date: date,
+        to_date: date,
+        production_line: Optional[str] = None,
+    ) -> DefectParetoResponse:
+        """Parameters ranked by out-of-spec count with cumulative %, optionally filtered by line."""
+        conditions = [
+            QualityResult.test_date >= from_date,
+            QualityResult.test_date <= to_date,
+        ]
+        if production_line:
+            lot_subquery = (
+                select(ProductionOutput.lot_number)
+                .join(OrderSnapshot, ProductionOutput.order_id == OrderSnapshot.order_id)
+                .where(OrderSnapshot.production_line == production_line)
+                .distinct()
+                .scalar_subquery()
+            )
+            conditions.append(QualityResult.lot_number.in_(lot_subquery))
+
+        query = (
+            select(
+                QualityResult.parameter_name,
+                func.count(QualityResult.id).label("total_tests"),
+                func.sum(case((QualityResult.in_spec == False, 1), else_=0)).label("defect_count"),  # noqa: E712
+            )
+            .where(*conditions)
+            .group_by(QualityResult.parameter_name)
+            .order_by(func.sum(case((QualityResult.in_spec == False, 1), else_=0)).desc())  # noqa: E712
+        )
+        result = await self.db.execute(query)
+        rows = result.all()
+
+        grand_total = sum(int(row.defect_count or 0) for row in rows)
+        running = 0
+        parameters: List[ParetoItem] = []
+        for row in rows:
+            total_tests = int(row.total_tests or 0)
+            defect_count = int(row.defect_count or 0)
+            running += defect_count
+            defect_pct = (
+                (Decimal(str(defect_count)) / Decimal(str(total_tests)) * 100).quantize(Decimal("0.01"))
+                if total_tests > 0
+                else Decimal("0.00")
+            )
+            cumulative_pct = (
+                (Decimal(str(running)) / Decimal(str(grand_total)) * 100).quantize(Decimal("0.01"))
+                if grand_total > 0
+                else Decimal("0.00")
+            )
+            parameters.append(
+                ParetoItem(
+                    parameter_name=row.parameter_name,
+                    defect_count=defect_count,
+                    total_tests=total_tests,
+                    defect_pct=defect_pct,
+                    cumulative_pct=cumulative_pct,
+                )
+            )
+
+        logger.info(
+            "defect_pareto_calculated",
+            from_date=str(from_date),
+            to_date=str(to_date),
+            production_line=production_line,
+            total_defects=grand_total,
+        )
+        return DefectParetoResponse(
+            period_from=from_date,
+            period_to=to_date,
+            product_id=None,
+            total_defects=grand_total,
+            parameters=parameters,
+        )
+
     @track_feature_path(feature_name="quality.sync_from_gateway", log_result=True)
     async def sync_from_gateway(
         self,

@@ -72,6 +72,28 @@ class QualityLotsResponse(BaseModel):
     pending_count: int
     period_from: date
     period_to: date
-    
+
+    class Config:
+        from_attributes = True
+
+
+class LotDeviationItem(BaseModel):
+    parameter_name: str
+    result_value: Decimal
+    lower_limit: Optional[Decimal]
+    upper_limit: Optional[Decimal]
+    deviation_magnitude: Decimal
+
+    class Config:
+        from_attributes = True
+
+
+class LotDeviationsResponse(BaseModel):
+    lot_number: str
+    product_name: Optional[str]
+    shift: Optional[str]
+    fail_count: int
+    deviations: List[LotDeviationItem]
+
     class Config:
         from_attributes = True

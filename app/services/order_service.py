@@ -1,15 +1,24 @@
 """
 Order business logic service.
 """
-from datetime import date, datetime
+from datetime import date, datetime, timezone
+from decimal import Decimal
 from typing import Optional, Dict, List
 from uuid import UUID, uuid4
 
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, case, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import OrderSnapshot, Product, ProductionLine
-from app.schemas import OrderStatusSummaryResponse, OrderListResponse, OrderDetailResponse
+from app.schemas import (
+    OrderStatusSummaryResponse,
+    OrderListResponse,
+    OrderDetailResponse,
+    PlanExecutionLineItem,
+    PlanExecutionResponse,
+    DowntimeLineItem,
+    DowntimeResponse,
+)
 from app.services.gateway_client import GatewayClient
 from app.utils.logging_utils import track_feature_path, log_data_flow
 from app.config import settings
@@ -163,7 +172,159 @@ class OrderService:
             actual_end=record.actual_end,
             outputs=[]  # Would need to fetch from separate table or Gateway
         )
-    
+
+    async def get_plan_execution_summary(
+        self,
+        from_date: date,
+        to_date: date,
+    ) -> PlanExecutionResponse:
+        """Plan vs actual execution by production line with overdue order count."""
+        now = datetime.now(timezone.utc)
+        overdue_case = case(
+            (
+                and_(
+                    OrderSnapshot.planned_end.isnot(None),
+                    or_(
+                        and_(
+                            OrderSnapshot.status == "completed",
+                            OrderSnapshot.actual_end > OrderSnapshot.planned_end,
+                        ),
+                        and_(
+                            OrderSnapshot.status.in_(["planned", "in_progress"]),
+                            OrderSnapshot.planned_end < now,
+                        ),
+                    ),
+                ),
+                1,
+            ),
+            else_=0,
+        )
+        query = (
+            select(
+                OrderSnapshot.production_line,
+                func.sum(OrderSnapshot.target_quantity).label("target_quantity"),
+                func.sum(OrderSnapshot.actual_quantity).label("actual_quantity"),
+                func.count(OrderSnapshot.id).label("total_orders"),
+                func.sum(case((OrderSnapshot.status == "completed", 1), else_=0)).label("completed_orders"),
+                func.sum(case((OrderSnapshot.status == "in_progress", 1), else_=0)).label("in_progress_orders"),
+                func.sum(overdue_case).label("overdue_orders"),
+            )
+            .where(
+                OrderSnapshot.snapshot_date >= from_date,
+                OrderSnapshot.snapshot_date <= to_date,
+            )
+            .group_by(OrderSnapshot.production_line)
+            .order_by(OrderSnapshot.production_line)
+        )
+        result = await self.db.execute(query)
+        rows = result.all()
+
+        lines: List[PlanExecutionLineItem] = []
+        for row in rows:
+            target = Decimal(str(row.target_quantity or 0))
+            actual = Decimal(str(row.actual_quantity or 0))
+            fulfillment = (
+                (actual / target * 100).quantize(Decimal("0.01"))
+                if target > 0
+                else Decimal("0.00")
+            )
+            lines.append(
+                PlanExecutionLineItem(
+                    production_line=row.production_line,
+                    target_quantity=target,
+                    actual_quantity=actual,
+                    fulfillment_pct=fulfillment,
+                    total_orders=int(row.total_orders or 0),
+                    completed_orders=int(row.completed_orders or 0),
+                    in_progress_orders=int(row.in_progress_orders or 0),
+                    overdue_orders=int(row.overdue_orders or 0),
+                )
+            )
+
+        logger.info(
+            "plan_execution_summary_calculated",
+            from_date=str(from_date),
+            to_date=str(to_date),
+            line_count=len(lines),
+        )
+        return PlanExecutionResponse(period_from=from_date, period_to=to_date, lines=lines)
+
+    async def get_downtime_summary(
+        self,
+        from_date: date,
+        to_date: date,
+    ) -> DowntimeResponse:
+        """Pareto-ranked production lines by total delay hours."""
+        query = (
+            select(
+                OrderSnapshot.production_line,
+                OrderSnapshot.planned_end,
+                OrderSnapshot.actual_end,
+            )
+            .where(
+                OrderSnapshot.snapshot_date >= from_date,
+                OrderSnapshot.snapshot_date <= to_date,
+                OrderSnapshot.status == "completed",
+                OrderSnapshot.actual_end.isnot(None),
+                OrderSnapshot.planned_end.isnot(None),
+            )
+        )
+        result = await self.db.execute(query)
+        rows = result.all()
+
+        line_stats: Dict[Optional[str], Dict] = {}
+        for row in rows:
+            key = row.production_line
+            if key not in line_stats:
+                line_stats[key] = {"total_delay_hours": Decimal("0"), "order_count": 0}
+            diff = (row.actual_end - row.planned_end).total_seconds()
+            if diff > 0:
+                line_stats[key]["total_delay_hours"] += Decimal(str(round(diff / 3600, 4)))
+                line_stats[key]["order_count"] += 1
+
+        items = sorted(line_stats.items(), key=lambda x: x[1]["total_delay_hours"], reverse=True)
+        grand_total = sum(s["total_delay_hours"] for _, s in items)
+
+        running = Decimal("0")
+        lines: List[DowntimeLineItem] = []
+        for rank, (production_line, stats) in enumerate(items, start=1):
+            total_delay = stats["total_delay_hours"].quantize(Decimal("0.01"))
+            order_count = stats["order_count"]
+            avg_delay = (
+                (total_delay / Decimal(str(order_count))).quantize(Decimal("0.01"))
+                if order_count > 0
+                else Decimal("0.00")
+            )
+            running += total_delay
+            cumulative_pct = (
+                (running / grand_total * 100).quantize(Decimal("0.01"))
+                if grand_total > 0
+                else Decimal("0.00")
+            )
+            lines.append(
+                DowntimeLineItem(
+                    rank=rank,
+                    production_line=production_line,
+                    total_delay_hours=total_delay,
+                    order_count=order_count,
+                    avg_delay_per_order=avg_delay,
+                    cumulative_pct=cumulative_pct,
+                )
+            )
+
+        logger.info(
+            "downtime_summary_calculated",
+            from_date=str(from_date),
+            to_date=str(to_date),
+            line_count=len(lines),
+        )
+        return DowntimeResponse(
+            total_delay_hours=grand_total.quantize(Decimal("0.01")),
+            period_from=from_date,
+            period_to=to_date,
+            lines=lines,
+        )
+
     @track_feature_path(feature_name="orders.sync_from_gateway", log_result=True)
     async def sync_from_gateway(
         self,

@@ -88,6 +88,51 @@ class OrderDetailResponse(BaseModel):
     actual_start: Optional[datetime]
     actual_end: Optional[datetime]
     outputs: List[OrderOutputItem] = []
-    
+
+    class Config:
+        from_attributes = True
+
+
+class PlanExecutionLineItem(BaseModel):
+    production_line: Optional[str]
+    target_quantity: Decimal
+    actual_quantity: Decimal
+    fulfillment_pct: Decimal
+    total_orders: int
+    completed_orders: int
+    in_progress_orders: int
+    overdue_orders: int
+
+    class Config:
+        from_attributes = True
+
+
+class PlanExecutionResponse(BaseModel):
+    period_from: date
+    period_to: date
+    lines: List[PlanExecutionLineItem]
+
+    class Config:
+        from_attributes = True
+
+
+class DowntimeLineItem(BaseModel):
+    rank: int
+    production_line: Optional[str]
+    total_delay_hours: Decimal
+    order_count: int
+    avg_delay_per_order: Decimal
+    cumulative_pct: Decimal
+
+    class Config:
+        from_attributes = True
+
+
+class DowntimeResponse(BaseModel):
+    total_delay_hours: Decimal
+    period_from: date
+    period_to: date
+    lines: List[DowntimeLineItem]
+
     class Config:
         from_attributes = True
