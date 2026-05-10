@@ -220,70 +220,54 @@ class KPIService:
         to_date: Optional[date]
     ) -> int:
         """Sync KPI data from Gateway and store aggregated results.
-        
+
         If no dates provided (initial sync), fetches KPI for each month
         from 2024-01 to current month.
         """
         logger.info("syncing_kpi_from_gateway", from_date=from_date, to_date=to_date)
-        
+
         records_processed = 0
-        
+
         if from_date and to_date:
             # Incremental sync: single period (upsert)
-            gateway_data = await self.gateway.get_kpi(from_date, to_date)
-            # Handle both dict-wrapped {"kpi": {...}} and direct dict/list
-            if isinstance(gateway_data, list) and gateway_data:
-                kpi_data = gateway_data[0]
-            elif isinstance(gateway_data, dict):
-                kpi_data = gateway_data.get("kpi", gateway_data)
-            else:
-                kpi_data = None
-            
-            if not kpi_data:
-                logger.warning("kpi_sync_no_data_from_gateway")
-                return 0
-            
+            kpi_response = await self.gateway.get_kpi(from_date, to_date)
+
             # Use ON CONFLICT DO UPDATE for upsert
             from sqlalchemy.dialects.postgresql import insert
-            raw_id = kpi_data.get("id")
-            try:
-                kpi_id = UUID(raw_id) if isinstance(raw_id, str) else raw_id
-            except (ValueError, AttributeError, TypeError):
-                logger.warning("invalid_aggregated_kpi_id_skipped", raw=raw_id)
-                kpi_id = None
+            from uuid import UUID
 
             stmt = insert(AggregatedKPI).values(
-                id=kpi_id,
                 period_from=from_date,
                 period_to=to_date,
                 production_line=None,
-                total_output=Decimal(str(kpi_data.get("totalOutput", 0))),
-                defect_rate=Decimal(str(kpi_data.get("defectRate", 0))),
-                completed_orders=kpi_data.get("completedOrders", 0),
-                total_orders=kpi_data.get("totalOrders", 0),
-                oee_estimate=Decimal(str(kpi_data.get("oeeEstimate", 0))) if kpi_data.get("oeeEstimate") else None
+                total_output=Decimal(str(kpi_response.totalOutput)),
+                defect_rate=Decimal(str(kpi_response.defectRate)),
+                completed_orders=kpi_response.completedOrders,
+                total_orders=kpi_response.totalOrders,
+                oee_estimate=Decimal(str(kpi_response.oeeEstimate)) if kpi_response.oeeEstimate else None
             ).on_conflict_do_update(
                 index_elements=['period_from', 'period_to', 'production_line'],
                 set_=dict(
-                    total_output=Decimal(str(kpi_data.get("totalOutput", 0))),
-                    defect_rate=Decimal(str(kpi_data.get("defectRate", 0))),
-                    completed_orders=kpi_data.get("completedOrders", 0),
-                    total_orders=kpi_data.get("totalOrders", 0),
-                    oee_estimate=Decimal(str(kpi_data.get("oeeEstimate", 0))) if kpi_data.get("oeeEstimate") else None
+                    total_output=Decimal(str(kpi_response.totalOutput)),
+                    defect_rate=Decimal(str(kpi_response.defectRate)),
+                    completed_orders=kpi_response.completedOrders,
+                    total_orders=kpi_response.totalOrders,
+                    oee_estimate=Decimal(str(kpi_response.oeeEstimate)) if kpi_response.oeeEstimate else None
                 )
             )
             await self.db.execute(stmt)
             logger.info("kpi_sync_upserted", period_from=from_date.isoformat(), period_to=to_date.isoformat())
-            
+
             await self.db.commit()
             records_processed += 1
         else:
             # Initial sync: fetch KPI for each month from 2024-01 to now
             from calendar import monthrange
-            
+            from uuid import UUID
+
             start = date(2024, 1, 1)
             end = date.today()
-            
+
             current = start
             while current <= end:
                 year = current.year
@@ -291,48 +275,33 @@ class KPIService:
                 last_day = monthrange(year, month)[1]
                 month_start = date(year, month, 1)
                 month_end = date(year, month, last_day)
-                
-                try:
-                    gateway_data = await self.gateway.get_kpi(from_date=month_start, to_date=month_end)
-                    # Handle both dict-wrapped {"kpi": {...}} and direct dict/list
-                    if isinstance(gateway_data, list) and gateway_data:
-                        kpi_data = gateway_data[0]
-                    elif isinstance(gateway_data, dict):
-                        kpi_data = gateway_data.get("kpi", gateway_data)
-                    else:
-                        kpi_data = None
-                    
-                    if kpi_data and kpi_data.get("totalOrders", 0) > 0:
-                        raw_id = kpi_data.get("id")
-                        try:
-                            kpi_id = UUID(raw_id) if isinstance(raw_id, str) else raw_id
-                        except (ValueError, AttributeError, TypeError):
-                            logger.warning("invalid_aggregated_kpi_id_skipped", raw=raw_id)
-                            continue
 
+                try:
+                    kpi_response = await self.gateway.get_kpi(from_date=month_start, to_date=month_end)
+
+                    if kpi_response.totalOrders > 0:
                         aggregated = AggregatedKPI(
-                            id=kpi_id,
                             period_from=month_start,
                             period_to=month_end,
                             production_line=None,
-                            total_output=Decimal(str(kpi_data.get("totalOutput", 0))),
-                            defect_rate=Decimal(str(kpi_data.get("defectRate", 0))),
-                            completed_orders=kpi_data.get("completedOrders", 0),
-                            total_orders=kpi_data.get("totalOrders", 0),
-                            oee_estimate=Decimal(str(kpi_data.get("oeeEstimate", 0))) if kpi_data.get("oeeEstimate") else None
+                            total_output=Decimal(str(kpi_response.totalOutput)),
+                            defect_rate=Decimal(str(kpi_response.defectRate)),
+                            completed_orders=kpi_response.completedOrders,
+                            total_orders=kpi_response.totalOrders,
+                            oee_estimate=Decimal(str(kpi_response.oeeEstimate)) if kpi_response.oeeEstimate else None
                         )
                         self.db.add(aggregated)
                         records_processed += 1
-                        logger.info("kpi_sync_month", month=month_start.isoformat(), total_orders=kpi_data.get("totalOrders", 0))
+                        logger.info("kpi_sync_month", month=month_start.isoformat(), total_orders=kpi_response.totalOrders)
                 except Exception as e:
                     logger.error("kpi_sync_month_error", month=month_start.isoformat(), error=str(e)[:200])
-                
+
                 # Move to next month
                 if month == 12:
                     current = date(year + 1, 1, 1)
                 else:
                     current = date(year, month + 1, 1)
-            
+
             await self.db.commit()
         
         log_data_flow(
@@ -378,40 +347,30 @@ class KPIService:
 
         if from_date and to_date:
             # Incremental sync: fetch for each line (upsert)
+            from sqlalchemy.dialects.postgresql import insert
+
             for line_id in line_ids:
                 try:
-                    gateway_data = await self.gateway.get_kpi(from_date, to_date, production_line_id=line_id)
-                    # Handle both dict-wrapped {"kpi": {...}} and direct dict/list
-                    if isinstance(gateway_data, list) and gateway_data:
-                        kpi_data = gateway_data[0]
-                    elif isinstance(gateway_data, dict):
-                        kpi_data = gateway_data.get("kpi", gateway_data)
-                    else:
-                        kpi_data = None
-
-                    if not kpi_data:
-                        logger.debug("kpi_sync_no_data_for_line", line=line_id)
-                        continue
+                    kpi_response = await self.gateway.get_kpi(from_date, to_date, production_line_id=line_id)
 
                     # Use ON CONFLICT DO UPDATE for upsert
-                    from sqlalchemy.dialects.postgresql import insert
                     stmt = insert(AggregatedKPI).values(
                         period_from=from_date,
                         period_to=to_date,
                         production_line=line_id,
-                        total_output=Decimal(str(kpi_data.get("totalOutput", 0))),
-                        defect_rate=Decimal(str(kpi_data.get("defectRate", 0))),
-                        completed_orders=kpi_data.get("completedOrders", 0),
-                        total_orders=kpi_data.get("totalOrders", 0),
-                        oee_estimate=Decimal(str(kpi_data.get("oeeEstimate", 0))) if kpi_data.get("oeeEstimate") else None
+                        total_output=Decimal(str(kpi_response.totalOutput)),
+                        defect_rate=Decimal(str(kpi_response.defectRate)),
+                        completed_orders=kpi_response.completedOrders,
+                        total_orders=kpi_response.totalOrders,
+                        oee_estimate=Decimal(str(kpi_response.oeeEstimate)) if kpi_response.oeeEstimate else None
                     ).on_conflict_do_update(
                         index_elements=['period_from', 'period_to', 'production_line'],
                         set_=dict(
-                            total_output=Decimal(str(kpi_data.get("totalOutput", 0))),
-                            defect_rate=Decimal(str(kpi_data.get("defectRate", 0))),
-                            completed_orders=kpi_data.get("completedOrders", 0),
-                            total_orders=kpi_data.get("totalOrders", 0),
-                            oee_estimate=Decimal(str(kpi_data.get("oeeEstimate", 0))) if kpi_data.get("oeeEstimate") else None
+                            total_output=Decimal(str(kpi_response.totalOutput)),
+                            defect_rate=Decimal(str(kpi_response.defectRate)),
+                            completed_orders=kpi_response.completedOrders,
+                            total_orders=kpi_response.totalOrders,
+                            oee_estimate=Decimal(str(kpi_response.oeeEstimate)) if kpi_response.oeeEstimate else None
                         )
                     )
                     await self.db.execute(stmt)
@@ -447,29 +406,22 @@ class KPIService:
 
                 for line_id in line_ids:
                     try:
-                        gateway_data = await self.gateway.get_kpi(
+                        kpi_response = await self.gateway.get_kpi(
                             from_date=month_start,
                             to_date=month_end,
                             production_line_id=line_id
                         )
-                        # Handle both dict-wrapped {"kpi": {...}} and direct dict/list
-                        if isinstance(gateway_data, list) and gateway_data:
-                            kpi_data = gateway_data[0]
-                        elif isinstance(gateway_data, dict):
-                            kpi_data = gateway_data.get("kpi", gateway_data)
-                        else:
-                            kpi_data = None
 
-                        if kpi_data and kpi_data.get("totalOrders", 0) > 0:
+                        if kpi_response.totalOrders > 0:
                             aggregated = AggregatedKPI(
                                 period_from=month_start,
                                 period_to=month_end,
                                 production_line=line_id,
-                                total_output=Decimal(str(kpi_data.get("totalOutput", 0))),
-                                defect_rate=Decimal(str(kpi_data.get("defectRate", 0))),
-                                completed_orders=kpi_data.get("completedOrders", 0),
-                                total_orders=kpi_data.get("totalOrders", 0),
-                                oee_estimate=Decimal(str(kpi_data.get("oeeEstimate", 0))) if kpi_data.get("oeeEstimate") else None
+                                total_output=Decimal(str(kpi_response.totalOutput)),
+                                defect_rate=Decimal(str(kpi_response.defectRate)),
+                                completed_orders=kpi_response.completedOrders,
+                                total_orders=kpi_response.totalOrders,
+                                oee_estimate=Decimal(str(kpi_response.oeeEstimate)) if kpi_response.oeeEstimate else None
                             )
                             self.db.add(aggregated)
                             records_processed += 1

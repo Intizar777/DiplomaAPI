@@ -95,6 +95,7 @@ app/
 - **Cron hourly** — Sync via `app/cron/scheduler.py` every 60 min
 - **JSON only** — Use Pydantic for serialization
 - **No auth in v1** — Read-only endpoints; auth planned for v2
+- Use ConfigDict instead of class Config for Pydantic Models
 
 ## Tech Stack
 
@@ -111,7 +112,6 @@ app/
 | Scheduler | APScheduler 3.x | `app/cron/scheduler.py` |
 
 ## Verification Commands
-
 ```bash
 pytest tests/ -v              # Run tests (testcontainers PostgreSQL)
 mypy app/                     # Type check
@@ -119,27 +119,3 @@ ruff check app/               # Lint
 uvicorn app.main:app --reload # Dev server → http://localhost:8000/docs
 ```
 
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| Type check fails | Add type hints: `field: str \| None = None` |
-| Test async fails | Use `@pytest.mark.asyncio` |
-| Docker error in tests | Start Docker or use `.env.test` with local DB |
-| Alembic fails | Check `DATABASE_URL`, run `alembic upgrade head` |
-| Import errors | Verify exports in `app/routers/__init__.py` |
-| 500 error | Check server logs for exceptions |
-| Gateway timeout | Verify `GATEWAY_URL` and `GATEWAY_TOKEN` in `.env` |
-
-## Quick Reference
-
-- Architecture questions → Read CLAUDE.md
-- Current scope → Check feature_list.json
-- Prior context → Read progress.md
-- Pattern examples → See CLAUDE.md "Common Patterns"
-- Bug found → Fix immediately
-- Want refactor → Check CLAUDE.md patterns first, document in commit
-
----
-
-**Last updated:** 2026-05-07 | **Version:** 1.0 (comprehensive harness)

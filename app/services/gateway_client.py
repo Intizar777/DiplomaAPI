@@ -7,7 +7,16 @@ from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import httpx
+from pydantic import ValidationError
 from app.config import settings
+from app.schemas.gateway_responses import (
+    LoginResponse, LocationsResponse, DepartmentsResponse, PositionsResponse,
+    EmployeesResponse, WorkstationsResponse, ProductionLinesResponse,
+    ProductsResponse, OrdersResponse, OrderDetailResponse, OutputsResponse,
+    SalesResponse, SalesSummaryResponse, KpiResponse, QualityResponse,
+    SensorReadingsResponse, InventoryResponse, UnitsOfMeasureResponse,
+    CustomersResponse, WarehousesResponse,
+)
 from app.utils.logging_utils import log_data_flow
 import structlog
 
@@ -475,7 +484,7 @@ class GatewayClient:
         from_date: Optional[date] = None,
         to_date: Optional[date] = None,
         production_line_id: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> KpiResponse:
         """Get production KPI from Gateway."""
         params = {}
         if from_date:
@@ -486,27 +495,30 @@ class GatewayClient:
             params["productionLineId"] = production_line_id
 
         data = await self._request("GET", "/production/kpi", params=params)
-        # Handle both dict-wrapped {"kpi": [...]} and direct array responses
-        if isinstance(data, list):
-            kpi_data = data
-        elif isinstance(data, dict):
-            kpi_data = data.get("kpi", [])
-        else:
-            kpi_data = []
-        log_data_flow(
-            source="gateway_api",
-            target="kpi_service",
-            operation="fetch_kpi",
-            records_count=len(kpi_data) if isinstance(kpi_data, list) else 1,
-        )
-        return data
+
+        try:
+            kpi_response = KpiResponse(**data)
+            log_data_flow(
+                source="gateway_api",
+                target="kpi_service",
+                operation="fetch_kpi",
+                records_count=1,
+            )
+            return kpi_response
+        except ValidationError as e:
+            logger.error(
+                "gateway_kpi_validation_error",
+                error=str(e),
+                raw_data=data
+            )
+            raise
     
     async def get_sales(
         self,
         from_date: Optional[date] = None,
         to_date: Optional[date] = None,
         group_by: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> SalesResponse:
         """Get sales data from Gateway (paginated)."""
         params = {}
         if from_date:
@@ -515,22 +527,32 @@ class GatewayClient:
             params["to"] = to_date.isoformat()
         if group_by:
             params["groupBy"] = group_by
-        
+
         sales = await self._fetch_all_pages("/production/sales", "sales", params)
-        log_data_flow(
-            source="gateway_api",
-            target="sales_service",
-            operation="fetch_sales",
-            records_count=len(sales),
-        )
-        return {"sales": sales}
+
+        try:
+            sales_response = SalesResponse(sales=sales, total=len(sales))
+            log_data_flow(
+                source="gateway_api",
+                target="sales_service",
+                operation="fetch_sales",
+                records_count=len(sales),
+            )
+            return sales_response
+        except ValidationError as e:
+            logger.error(
+                "gateway_sales_validation_error",
+                error=str(e),
+                records_count=len(sales)
+            )
+            raise
     
     async def get_sales_summary(
         self,
         from_date: Optional[date] = None,
         to_date: Optional[date] = None,
         group_by: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> SalesSummaryResponse:
         """Get sales summary from Gateway."""
         params = {}
         if from_date:
@@ -539,8 +561,14 @@ class GatewayClient:
             params["to"] = to_date.isoformat()
         if group_by:
             params["groupBy"] = group_by
-        
-        return await self._request("GET", "/production/sales/summary", params=params)
+
+        data = await self._request("GET", "/production/sales/summary", params=params)
+
+        try:
+            return SalesSummaryResponse(**data)
+        except ValidationError as e:
+            logger.error("gateway_sales_summary_validation_error", error=str(e))
+            raise
     
     async def get_orders(
         self,
@@ -548,7 +576,7 @@ class GatewayClient:
         to_date: Optional[date] = None,
         status: Optional[str] = None,
         production_line: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> OrdersResponse:
         """Get production orders from Gateway (paginated)."""
         params = {}
         if from_date:
@@ -559,19 +587,31 @@ class GatewayClient:
             params["status"] = status
         if production_line:
             params["productionLine"] = production_line
-        
+
         orders = await self._fetch_all_pages("/production/orders", "orders", params)
-        log_data_flow(
-            source="gateway_api",
-            target="order_service",
-            operation="fetch_orders",
-            records_count=len(orders),
-        )
-        return {"orders": orders}
+
+        try:
+            orders_response = OrdersResponse(orders=orders, total=len(orders))
+            log_data_flow(
+                source="gateway_api",
+                target="order_service",
+                operation="fetch_orders",
+                records_count=len(orders),
+            )
+            return orders_response
+        except ValidationError as e:
+            logger.error("gateway_orders_validation_error", error=str(e))
+            raise
     
-    async def get_order(self, order_id: str) -> Dict[str, Any]:
+    async def get_order(self, order_id: str) -> OrderDetailResponse:
         """Get single order details from Gateway."""
-        return await self._request("GET", f"/production/orders/{order_id}")
+        data = await self._request("GET", f"/production/orders/{order_id}")
+
+        try:
+            return OrderDetailResponse(**data)
+        except ValidationError as e:
+            logger.error("gateway_order_detail_validation_error", error=str(e), order_id=order_id)
+            raise
     
     async def get_quality(
         self,
@@ -579,7 +619,7 @@ class GatewayClient:
         lot_number: Optional[str] = None,
         decision: Optional[str] = None,
         in_spec: Optional[bool] = None
-    ) -> Dict[str, Any]:
+    ) -> QualityResponse:
         """Get quality results from Gateway.
 
         Note: Gateway /production/quality does NOT support from/to or offset/limit.
@@ -596,47 +636,61 @@ class GatewayClient:
             params["inSpec"] = str(in_spec).lower()
 
         data = await self._request("GET", "/production/quality", params=params)
-        # Handle both dict-wrapped {"quality": [...]} and direct array responses
+
+        # Normalize response format
         if isinstance(data, list):
-            quality_data = data
+            normalized = {"results": data}
         elif isinstance(data, dict):
-            quality_data = data.get("quality", [])
+            results = data.get("results", data.get("quality", []))
+            normalized = {"results": results, "total": len(results)}
         else:
-            quality_data = []
-        log_data_flow(
-            source="gateway_api",
-            target="quality_service",
-            operation="fetch_quality",
-            records_count=len(quality_data) if isinstance(quality_data, list) else 1,
-        )
-        return data
+            normalized = {"results": [], "total": 0}
+
+        try:
+            quality_response = QualityResponse(**normalized)
+            log_data_flow(
+                source="gateway_api",
+                target="quality_service",
+                operation="fetch_quality",
+                records_count=len(normalized["results"]),
+            )
+            return quality_response
+        except ValidationError as e:
+            logger.error("gateway_quality_validation_error", error=str(e))
+            raise
     
     async def get_output(
         self,
         from_date: Optional[date] = None,
         to_date: Optional[date] = None
-    ) -> Dict[str, Any]:
+    ) -> OutputsResponse:
         """Get production output from Gateway (paginated)."""
         params = {}
         if from_date:
             params["from"] = from_date.isoformat()
         if to_date:
             params["to"] = to_date.isoformat()
-        
+
         outputs = await self._fetch_all_pages("/production/output", "outputs", params)
-        log_data_flow(
-            source="gateway_api",
-            target="output_service",
-            operation="fetch_output",
-            records_count=len(outputs),
-        )
-        return {"outputs": outputs}
+
+        try:
+            outputs_response = OutputsResponse(outputs=outputs, total=len(outputs))
+            log_data_flow(
+                source="gateway_api",
+                target="output_service",
+                operation="fetch_output",
+                records_count=len(outputs),
+            )
+            return outputs_response
+        except ValidationError as e:
+            logger.error("gateway_output_validation_error", error=str(e))
+            raise
     
     async def get_products(
         self,
         category: Optional[str] = None,
         brand: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> ProductsResponse:
         """Get products from Gateway."""
         params = {}
         if category:
@@ -645,20 +699,28 @@ class GatewayClient:
             params["brand"] = brand
 
         data = await self._request("GET", "/production/products", params=params)
-        # Handle both dict-wrapped {"products": [...]} and direct array responses
+
+        # Normalize response format
         if isinstance(data, list):
-            products = data
+            normalized = {"products": data, "total": len(data)}
         elif isinstance(data, dict):
             products = data.get("products", [])
+            normalized = {"products": products, "total": len(products)}
         else:
-            products = []
-        log_data_flow(
-            source="gateway_api",
-            target="product_service",
-            operation="fetch_products",
-            records_count=len(products) if isinstance(products, list) else 1,
-        )
-        return data
+            normalized = {"products": [], "total": 0}
+
+        try:
+            products_response = ProductsResponse(**normalized)
+            log_data_flow(
+                source="gateway_api",
+                target="product_service",
+                operation="fetch_products",
+                records_count=len(normalized["products"]),
+            )
+            return products_response
+        except ValidationError as e:
+            logger.error("gateway_products_validation_error", error=str(e))
+            raise
     
     async def get_sensor_readings(
         self,
@@ -667,7 +729,7 @@ class GatewayClient:
         quality: Optional[str] = None,
         from_date: Optional[date] = None,
         to_date: Optional[date] = None
-    ) -> Dict[str, Any]:
+    ) -> SensorReadingsResponse:
         """Get sensor readings from Gateway (paginated).
 
         GET /production/sensors returns {readings: [...], total: N}
@@ -685,21 +747,27 @@ class GatewayClient:
             params["to"] = to_date.isoformat()
 
         readings = await self._fetch_all_pages("/production/sensors", "readings", params)
-        log_data_flow(
-            source="gateway_api",
-            target="sensor_service",
-            operation="fetch_sensor_readings",
-            records_count=len(readings),
-        )
-        return {"readings": readings}
+
+        try:
+            readings_response = SensorReadingsResponse(readings=readings, total=len(readings))
+            log_data_flow(
+                source="gateway_api",
+                target="sensor_service",
+                operation="fetch_sensor_readings",
+                records_count=len(readings),
+            )
+            return readings_response
+        except ValidationError as e:
+            logger.error("gateway_sensor_readings_validation_error", error=str(e))
+            raise
     
     async def get_inventory(
         self,
         product_id: Optional[str] = None,
         warehouse_code: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> InventoryResponse:
         """Get inventory from Gateway.
-        
+
         Note: Gateway /production/inventory does NOT support offset/limit.
         All inventory is fetched in a single request.
         """
@@ -708,80 +776,132 @@ class GatewayClient:
             params["productId"] = product_id
         if warehouse_code:
             params["warehouseCode"] = warehouse_code
-        
+
         data = await self._request("GET", "/production/inventory", params=params)
-        # Handle dict-wrapped {"inventory": [...], "items": [...]} and direct array
+
+        # Normalize response format
         if isinstance(data, list):
-            items = data
+            normalized = {"inventory": data, "total": len(data)}
         elif isinstance(data, dict):
             items = data.get("inventory", data.get("items", []))
+            normalized = {"inventory": items, "total": len(items)}
         else:
-            items = []
-        log_data_flow(
-            source="gateway_api",
-            target="inventory_service",
-            operation="fetch_inventory",
-            records_count=len(items) if isinstance(items, list) else None,
-        )
-        return data
+            normalized = {"inventory": [], "total": 0}
+
+        try:
+            inventory_response = InventoryResponse(**normalized)
+            log_data_flow(
+                source="gateway_api",
+                target="inventory_service",
+                operation="fetch_inventory",
+                records_count=len(normalized["inventory"]),
+            )
+            return inventory_response
+        except ValidationError as e:
+            logger.error("gateway_inventory_validation_error", error=str(e))
+            raise
 
     # Personnel API methods
 
-    async def get_personnel_locations(self) -> Dict[str, Any]:
+    async def get_personnel_locations(self) -> LocationsResponse:
         """Get personnel locations from Gateway (paginated)."""
         locations = await self._fetch_all_pages("/personnel/locations", "locations")
-        return {"locations": locations}
 
-    async def get_personnel_departments(self) -> Dict[str, Any]:
+        try:
+            return LocationsResponse(locations=locations, total=len(locations))
+        except ValidationError as e:
+            logger.error("gateway_locations_validation_error", error=str(e))
+            raise
+
+    async def get_personnel_departments(self) -> DepartmentsResponse:
         """Get personnel departments from Gateway (paginated)."""
         departments = await self._fetch_all_pages("/personnel/departments", "departments")
-        return {"departments": departments}
 
-    async def get_personnel_positions(self) -> Dict[str, Any]:
+        try:
+            return DepartmentsResponse(departments=departments, total=len(departments))
+        except ValidationError as e:
+            logger.error("gateway_departments_validation_error", error=str(e))
+            raise
+
+    async def get_personnel_positions(self) -> PositionsResponse:
         """Get personnel positions from Gateway (paginated)."""
         positions = await self._fetch_all_pages("/personnel/positions", "positions")
-        return {"positions": positions}
 
-    async def get_personnel_production_lines(self) -> Dict[str, Any]:
+        try:
+            return PositionsResponse(positions=positions, total=len(positions))
+        except ValidationError as e:
+            logger.error("gateway_positions_validation_error", error=str(e))
+            raise
+
+    async def get_personnel_production_lines(self) -> ProductionLinesResponse:
         """Get personnel production lines from Gateway (paginated)."""
         lines = await self._fetch_all_pages("/production/production-lines", "productionLines")
-        return {"productionLines": lines}
 
-    async def get_personnel_workstations(self) -> Dict[str, Any]:
+        try:
+            return ProductionLinesResponse(productionLines=lines, total=len(lines))
+        except ValidationError as e:
+            logger.error("gateway_production_lines_validation_error", error=str(e))
+            raise
+
+    async def get_personnel_workstations(self) -> WorkstationsResponse:
         """Get personnel workstations from Gateway (paginated)."""
         workstations = await self._fetch_all_pages("/personnel/workstations", "workstations")
-        return {"workstations": workstations}
 
-    async def get_personnel_employees(self) -> Dict[str, Any]:
+        try:
+            return WorkstationsResponse(workstations=workstations, total=len(workstations))
+        except ValidationError as e:
+            logger.error("gateway_workstations_validation_error", error=str(e))
+            raise
+
+    async def get_personnel_employees(self) -> EmployeesResponse:
         """Get personnel employees from Gateway (paginated)."""
         employees = await self._fetch_all_pages("/personnel/employees", "employees")
-        log_data_flow(
-            source="gateway_api",
-            target="personnel_service",
-            operation="fetch_employees",
-            records_count=len(employees),
-        )
-        return {"employees": employees}
+
+        try:
+            employees_response = EmployeesResponse(employees=employees, total=len(employees))
+            log_data_flow(
+                source="gateway_api",
+                target="personnel_service",
+                operation="fetch_employees",
+                records_count=len(employees),
+            )
+            return employees_response
+        except ValidationError as e:
+            logger.error("gateway_employees_validation_error", error=str(e))
+            raise
 
     # Reference data API methods
 
-    async def get_units_of_measure(self) -> Dict[str, Any]:
+    async def get_units_of_measure(self) -> UnitsOfMeasureResponse:
         """Get units of measure from Gateway.
 
         Gateway returns either a direct array or {data: [...]}.
         """
         data = await self._request("GET", "/production/units-of-measure")
+
+        # Normalize response format
         if isinstance(data, list):
-            return {"units": data}
-        if isinstance(data, dict):
-            # Try common wrapper keys, fallback to direct dict values
-            for key in ("units", "data", "items", "list"):
-                if key in data:
-                    return {"units": data[key]}
-            # If response is a single object, wrap it
-            if "id" in data:
-                return {"units": [data]}
-        return {"units": []}
+            normalized = {"unitsOfMeasure": data, "total": len(data)}
+        elif isinstance(data, dict):
+            for key in ("unitsOfMeasure", "units", "data", "items", "list"):
+                if key in data and isinstance(data[key], list):
+                    items = data[key]
+                    normalized = {"unitsOfMeasure": items, "total": len(items)}
+                    break
+            else:
+                # If response is a single object, wrap it
+                if "id" in data:
+                    normalized = {"unitsOfMeasure": [data], "total": 1}
+                else:
+                    normalized = {"unitsOfMeasure": [], "total": 0}
+        else:
+            normalized = {"unitsOfMeasure": [], "total": 0}
+
+        try:
+            return UnitsOfMeasureResponse(**normalized)
+        except ValidationError as e:
+            logger.error("gateway_units_of_measure_validation_error", error=str(e))
+            raise
 
     async def get_sensor_parameters(self) -> Dict[str, Any]:
         """Get sensor parameters from Gateway.
@@ -809,15 +929,25 @@ class GatewayClient:
                 return {"parameters": []}
             raise
 
-    async def get_customers(self) -> Dict[str, Any]:
+    async def get_customers(self) -> CustomersResponse:
         """Get customers from Gateway (paginated)."""
         customers = await self._fetch_all_pages("/production/customers", "customers")
-        return {"customers": customers}
 
-    async def get_warehouses(self) -> Dict[str, Any]:
+        try:
+            return CustomersResponse(customers=customers, total=len(customers))
+        except ValidationError as e:
+            logger.error("gateway_customers_validation_error", error=str(e))
+            raise
+
+    async def get_warehouses(self) -> WarehousesResponse:
         """Get warehouses from Gateway (paginated)."""
         warehouses = await self._fetch_all_pages("/production/warehouses", "warehouses")
-        return {"warehouses": warehouses}
+
+        try:
+            return WarehousesResponse(warehouses=warehouses, total=len(warehouses))
+        except ValidationError as e:
+            logger.error("gateway_warehouses_validation_error", error=str(e))
+            raise
 
     # Convenience aliases used by initial sync
 

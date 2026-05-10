@@ -169,14 +169,13 @@ class OrderService:
         logger.info("syncing_orders_from_gateway", from_date=from_date, to_date=to_date)
         
         # Fetch orders from Gateway
-        gateway_data = await self.gateway.get_orders(from_date, to_date)
-        
+        orders_response = await self.gateway.get_orders(from_date, to_date)
+
         records_processed = 0
         snapshot_date = date.today()
         batch_size = 50
-        
-        orders = gateway_data.get("orders", [])
-        logger.info("orders_fetched_from_gateway", total_orders=len(orders))
+
+        logger.info("orders_fetched_from_gateway", total_orders=len(orders_response.orders))
 
         # Load product names for enrichment
         product_names: Dict[UUID, str] = {}
@@ -184,43 +183,44 @@ class OrderService:
         product_names = {row[0]: row[1] for row in product_result.all()}
 
         batch = []
-        for order in orders:
+        for order_item in orders_response.orders:
             # Each sync creates a new snapshot; gateway ID → order_id
             snapshot_id = uuid4()
 
-            # Parse ISO datetime strings to datetime objects
+            # Parse ISO datetime objects
             def parse_dt(val):
-                if val and isinstance(val, str):
-                    try:
-                        # Handle ISO format: "2024-12-01T21:12:32.971Z"
-                        return datetime.fromisoformat(val.replace("Z", "+00:00"))
-                    except ValueError:
-                        return None
-                return val
+                if val:
+                    if isinstance(val, str):
+                        try:
+                            return datetime.fromisoformat(val.replace("Z", "+00:00"))
+                        except ValueError:
+                            return None
+                    return val if isinstance(val, datetime) else None
+                return None
 
-            product_id = order.get("productId")
+            product_id = order_item.productId
             product_name = None
             if product_id:
                 try:
-                    product_name = product_names.get(UUID(product_id) if isinstance(product_id, str) else product_id)
+                    product_name = product_names.get(UUID(str(product_id)) if not isinstance(product_id, UUID) else product_id)
                 except (ValueError, AttributeError, TypeError):
                     pass
 
             snapshot = OrderSnapshot(
                 id=snapshot_id,
-                order_id=order.get("id"),
-                external_order_id=order.get("externalOrderId"),
+                order_id=order_item.id,
+                external_order_id=order_item.externalOrderId,
                 product_id=product_id,
                 product_name=product_name,
-                target_quantity=order.get("targetQuantity"),
-                actual_quantity=order.get("actualQuantity"),
-                unit_of_measure=order.get("unitOfMeasure"),
-                status=order.get("status", "").lower(),
-                production_line=order.get("productionLine"),
-                planned_start=parse_dt(order.get("plannedStart")),
-                planned_end=parse_dt(order.get("plannedEnd")),
-                actual_start=parse_dt(order.get("actualStart")),
-                actual_end=parse_dt(order.get("actualEnd")),
+                target_quantity=order_item.targetQuantity,
+                actual_quantity=order_item.actualQuantity,
+                unit_of_measure=None,
+                status=order_item.status.lower() if order_item.status else None,
+                production_line=order_item.productionLineId,
+                planned_start=parse_dt(order_item.plannedStart),
+                planned_end=parse_dt(order_item.plannedEnd),
+                actual_start=parse_dt(order_item.actualStart),
+                actual_end=parse_dt(order_item.actualEnd),
                 snapshot_date=snapshot_date
             )
             batch.append(snapshot)

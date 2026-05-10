@@ -323,82 +323,54 @@ class SalesService:
     ) -> int:
         """Sync sales data from Gateway."""
         logger.info("syncing_sales_from_gateway", from_date=from_date, to_date=to_date)
-        
+
         period_from = from_date or date.today() - timedelta(days=1)
         period_to = to_date or date.today()
-        
-        # Fetch sales summary from Gateway by region
-        gateway_data = await self.gateway.get_sales_summary(from_date, to_date, "region")
-        
-        records_processed = 0
-        
-        # Gateway returns summary data: dict-wrapped or direct array
-        if isinstance(gateway_data, list):
-            summary = gateway_data
-        elif isinstance(gateway_data, dict):
-            summary = gateway_data.get("summary", gateway_data.get("regions", []))
-        else:
-            summary = []
-        for item in summary:
-            from sqlalchemy.dialects.postgresql import insert
-            raw_id = item.get("id")
-            try:
-                sales_id = UUID(raw_id) if isinstance(raw_id, str) else raw_id
-            except (ValueError, AttributeError, TypeError):
-                logger.warning("invalid_aggregated_sales_id_region_skipped", raw=raw_id)
-                continue
 
+        # Fetch sales summary from Gateway by region
+        summary_response = await self.gateway.get_sales_summary(from_date, to_date, "region")
+
+        records_processed = 0
+        from sqlalchemy.dialects.postgresql import insert
+
+        for item in summary_response.summary:
             stmt = insert(AggregatedSales).values(
-                id=sales_id,
                 period_from=period_from,
                 period_to=period_to,
                 group_by_type="region",
-                group_key=item.get("groupKey", item.get("region", "")),
-                total_quantity=Decimal(str(item.get("totalQuantity", item.get("quantity", 0)))),
-                total_amount=Decimal(str(item.get("totalAmount", item.get("amount", 0)))),
-                sales_count=item.get("salesCount", 1)
+                group_key=item.groupKey,
+                total_quantity=Decimal(str(item.totalQuantity)),
+                total_amount=Decimal(str(item.totalAmount)),
+                sales_count=item.salesCount
             ).on_conflict_do_update(
                 index_elements=['period_from', 'period_to', 'group_by_type', 'group_key'],
                 set_=dict(
-                    total_quantity=Decimal(str(item.get("totalQuantity", item.get("quantity", 0)))),
-                    total_amount=Decimal(str(item.get("totalAmount", item.get("amount", 0)))),
-                    sales_count=item.get("salesCount", 1)
+                    total_quantity=Decimal(str(item.totalQuantity)),
+                    total_amount=Decimal(str(item.totalAmount)),
+                    sales_count=item.salesCount
                 )
             )
             await self.db.execute(stmt)
             records_processed += 1
-        
-        # Also fetch by channel
-        gateway_data_channel = await self.gateway.get_sales_summary(from_date, to_date, "channel")
-        if isinstance(gateway_data_channel, list):
-            summary_channel = gateway_data_channel
-        elif isinstance(gateway_data_channel, dict):
-            summary_channel = gateway_data_channel.get("summary", gateway_data_channel.get("channels", []))
-        else:
-            summary_channel = []
-        for item in summary_channel:
-            raw_id = item.get("id")
-            try:
-                sales_id = UUID(raw_id) if isinstance(raw_id, str) else raw_id
-            except (ValueError, AttributeError, TypeError):
-                logger.warning("invalid_aggregated_sales_id_channel_skipped", raw=raw_id)
-                continue
 
+        # Also fetch by channel
+        summary_channel_response = await self.gateway.get_sales_summary(from_date, to_date, "channel")
+
+        for item in summary_channel_response.summary:
             stmt = insert(AggregatedSales).values(
-                id=sales_id,
                 period_from=period_from,
                 period_to=period_to,
                 group_by_type="channel",
-                group_key=item.get("groupKey", item.get("channel", "")),
-                total_quantity=Decimal(str(item.get("totalQuantity", item.get("quantity", 0)))),
-                total_amount=Decimal(str(item.get("totalAmount", item.get("amount", 0)))),
-                sales_count=item.get("salesCount", 1)
+                group_key=item.groupKey,
+                total_quantity=Decimal(str(item.totalQuantity)),
+                total_amount=Decimal(str(item.totalAmount)),
+                sales_count=item.salesCount
             ).on_conflict_do_update(
                 index_elements=['period_from', 'period_to', 'group_by_type', 'group_key'],
                 set_=dict(
-                    total_quantity=Decimal(str(item.get("totalQuantity", item.get("quantity", 0)))),
-                    total_amount=Decimal(str(item.get("totalAmount", item.get("amount", 0)))),
-                    sales_count=item.get("salesCount", 1)
+                    total_quantity=Decimal(str(item.totalQuantity)),
+                    total_amount=Decimal(str(item.totalAmount)),
+                    sales_count=item.salesCount
                 )
             )
             await self.db.execute(stmt)
@@ -406,62 +378,47 @@ class SalesService:
         
         # Also sync raw sales data for product-level analytics
         try:
-            raw_gateway_data = await self.gateway.get_sales(from_date, to_date)
-            raw_sales = raw_gateway_data.get("sales", [])
-            
-            if raw_sales:
+            sales_response = await self.gateway.get_sales(from_date, to_date)
+
+            if sales_response.sales:
                 # Get product name map for enrichment
                 product_result = await self.db.execute(select(Product.id, Product.name))
                 product_names = {row[0]: row[1] for row in product_result.all()}
-                
+
                 batch_size = 50
                 batch = []
                 snapshot_date = date.today()
-                
-                for sale_data in raw_sales:
-                    # Extract and validate ID from Gateway
-                    raw_id = sale_data.get("id")
-                    try:
-                        sale_id = UUID(raw_id) if isinstance(raw_id, str) else raw_id
-                    except (ValueError, AttributeError, TypeError):
-                        logger.warning("invalid_sale_record_id_skipped", raw=raw_id)
-                        continue
 
-                    product_id = sale_data.get("productId")
+                for sale_item in sales_response.sales:
+                    product_id = sale_item.productId
                     product_name = product_names.get(product_id) if product_id else None
 
-                    # Sync Customer if present
-                    customer_id = None
-                    customer_data = sale_data.get("customer")
-                    if customer_data:
-                        customer_id = await self._sync_customer(customer_data)
-
                     # Parse sale_date
-                    sale_date_raw = sale_data.get("saleDate", date.today())
+                    sale_date_raw = sale_item.saleDate
                     if isinstance(sale_date_raw, str):
                         try:
                             parsed_sale_date = date.fromisoformat(sale_date_raw[:10])
                         except ValueError:
                             parsed_sale_date = date.today()
                     else:
-                        parsed_sale_date = sale_date_raw
+                        parsed_sale_date = sale_date_raw.date() if hasattr(sale_date_raw, 'date') else sale_date_raw
 
                     sale_record = SaleRecord(
-                        id=sale_id,
-                        external_id=sale_data.get("externalId"),
+                        id=sale_item.id,
+                        external_id=sale_item.externalId,
                         product_id=product_id,
-                        product_name=product_name or sale_data.get("customerName"),
-                        customer_id=customer_id,
-                        customer_name=sale_data.get("customerName"),
-                        quantity=Decimal(str(sale_data.get("quantity", 0))),
-                        amount=Decimal(str(sale_data.get("amount", 0))),
+                        product_name=product_name,
+                        customer_id=sale_item.customerId,
+                        customer_name=None,
+                        quantity=Decimal(str(sale_item.quantity)),
+                        amount=Decimal(str(sale_item.amount)),
                         sale_date=parsed_sale_date,
-                        region=sale_data.get("region"),
-                        channel=sale_data.get("channel", "").lower() if sale_data.get("channel") else None,
+                        region=sale_item.region,
+                        channel=sale_item.channel.lower() if sale_item.channel else None,
                         snapshot_date=snapshot_date
                     )
                     batch.append(sale_record)
-                    
+
                     if len(batch) >= batch_size:
                         try:
                             self.db.add_all(batch)
@@ -471,7 +428,7 @@ class SalesService:
                             await self.db.rollback()
                             logger.error("sales_raw_batch_error", error=str(e)[:200])
                         batch = []
-                
+
                 if batch:
                     try:
                         self.db.add_all(batch)
