@@ -118,8 +118,8 @@ class PersonnelService:
     async def _sync_locations(self) -> int:
         """Sync locations from Gateway."""
         logger.info("syncing_locations_from_gateway")
-        gateway_data = await self.gateway.get_personnel_locations()
-        items = gateway_data.get("locations", [])
+        locations_response = await self.gateway.get_personnel_locations()
+        items = [item.dict() for item in locations_response.locations]
         logger.info("locations_fetched_from_gateway", total=len(items))
         return await self._upsert_entities(Location, items, self._apply_location_fields)
 
@@ -128,7 +128,7 @@ class PersonnelService:
         from app.services.gateway_client import GatewayError
         logger.info("syncing_production_lines_from_gateway")
         try:
-            gateway_data = await self.gateway.get_personnel_production_lines()
+            production_lines_response = await self.gateway.get_personnel_production_lines()
         except GatewayError as e:
             if "404" in str(e):
                 logger.warning(
@@ -137,15 +137,15 @@ class PersonnelService:
                 )
                 return 0
             raise
-        items = gateway_data.get("productionLines", [])
+        items = [item.dict() for item in production_lines_response.productionLines]
         logger.info("production_lines_fetched_from_gateway", total=len(items))
         return await self._upsert_entities(ProductionLine, items, self._apply_production_line_fields)
 
     async def _sync_departments(self) -> int:
         """Sync departments from Gateway (two-pass for self-referencing parent_id)."""
         logger.info("syncing_departments_from_gateway")
-        gateway_data = await self.gateway.get_personnel_departments()
-        items = gateway_data.get("departments", [])
+        departments_response = await self.gateway.get_personnel_departments()
+        items = [item.dict() for item in departments_response.departments]
         logger.info("departments_fetched_from_gateway", total=len(items))
 
         # First pass: upsert all without parent_id
@@ -181,24 +181,24 @@ class PersonnelService:
     async def _sync_positions(self) -> int:
         """Sync positions from Gateway."""
         logger.info("syncing_positions_from_gateway")
-        gateway_data = await self.gateway.get_personnel_positions()
-        items = gateway_data.get("positions", [])
+        positions_response = await self.gateway.get_personnel_positions()
+        items = [item.dict() for item in positions_response.positions]
         logger.info("positions_fetched_from_gateway", total=len(items))
         return await self._upsert_entities(Position, items, self._apply_position_fields)
 
     async def _sync_workstations(self) -> int:
         """Sync workstations from Gateway."""
         logger.info("syncing_workstations_from_gateway")
-        gateway_data = await self.gateway.get_personnel_workstations()
-        items = gateway_data.get("workstations", [])
+        workstations_response = await self.gateway.get_personnel_workstations()
+        items = [item.dict() for item in workstations_response.workstations]
         logger.info("workstations_fetched_from_gateway", total=len(items))
         return await self._upsert_entities(Workstation, items, self._apply_workstation_fields)
 
     async def _sync_employees(self) -> int:
         """Sync employees from Gateway."""
         logger.info("syncing_employees_from_gateway")
-        gateway_data = await self.gateway.get_personnel_employees()
-        items = gateway_data.get("employees", [])
+        employees_response = await self.gateway.get_personnel_employees()
+        items = [item.dict() for item in employees_response.employees]
         logger.info("employees_fetched_from_gateway", total=len(items))
         return await self._upsert_entities(Employee, items, self._apply_employee_fields)
 

@@ -121,52 +121,43 @@ class OutputService:
         """Sync output data from Gateway."""
         logger.info("syncing_output_from_gateway", from_date=from_date, to_date=to_date)
         
-        gateway_data = await self.gateway.get_output(from_date, to_date)
-        outputs = gateway_data.get("outputs", [])
-        logger.info("output_fetched_from_gateway", total_outputs=len(outputs))
-        
+        outputs_response = await self.gateway.get_output(from_date, to_date)
+        logger.info("output_fetched_from_gateway", total_outputs=len(outputs_response.outputs))
+
         # Get product name map for enrichment
         product_names = {}
         product_result = await self.db.execute(select(Product.id, Product.name))
         product_names = {row[0]: row[1] for row in product_result.all()}
-        
+
         records_processed = 0
         batch_size = 50
         batch = []
         snapshot_date = date.today()
-        
-        for output_data in outputs:
-            # Extract and validate ID from Gateway
-            raw_id = output_data.get("id")
-            try:
-                output_id = UUID(raw_id) if isinstance(raw_id, str) else raw_id
-            except (ValueError, AttributeError, TypeError):
-                logger.warning("invalid_production_output_id_skipped", raw=raw_id)
-                continue
 
+        for output_item in outputs_response.outputs:
             # Parse production date
-            prod_date_raw = output_data.get("productionDate", date.today())
+            prod_date_raw = output_item.productionDate
             if isinstance(prod_date_raw, str):
                 try:
                     prod_date = date.fromisoformat(prod_date_raw[:10])
                 except ValueError:
                     prod_date = date.today()
             else:
-                prod_date = prod_date_raw
+                prod_date = prod_date_raw.date() if hasattr(prod_date_raw, 'date') else prod_date_raw
 
-            product_id = output_data.get("productId")
+            product_id = output_item.productId
             product_name = product_names.get(product_id) if product_id else None
 
             output = ProductionOutput(
-                id=output_id,
-                order_id=output_data.get("orderId"),
+                id=output_item.id,
+                order_id=output_item.orderId,
                 product_id=product_id,
                 product_name=product_name,
-                lot_number=output_data.get("lotNumber", ""),
-                quantity=Decimal(str(output_data.get("quantity", 0))),
-                quality_status=output_data.get("qualityStatus", "").lower() if output_data.get("qualityStatus") else None,
+                lot_number=output_item.lotNumber,
+                quantity=Decimal(str(output_item.quantity)),
+                quality_status=output_item.qualityStatus.lower() if output_item.qualityStatus else None,
                 production_date=prod_date,
-                shift=output_data.get("shift"),
+                shift=output_item.shift,
                 snapshot_date=snapshot_date
             )
             batch.append(output)

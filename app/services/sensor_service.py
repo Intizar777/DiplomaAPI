@@ -273,30 +273,21 @@ class SensorService:
         """Sync sensor readings from Gateway."""
         logger.info("syncing_sensors_from_gateway", from_date=from_date, to_date=to_date)
 
-        gateway_data = await self.gateway.get_sensor_readings(from_date=from_date, to_date=to_date)
-        readings = gateway_data.get("readings", [])
-        logger.info("sensors_fetched_from_gateway", total_readings=len(readings))
+        readings_response = await self.gateway.get_sensor_readings(from_date=from_date, to_date=to_date)
+        logger.info("sensors_fetched_from_gateway", total_readings=len(readings_response.readings))
 
         records_processed = 0
         batch_size = 50
         batch = []
         snapshot_date = datetime.utcnow()
 
-        for reading_data in readings:
-            # Extract and validate ID from Gateway
-            raw_id = reading_data.get("id")
-            try:
-                reading_id = UUID(raw_id) if isinstance(raw_id, str) else raw_id
-            except (ValueError, AttributeError, TypeError):
-                logger.warning("invalid_sensor_reading_id_skipped", raw=raw_id)
-                continue
-
+        for reading_item in readings_response.readings:
             # Readings response contains sensorId (FK), not a nested sensor object
             sensor_id = None
-            raw_sensor_id = reading_data.get("sensorId")
+            raw_sensor_id = reading_item.sensorId
             if raw_sensor_id:
                 try:
-                    sensor_uuid = UUID(raw_sensor_id) if isinstance(raw_sensor_id, str) else raw_sensor_id
+                    sensor_uuid = UUID(str(raw_sensor_id)) if not isinstance(raw_sensor_id, UUID) else raw_sensor_id
                     existing = await self.db.execute(select(Sensor).where(Sensor.id == sensor_uuid))
                     sensor = existing.scalar_one_or_none()
                     if sensor:
@@ -305,7 +296,7 @@ class SensorService:
                     pass
 
             # Parse recorded_at
-            recorded_at_raw = reading_data.get("recordedAt", datetime.utcnow())
+            recorded_at_raw = reading_item.recordedAt
             if isinstance(recorded_at_raw, str):
                 try:
                     recorded_at = datetime.fromisoformat(recorded_at_raw.replace("Z", "+00:00"))
@@ -317,10 +308,10 @@ class SensorService:
                 recorded_at = datetime.utcnow()
 
             reading = SensorReading(
-                id=reading_id,
+                id=reading_item.id,
                 sensor_id=sensor_id,
-                value=Decimal(str(reading_data.get("value", 0))) if reading_data.get("value") is not None else None,
-                quality=reading_data.get("quality", "").lower() if reading_data.get("quality") else None,
+                value=Decimal(str(reading_item.value)) if reading_item.value is not None else None,
+                quality=reading_item.quality.lower() if reading_item.quality else None,
                 recorded_at=recorded_at,
                 snapshot_date=snapshot_date
             )

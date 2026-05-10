@@ -166,15 +166,8 @@ class InventoryService:
         """Sync inventory from Gateway (snapshot current state)."""
         logger.info("syncing_inventory_from_gateway")
 
-        gateway_data = await self.gateway.get_inventory()
-        # Handle both dict-wrapped {"inventory": [...]} and direct array
-        if isinstance(gateway_data, list):
-            inventory = gateway_data
-        elif isinstance(gateway_data, dict):
-            inventory = gateway_data.get("inventory", gateway_data.get("items", []))
-        else:
-            inventory = []
-        logger.info("inventory_fetched_from_gateway", total_items=len(inventory))
+        inventory_response = await self.gateway.get_inventory()
+        logger.info("inventory_fetched_from_gateway", total_items=len(inventory_response.inventory))
 
         # Get product name map for enrichment
         product_result = await self.db.execute(select(Product.id, Product.name))
@@ -185,32 +178,15 @@ class InventoryService:
         batch = []
         snapshot_date = date.today()
 
-        for item_data in inventory:
-            # Extract and validate ID from Gateway
-            raw_id = item_data.get("id")
-            try:
-                inventory_id = UUID(raw_id) if isinstance(raw_id, str) else raw_id
-            except (ValueError, AttributeError, TypeError):
-                logger.warning("invalid_inventory_snapshot_id_skipped", raw=raw_id)
-                continue
-
-            product_id = item_data.get("productId")
+        for inventory_item in inventory_response.inventory:
+            product_id = inventory_item.productId
             product_name = product_names.get(product_id) if product_id else None
 
-            # Sync Warehouse: prefer nested object, fall back to warehouseId string
-            warehouse_id = None
-            warehouse_data = item_data.get("warehouse")
-            if warehouse_data:
-                warehouse_id = await self._sync_warehouse(warehouse_data)
-            elif item_data.get("warehouseId"):
-                raw_wh_id = item_data.get("warehouseId")
-                try:
-                    warehouse_id = UUID(raw_wh_id)
-                except (ValueError, TypeError):
-                    pass
+            # Warehouse ID from the inventory item
+            warehouse_id = inventory_item.warehouseId
 
             # Parse last_updated
-            last_updated_raw = item_data.get("lastUpdated")
+            last_updated_raw = inventory_item.lastUpdated
             if isinstance(last_updated_raw, str):
                 try:
                     last_updated = datetime.fromisoformat(last_updated_raw.replace("Z", "+00:00"))
@@ -220,13 +196,13 @@ class InventoryService:
                 last_updated = None
 
             snapshot = InventorySnapshot(
-                id=inventory_id,
+                id=inventory_item.id,
                 product_id=product_id,
                 product_name=product_name,
                 warehouse_id=warehouse_id,
-                lot_number=item_data.get("lotNumber"),
-                quantity=Decimal(str(item_data.get("quantity", 0))),
-                unit_of_measure=item_data.get("unitOfMeasure", ""),
+                lot_number=inventory_item.lotNumber,
+                quantity=Decimal(str(inventory_item.quantity)),
+                unit_of_measure=None,
                 last_updated=last_updated,
                 snapshot_date=snapshot_date
             )

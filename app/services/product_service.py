@@ -116,26 +116,19 @@ class ProductService:
         """Sync products from Gateway (full upsert)."""
         logger.info("syncing_products_from_gateway")
 
-        gateway_data = await self.gateway.get_products()
-        products = gateway_data.get("products", [])
-        logger.info("products_fetched_from_gateway", total_products=len(products))
+        products_response = await self.gateway.get_products()
+        logger.info("products_fetched_from_gateway", total_products=len(products_response.products))
 
         records_processed = 0
 
-        for product_data in products:
-            product_id_raw = product_data.get("id")
-            try:
-                product_id = UUID(product_id_raw) if isinstance(product_id_raw, str) else product_id_raw
-            except (ValueError, AttributeError):
-                logger.warning("invalid_product_id_skipped", raw=product_id_raw)
-                continue
-            code = product_data.get("code")
+        for product_item in products_response.products:
+            product_id = product_item.id
+            code = product_item.code
 
             # Sync UnitOfMeasure if present
             unit_of_measure_id = None
-            unit_data = product_data.get("unitOfMeasure")
-            if unit_data:
-                unit_of_measure_id = await self._sync_unit_of_measure(unit_data)
+            if product_item.unitOfMeasure:
+                unit_of_measure_id = await self._sync_unit_of_measure(product_item.unitOfMeasure.dict())
 
             # Try to find existing product by code first (unique constraint), then by id
             if code:
@@ -155,24 +148,24 @@ class ProductService:
 
             if product:
                 product.code = code or product.code
-                product.name = product_data.get("name", product.name)
-                product.category = product_data.get("category", product.category)
-                product.brand = product_data.get("brand", product.brand)
+                product.name = product_item.name or product.name
+                product.category = product_item.category or product.category
+                product.brand = product_item.brand or product.brand
                 product.unit_of_measure_id = unit_of_measure_id
-                product.shelf_life_days = product_data.get("shelfLifeDays", product.shelf_life_days)
-                product.requires_quality_check = product_data.get("requiresQualityCheck", product.requires_quality_check)
-                product.source_system_id = product_data.get("sourceSystemId", product.source_system_id)
+                product.shelf_life_days = product_item.shelfLifeDays or product.shelf_life_days
+                product.requires_quality_check = product_item.requiresQualityCheck if product_item.requiresQualityCheck is not None else product.requires_quality_check
+                product.source_system_id = None
             else:
                 product = Product(
                     id=product_id,  # Preserve original UUID from Gateway
                     code=code,
-                    name=product_data.get("name", ""),
-                    category=product_data.get("category"),
-                    brand=product_data.get("brand"),
+                    name=product_item.name or "",
+                    category=product_item.category,
+                    brand=product_item.brand,
                     unit_of_measure_id=unit_of_measure_id,
-                    shelf_life_days=product_data.get("shelfLifeDays"),
-                    requires_quality_check=product_data.get("requiresQualityCheck", False),
-                    source_system_id=product_data.get("sourceSystemId"),
+                    shelf_life_days=product_item.shelfLifeDays,
+                    requires_quality_check=product_item.requiresQualityCheck if product_item.requiresQualityCheck is not None else False,
+                    source_system_id=None,
                 )
                 self.db.add(product)
 
