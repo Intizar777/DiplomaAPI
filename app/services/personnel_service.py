@@ -283,7 +283,7 @@ class PersonnelService:
         dept.is_active = data.get("isActive", dept.is_active)
 
     def _apply_position_fields(self, position: Position, data: Dict[str, Any], **kwargs) -> None:
-        position.name = data.get("name", position.name or "")
+        position.name = data.get("name") or data.get("title") or position.name or ""
         position.code = data.get("code", position.code)
         raw_dept = data.get("departmentId")
         if raw_dept:
@@ -313,9 +313,25 @@ class PersonnelService:
         ws.is_active = data.get("isActive", ws.is_active)
 
     def _apply_employee_fields(self, emp: Employee, data: Dict[str, Any], **kwargs) -> None:
-        emp.first_name = data.get("firstName", emp.first_name or "")
-        emp.last_name = data.get("lastName", emp.last_name or "")
-        emp.middle_name = data.get("middleName", emp.middle_name)
+        # Handle both old format (firstName/lastName) and new format (fullName)
+        if "fullName" in data:
+            full_name = data.get("fullName", "").strip()
+            parts = full_name.split()
+            if len(parts) >= 2:
+                emp.last_name = parts[0]
+                emp.first_name = parts[1]
+                emp.middle_name = " ".join(parts[2:]) if len(parts) > 2 else None
+            elif len(parts) == 1:
+                emp.first_name = parts[0]
+                emp.last_name = ""
+            else:
+                emp.first_name = emp.first_name or ""
+                emp.last_name = emp.last_name or ""
+        else:
+            emp.first_name = data.get("firstName", emp.first_name or "")
+            emp.last_name = data.get("lastName", emp.last_name or "")
+            emp.middle_name = data.get("middleName", emp.middle_name)
+
         emp.employee_number = data.get("employeeNumber", emp.employee_number)
         raw_pos = data.get("positionId")
         if raw_pos:

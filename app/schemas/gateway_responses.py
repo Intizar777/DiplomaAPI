@@ -67,6 +67,7 @@ class DepartmentItem(BaseModel):
     name: str
     code: str
     type: str
+    locationId: Optional[UUID] = None
     parentId: Optional[UUID] = None
     headEmployeeId: Optional[UUID] = None
     sourceSystemId: Optional[str] = None
@@ -78,6 +79,7 @@ class DepartmentItem(BaseModel):
                 "name": "IT-отдел",
                 "code": "DEP-UPR-ITD",
                 "type": "department",
+                "locationId": "c9b5f796-b67f-4790-966c-b7d6225c4d30",
                 "parentId": "f22958aa-3cb7-4ed2-a122-60f1569c473e",
                 "headEmployeeId": "58156fda-4575-4271-b165-797b2549714c",
                 "sourceSystemId": None
@@ -94,17 +96,20 @@ class DepartmentsResponse(BaseModel):
 class PositionItem(BaseModel):
     """Single position from /personnel/positions"""
     id: UUID
-    title: str
+    name: str = Field(alias="title")
     code: str
+    departmentId: Optional[UUID] = None
 
     class Config:
         json_schema_extra = {
             "example": {
                 "id": "27cde08e-dafe-40b0-a6b9-1f0ad9401400",
                 "title": "HR-менеджер",
-                "code": "POS-0250"
+                "code": "POS-0250",
+                "departmentId": "ab751713-a58e-4f2e-b73e-02e9986f5aa8"
             }
         }
+        populate_by_name = True
 
 
 class PositionsResponse(BaseModel):
@@ -116,7 +121,7 @@ class PositionsResponse(BaseModel):
 class EmployeeItem(BaseModel):
     """Single employee from /personnel/employees"""
     id: UUID
-    personnelNumber: str
+    employeeNumber: str = Field(alias="personnelNumber")
     fullName: str
     dateOfBirth: datetime
     positionId: UUID
@@ -145,6 +150,7 @@ class EmployeeItem(BaseModel):
                 "sourceSystemId": None
             }
         }
+        populate_by_name = True
 
 
 class EmployeesResponse(BaseModel):

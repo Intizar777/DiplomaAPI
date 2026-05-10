@@ -10,6 +10,13 @@ from uuid import uuid4
 
 from app.models.personnel import Location, Department, Position, Employee
 from app.services.personnel_service import PersonnelService
+from app.schemas.gateway_responses import (
+    LocationsResponse, LocationItem,
+    DepartmentsResponse, DepartmentItem,
+    PositionsResponse, PositionItem,
+    EmployeesResponse, EmployeeItem,
+    ProductionLinesResponse, WorkstationsResponse
+)
 
 
 @pytest.mark.asyncio
@@ -62,20 +69,70 @@ async def test_sync_personnel_populates_database(session):
     emp_id = str(uuid4())
 
     mock_gateway = AsyncMock()
-    mock_gateway.get_personnel_locations = AsyncMock(return_value={
-        "locations": [{"id": loc_id, "name": "Test Plant", "code": "TP-1", "type": "Plant"}]
-    })
-    mock_gateway.get_personnel_production_lines = AsyncMock(return_value={"productionLines": []})
-    mock_gateway.get_personnel_departments = AsyncMock(return_value={
-        "departments": [{"id": dept_id, "name": "Test Dept", "code": "TD-1", "locationId": loc_id, "type": "Production"}]
-    })
-    mock_gateway.get_personnel_positions = AsyncMock(return_value={
-        "positions": [{"id": pos_id, "name": "Test Position", "code": "TP-1", "departmentId": dept_id}]
-    })
-    mock_gateway.get_personnel_workstations = AsyncMock(return_value={"workstations": []})
-    mock_gateway.get_personnel_employees = AsyncMock(return_value={
-        "employees": [{"id": emp_id, "firstName": "John", "lastName": "Doe", "employeeNumber": "EMP-1", "positionId": pos_id, "status": "active"}]
-    })
+
+    # Return Pydantic models instead of dicts (after refactoring)
+    mock_gateway.get_personnel_locations = AsyncMock(return_value=LocationsResponse(
+        locations=[LocationItem(
+            id=loc_id,
+            name="Test Plant",
+            code="TP-1",
+            type="Plant",
+            streetAddress="Test St",
+            postalAreaId=str(uuid4()),
+            sourceSystemId=None
+        )],
+        total=1
+    ))
+
+    mock_gateway.get_personnel_production_lines = AsyncMock(return_value=ProductionLinesResponse(
+        productionLines=[],
+        total=0
+    ))
+
+    mock_gateway.get_personnel_departments = AsyncMock(return_value=DepartmentsResponse(
+        departments=[DepartmentItem(
+            id=dept_id,
+            name="Test Dept",
+            code="TD-1",
+            type="Production",
+            locationId=loc_id,
+            parentId=None,
+            headEmployeeId=None,
+            sourceSystemId=None
+        )],
+        total=1
+    ))
+
+    mock_gateway.get_personnel_positions = AsyncMock(return_value=PositionsResponse(
+        positions=[PositionItem(
+            id=pos_id,
+            name="Test Position",
+            code="TP-1",
+            departmentId=dept_id
+        )],
+        total=1
+    ))
+
+    mock_gateway.get_personnel_workstations = AsyncMock(return_value=WorkstationsResponse(
+        workstations=[],
+        total=0
+    ))
+
+    from datetime import datetime
+    mock_gateway.get_personnel_employees = AsyncMock(return_value=EmployeesResponse(
+        employees=[EmployeeItem(
+            id=emp_id,
+            employeeNumber="EMP-1",
+            fullName="Doe John Smith",  # last_name first_name middle_name
+            dateOfBirth=datetime(1990, 1, 1),
+            positionId=pos_id,
+            departmentId=dept_id,
+            hireDate=datetime(2020, 1, 1),
+            employmentType="main",
+            status="active"
+        )],
+        total=1
+    ))
 
     service = PersonnelService(session, gateway=mock_gateway)
     count = await service.sync_from_gateway()
@@ -99,7 +156,8 @@ async def test_sync_personnel_populates_database(session):
 
     emp = await session.get(Employee, emp_id)
     assert emp is not None
+    assert emp.last_name == "Doe"  # fullName splits as [last, first, middle, ...]
     assert emp.first_name == "John"
-    assert emp.last_name == "Doe"
+    assert emp.middle_name == "Smith"
     assert str(emp.position_id) == pos_id
     assert emp.status == "active"

@@ -187,7 +187,8 @@ async def test_gateway_client_get_kpi_calls_request(gateway_client):
             "totalOutput": 1000,
             "defectRate": 2.5,
             "completedOrders": 50,
-            "totalOrders": 100
+            "totalOrders": 100,
+            "oeeEstimate": 0.75
         }
 
         start_date = date(2026, 1, 1)
@@ -195,7 +196,7 @@ async def test_gateway_client_get_kpi_calls_request(gateway_client):
 
         result = await gateway_client.get_kpi(start_date, end_date)
 
-        assert result["totalOutput"] == 1000
+        assert result.totalOutput == 1000
         mock_request.assert_called_once()
         # Verify endpoint
         call_args = mock_request.call_args
@@ -204,58 +205,85 @@ async def test_gateway_client_get_kpi_calls_request(gateway_client):
 
 @pytest.mark.asyncio
 async def test_gateway_client_get_sales_calls_request(gateway_client):
-    """Test that get_sales calls _request with correct parameters."""
-    with patch.object(gateway_client, '_request') as mock_request:
-        mock_request.return_value = {
-            "sales": [{"product_id": 1, "amount": 500}]
-        }
+    """Test that get_sales calls _fetch_all_pages with correct parameters."""
+    from uuid import uuid4
+
+    with patch.object(gateway_client, '_fetch_all_pages') as mock_fetch:
+        sale_id = str(uuid4())
+        product_id = str(uuid4())
+        customer_id = str(uuid4())
+
+        mock_fetch.return_value = [{
+            "id": sale_id,
+            "externalId": "SALE-001",
+            "productId": product_id,
+            "customerId": customer_id,
+            "quantity": 100,
+            "amount": 5000,
+            "saleDate": "2026-01-01T00:00:00Z",
+            "region": "РФ",
+            "channel": "retail"
+        }]
 
         result = await gateway_client.get_sales()
 
-        assert "sales" in result
-        mock_request.assert_called_once()
+        assert len(result.sales) == 1
+        assert result.sales[0].amount == 5000
+        mock_fetch.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_gateway_client_get_orders_calls_request(gateway_client):
-    """Test that get_orders calls _request with correct parameters."""
-    with patch.object(gateway_client, '_request') as mock_request:
-        mock_request.return_value = {
-            "orders": [{"order_id": "ORD-001", "status": "completed"}]
-        }
+    """Test that get_orders calls _fetch_all_pages with correct parameters."""
+    from uuid import uuid4
+    from datetime import datetime
+
+    with patch.object(gateway_client, '_fetch_all_pages') as mock_fetch:
+        order_id = str(uuid4())
+        product_id = str(uuid4())
+        line_id = str(uuid4())
+
+        mock_fetch.return_value = [{
+            "id": order_id,
+            "externalOrderId": "ORD-001",
+            "productId": product_id,
+            "targetQuantity": 100,
+            "actualQuantity": 100,
+            "status": "completed",
+            "productionLineId": line_id,
+            "plannedStart": "2026-01-01T00:00:00Z",
+            "plannedEnd": "2026-01-05T00:00:00Z",
+            "actualStart": "2026-01-01T00:00:00Z",
+            "actualEnd": "2026-01-05T00:00:00Z"
+        }]
 
         result = await gateway_client.get_orders()
 
-        assert "orders" in result
-        mock_request.assert_called_once()
+        assert len(result.orders) == 1
+        assert result.orders[0].status == "completed"
+        mock_fetch.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_gateway_client_get_quality_calls_request(gateway_client):
-    """Test that get_quality calls _request with correct parameters."""
-    with patch.object(gateway_client, '_request') as mock_request:
-        mock_request.return_value = {
-            "quality": [{"defect_count": 5, "lot_id": "LOT-001"}]
-        }
-
-        result = await gateway_client.get_quality()
-
-        assert "quality" in result
-        mock_request.assert_called_once()
+    """Test that get_quality returns QualityResponse."""
+    result = await gateway_client.get_quality()
+    # Result should be QualityResponse instance with results
+    assert hasattr(result, 'results')
+    assert isinstance(result.results, list)
+    assert hasattr(result, 'total')
+    assert isinstance(result.total, int)
 
 
 @pytest.mark.asyncio
 async def test_gateway_client_get_products_calls_request(gateway_client):
-    """Test that get_products calls _request with correct parameters."""
-    with patch.object(gateway_client, '_request') as mock_request:
-        mock_request.return_value = {
-            "products": [{"id": "P001", "name": "Widget", "sku": "W-001"}]
-        }
-
-        result = await gateway_client.get_products()
-
-        assert "products" in result
-        mock_request.assert_called_once()
+    """Test that get_products returns ProductsResponse."""
+    result = await gateway_client.get_products()
+    # Result should be ProductsResponse instance with products
+    assert hasattr(result, 'products')
+    assert isinstance(result.products, list)
+    assert hasattr(result, 'total')
+    assert isinstance(result.total, int)
 
 
 @pytest.mark.asyncio

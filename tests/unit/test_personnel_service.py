@@ -6,9 +6,18 @@ Gateway client is mocked or set to None for query-only tests.
 """
 import pytest
 from uuid import uuid4
+from datetime import datetime
 
 from app.models.personnel import Location, Department, Position, Employee, ProductionLine, Workstation
 from app.services.personnel_service import PersonnelService
+from app.schemas.gateway_responses import (
+    LocationsResponse, LocationItem,
+    ProductionLinesResponse,
+    DepartmentsResponse,
+    PositionsResponse,
+    WorkstationsResponse,
+    EmployeesResponse,
+)
 
 
 @pytest.mark.asyncio
@@ -73,14 +82,33 @@ async def test_sync_from_gateway_upserts_correctly(session):
 
     raw_id = str(uuid4())
     mock_gateway = AsyncMock()
-    mock_gateway.get_personnel_locations = AsyncMock(return_value={
-        "locations": [{"id": raw_id, "name": "Old Name", "code": "LOC-1", "type": "Plant"}]
-    })
-    mock_gateway.get_personnel_production_lines = AsyncMock(return_value={"productionLines": []})
-    mock_gateway.get_personnel_departments = AsyncMock(return_value={"departments": []})
-    mock_gateway.get_personnel_positions = AsyncMock(return_value={"positions": []})
-    mock_gateway.get_personnel_workstations = AsyncMock(return_value={"workstations": []})
-    mock_gateway.get_personnel_employees = AsyncMock(return_value={"employees": []})
+    mock_gateway.get_personnel_locations = AsyncMock(return_value=LocationsResponse(
+        locations=[LocationItem(
+            id=raw_id,
+            name="Old Name",
+            code="LOC-1",
+            type="Plant",
+            streetAddress="Test St",
+            postalAreaId=str(uuid4()),
+            sourceSystemId=None
+        )],
+        total=1
+    ))
+    mock_gateway.get_personnel_production_lines = AsyncMock(return_value=ProductionLinesResponse(
+        productionLines=[], total=0
+    ))
+    mock_gateway.get_personnel_departments = AsyncMock(return_value=DepartmentsResponse(
+        departments=[], total=0
+    ))
+    mock_gateway.get_personnel_positions = AsyncMock(return_value=PositionsResponse(
+        positions=[], total=0
+    ))
+    mock_gateway.get_personnel_workstations = AsyncMock(return_value=WorkstationsResponse(
+        workstations=[], total=0
+    ))
+    mock_gateway.get_personnel_employees = AsyncMock(return_value=EmployeesResponse(
+        employees=[], total=0
+    ))
 
     service = PersonnelService(session, gateway=mock_gateway)
 
@@ -92,9 +120,18 @@ async def test_sync_from_gateway_upserts_correctly(session):
     assert loc.name == "Old Name"
 
     # Second sync — update
-    mock_gateway.get_personnel_locations = AsyncMock(return_value={
-        "locations": [{"id": raw_id, "name": "New Name", "code": "LOC-1", "type": "Plant"}]
-    })
+    mock_gateway.get_personnel_locations = AsyncMock(return_value=LocationsResponse(
+        locations=[LocationItem(
+            id=raw_id,
+            name="New Name",
+            code="LOC-1",
+            type="Plant",
+            streetAddress="Test St",
+            postalAreaId=str(uuid4()),
+            sourceSystemId=None
+        )],
+        total=1
+    ))
     count2 = await service.sync_from_gateway()
     assert count2 == 1
 
