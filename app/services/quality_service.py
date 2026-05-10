@@ -6,10 +6,10 @@ from decimal import Decimal
 from typing import Dict, List, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import select, func, desc, cast, String
+from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import QualityResult, Product, QualitySpec
+from app.models import QualityResult, QualitySpec, Product
 from app.schemas import QualitySummaryResponse, DefectTrendsResponse, QualityLotsResponse
 from app.services.gateway_client import GatewayClient
 from app.utils.logging_utils import track_feature_path, log_data_flow
@@ -173,34 +173,27 @@ class QualityService:
         decision: Optional[str] = None
     ) -> QualityLotsResponse:
         """Get quality lots with decisions."""
-        # Join with Product to get product_name using source_system_id
-        query = select(
-            QualityResult,
-            Product.name.label("product_name")
-        ).outerjoin(
-            Product, cast(QualityResult.product_id, String) == Product.source_system_id
-        ).where(
+        query = select(QualityResult).where(
             QualityResult.test_date >= from_date,
             QualityResult.test_date <= to_date
         )
-        
+
         if decision:
             query = query.where(QualityResult.decision == decision.lower())
-        
+
         query = query.order_by(desc(QualityResult.test_date))
-        
+
         result = await self.db.execute(query)
-        rows = result.all()
-        
+        records = result.scalars().all()
+
         # Group by lot
         by_lot: Dict[str, Dict] = {}
-        for row in rows:
-            record = row.QualityResult
+        for record in records:
             lot = record.lot_number
             if lot not in by_lot:
                 by_lot[lot] = {
                     "product_id": str(record.product_id),
-                    "product_name": row.product_name or record.product_name,
+                    "product_name": record.product_name,
                     "decision": record.decision,
                     "test_date": record.test_date,
                     "parameters": []
@@ -288,13 +281,18 @@ class QualityService:
         for quality_item in results:
             # Enrich product_name
             product_name = None
-            product_id = quality_item.productId
-            if product_id:
+            product_id_raw = quality_item.productId
+            product_id = None
+
+            if product_id_raw and str(product_id_raw).strip():
                 try:
-                    product_uuid = UUID(str(product_id)) if not isinstance(product_id, UUID) else product_id
-                    product_name = product_names.get(product_uuid)
+                    product_id = UUID(str(product_id_raw)) if not isinstance(product_id_raw, UUID) else product_id_raw
+                    product_name = product_names.get(product_id)
                 except (ValueError, AttributeError, TypeError):
-                    pass
+                    product_id = uuid4()
+            else:
+                # Gateway doesn't provide valid product IDs, use lot_number hash
+                product_id = uuid4()
 
             # Parse test date
             test_date_raw = quality_item.testDate

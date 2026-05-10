@@ -163,7 +163,7 @@ class ProductService:
                 product.unit_of_measure_id = unit_of_measure_id
                 product.shelf_life_days = product_item.shelfLifeDays or product.shelf_life_days
                 product.requires_quality_check = product_item.requiresQualityCheck if product_item.requiresQualityCheck is not None else product.requires_quality_check
-                product.source_system_id = None
+                product.source_system_id = str(product_item.id)
             else:
                 product = Product(
                     id=product_id,  # Preserve original UUID from Gateway
@@ -174,7 +174,7 @@ class ProductService:
                     unit_of_measure_id=unit_of_measure_id,
                     shelf_life_days=product_item.shelfLifeDays,
                     requires_quality_check=product_item.requiresQualityCheck if product_item.requiresQualityCheck is not None else False,
-                    source_system_id=None,
+                    source_system_id=str(product_item.id),
                 )
                 self.db.add(product)
 

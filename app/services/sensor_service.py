@@ -164,6 +164,44 @@ class SensorService:
 
         return {"items": items}
     
+    async def _ensure_sensor_parameter(self, param_id: UUID) -> Optional[UUID]:
+        """Ensure a sensor parameter exists by ID. Create stub if missing.
+
+        Used when readings contain only parameter ID, not full parameter data.
+        Stub will be updated later by sync_references_task.
+        """
+        if not param_id:
+            return None
+
+        try:
+            param_uuid = UUID(str(param_id)) if isinstance(param_id, str) else param_id
+        except (ValueError, AttributeError, TypeError):
+            logger.warning("invalid_sensor_parameter_id_skipped", raw=param_id)
+            return None
+
+        # Check if parameter exists
+        existing = await self.db.execute(
+            select(SensorParameter).where(SensorParameter.id == param_uuid)
+        )
+        param = existing.scalar_one_or_none()
+
+        if not param:
+            # Create stub parameter with minimum required fields
+            # Code limited to 20 chars, use first 8 chars of UUID
+            code = f"param_{str(param_uuid)[:8]}"
+            param = SensorParameter(
+                id=param_uuid,
+                code=code,
+                name="[Pending sync]",
+                unit="[Unknown]",
+                description="Stub created during sensor reading sync; will be updated by references sync",
+                is_active=True,
+            )
+            self.db.add(param)
+            logger.info("sensor_parameter_stub_created", param_id=param_uuid)
+
+        return param.id
+
     async def _sync_sensor_parameter(self, param_data: dict) -> Optional[UUID]:
         """Sync a sensor parameter and return its ID."""
         if not param_data:
@@ -226,7 +264,12 @@ class SensorService:
         return param.id
 
     async def _sync_sensor(self, sensor_data: dict) -> Optional[UUID]:
-        """Sync a sensor device and return its ID."""
+        """Sync a sensor device and return its ID.
+
+        Supports two patterns:
+        1. Full sync with nested sensorParameter object (from sync_references_task)
+        2. Reading sync with separate sensorParameterId UUID (from sync_from_gateway)
+        """
         if not sensor_data:
             return None
 
@@ -254,22 +297,35 @@ class SensorService:
             )
             sensor = existing.scalar_one_or_none()
 
-        # Sync sensor parameter
+        # Sync sensor parameter from nested object OR use pre-synced parameter ID
         param_id = None
         param_data = sensor_data.get("sensorParameter")
         if param_data:
             param_id = await self._sync_sensor_parameter(param_data)
+        else:
+            # Pattern 2: Use sensorParameterId if available (from readings sync)
+            param_id_raw = sensor_data.get("sensorParameterId")
+            if param_id_raw:
+                try:
+                    param_id = UUID(param_id_raw) if isinstance(param_id_raw, str) else param_id_raw
+                except (ValueError, AttributeError, TypeError):
+                    pass
+
+        # Parse production_line_id (could be string or UUID)
+        prod_line_id = sensor_data.get("productionLineId")
+        if prod_line_id:
+            prod_line_id = UUID(str(prod_line_id)) if not isinstance(prod_line_id, UUID) else prod_line_id
 
         if sensor:
             sensor.device_id = device_id or sensor.device_id
-            sensor.production_line_id = UUID(sensor_data.get("productionLineId")) if sensor_data.get("productionLineId") else sensor.production_line_id
+            sensor.production_line_id = prod_line_id or sensor.production_line_id
             sensor.sensor_parameter_id = param_id or sensor.sensor_parameter_id
             sensor.is_active = sensor_data.get("isActive", sensor.is_active)
         else:
             sensor = Sensor(
                 id=sensor_id,
                 device_id=device_id or f"sensor_{sensor_id}",
-                production_line_id=UUID(sensor_data.get("productionLineId")) if sensor_data.get("productionLineId") else None,
+                production_line_id=prod_line_id,
                 sensor_parameter_id=param_id,
                 is_active=sensor_data.get("isActive", True),
             )
@@ -283,32 +339,58 @@ class SensorService:
         from_date: Optional[date],
         to_date: Optional[date]
     ) -> int:
-        """Sync sensor readings from Gateway."""
+        """Sync sensor readings from Gateway, including Sensor and SensorParameter hierarchy.
+
+        Flow:
+        1. For each reading: ensure SensorParameter exists (create stub if needed)
+        2. Build and sync Sensor from reading metadata
+        3. Create SensorReading with valid Sensor FK
+        """
         logger.info("syncing_sensors_from_gateway", from_date=from_date, to_date=to_date)
 
         readings_response = await self.gateway.get_sensor_readings(from_date=from_date, to_date=to_date)
         logger.info("sensors_fetched_from_gateway", total_readings=len(readings_response.readings))
 
         records_processed = 0
+        sensors_synced = 0
+        parameters_synced = 0
         batch_size = 50
         batch = []
         snapshot_date = datetime.utcnow()
 
+        # Pre-pass: Ensure all SensorParameters exist (avoid autoflush conflicts during Sensor sync)
         for reading_item in readings_response.readings:
-            # Readings response contains sensorId (FK), not a nested sensor object
-            sensor_id = None
-            raw_sensor_id = reading_item.sensorId
-            if raw_sensor_id:
-                try:
-                    sensor_uuid = UUID(str(raw_sensor_id)) if not isinstance(raw_sensor_id, UUID) else raw_sensor_id
-                    existing = await self.db.execute(select(Sensor).where(Sensor.id == sensor_uuid))
-                    sensor = existing.scalar_one_or_none()
-                    if sensor:
-                        sensor_id = sensor.id
-                except (ValueError, AttributeError, TypeError):
-                    pass
+            if reading_item.sensorParameterId:
+                await self._ensure_sensor_parameter(reading_item.sensorParameterId)
+                parameters_synced += 1
 
-            # Parse recorded_at
+        # Commit parameters before syncing sensors to avoid autoflush conflicts
+        if parameters_synced > 0:
+            await self.db.commit()
+
+        for reading_item in readings_response.readings:
+            # Step 1: Get parameter ID (already synced in pre-pass)
+            param_id = reading_item.sensorParameterId
+
+            # Step 2: Build and sync Sensor from reading metadata
+            sensor_id = None
+            if reading_item.sensorId:
+                sensor_data = {
+                    "id": reading_item.sensorId,
+                    "deviceId": reading_item.deviceId,
+                    "productionLineId": reading_item.productionLineId,
+                    "sensorParameterId": param_id,
+                    "isActive": True,
+                }
+                try:
+                    sensor_id = await self._sync_sensor(sensor_data)
+                    if sensor_id:
+                        sensors_synced += 1
+                except Exception as e:
+                    logger.error("sensor_sync_error", reading_id=reading_item.id, error=str(e)[:200])
+                    continue
+
+            # Step 3: Parse recorded_at
             recorded_at_raw = reading_item.recordedAt
             if isinstance(recorded_at_raw, str):
                 try:
@@ -319,6 +401,11 @@ class SensorService:
                 recorded_at = recorded_at_raw
             else:
                 recorded_at = datetime.utcnow()
+
+            # Step 4: Create SensorReading (sensor_id guaranteed to exist now)
+            if not sensor_id:
+                logger.warning("sensor_reading_skipped_no_sensor_id", reading_id=reading_item.id)
+                continue
 
             reading = SensorReading(
                 id=reading_item.id,
@@ -332,7 +419,8 @@ class SensorService:
 
             if len(batch) >= batch_size:
                 try:
-                    for item in batch: await self.db.merge(item)
+                    for item in batch:
+                        await self.db.merge(item)
                     await self.db.commit()
                     records_processed += len(batch)
                     logger.info("sensors_sync_batch", records_processed=records_processed)
@@ -343,7 +431,8 @@ class SensorService:
 
         if batch:
             try:
-                for item in batch: await self.db.merge(item)
+                for item in batch:
+                    await self.db.merge(item)
                 await self.db.commit()
                 records_processed += len(batch)
             except Exception as e:
@@ -356,5 +445,10 @@ class SensorService:
             operation="sync_insert",
             records_count=records_processed,
         )
-        logger.info("sensors_sync_completed", records_processed=records_processed)
+        logger.info(
+            "sensors_sync_completed",
+            records_processed=records_processed,
+            sensors_synced=sensors_synced,
+            parameters_synced=parameters_synced,
+        )
         return records_processed
