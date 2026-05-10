@@ -30,10 +30,31 @@ async def run_scheduled_jobs():
             now = datetime.utcnow()
             current_minute = now.minute
 
-            logger.info("scheduler_check", current_minute=current_minute, current_time=now.isoformat(), jobs_disabled="refactoring_in_progress")
+            logger.info("scheduler_check", current_minute=current_minute, current_time=now.isoformat())
 
-            # Jobs disabled during sync refactoring - will re-enable after testing
             jobs_to_run = []
+            if current_minute == 0:
+                jobs_to_run.append(("kpi", sync_kpi_task))
+            elif current_minute == 2:
+                jobs_to_run.append(("kpi_per_line", sync_kpi_per_line_task))
+            elif current_minute == 5:
+                jobs_to_run.append(("sales", sync_sales_task))
+            elif current_minute == 10:
+                jobs_to_run.append(("orders", sync_orders_task))
+            elif current_minute == 15:
+                jobs_to_run.append(("quality", sync_quality_task))
+            elif current_minute == 20:
+                jobs_to_run.append(("products", sync_products_task))
+            elif current_minute == 25:
+                jobs_to_run.append(("output", sync_output_task))
+            elif current_minute == 30:
+                jobs_to_run.append(("sensors", sync_sensors_task))
+            elif current_minute == 35:
+                jobs_to_run.append(("inventory", sync_inventory_task))
+            elif current_minute == 40:
+                jobs_to_run.append(("personnel", sync_personnel_task))
+            elif current_minute == 45:
+                jobs_to_run.append(("references", sync_references_task))
 
             # Run jobs
             for job_name, job_func in jobs_to_run:
