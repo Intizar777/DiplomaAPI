@@ -169,9 +169,17 @@ class InventoryService:
         inventory_response = await self.gateway.get_inventory()
         logger.info("inventory_fetched_from_gateway", total_items=len(inventory_response.inventory))
 
-        # Get product name map for enrichment
-        product_result = await self.db.execute(select(Product.id, Product.name))
-        product_names = {row[0]: row[1] for row in product_result.all()}
+        # Get product name + unit_of_measure code map for enrichment
+        from app.models.reference import UnitOfMeasure
+        product_result = await self.db.execute(
+            select(Product.id, Product.name, UnitOfMeasure.code.label("uom_code"))
+            .outerjoin(UnitOfMeasure, Product.unit_of_measure_id == UnitOfMeasure.id)
+        )
+        product_names = {}
+        product_uom_codes = {}
+        for row in product_result.all():
+            product_names[row[0]] = row[1]
+            product_uom_codes[row[0]] = row[2]
 
         records_processed = 0
         batch_size = 50
@@ -202,7 +210,7 @@ class InventoryService:
                 warehouse_id=warehouse_id,
                 lot_number=inventory_item.lotNumber,
                 quantity=Decimal(str(inventory_item.quantity)),
-                unit_of_measure=None,
+                unit_of_measure=product_uom_codes.get(product_id),
                 last_updated=last_updated,
                 snapshot_date=snapshot_date
             )
@@ -274,11 +282,21 @@ class InventoryService:
                 warehouse=payload.warehouse_code,
             )
         else:
+            # Look up unit_of_measure from product
+            from app.models.reference import UnitOfMeasure
+            uom_result = await self.db.execute(
+                select(UnitOfMeasure.code).join(
+                    Product, Product.unit_of_measure_id == UnitOfMeasure.id
+                ).where(Product.id == payload.product_id)
+            )
+            uom_code = uom_result.scalar_one_or_none()
+
             snapshot = InventorySnapshot(
                 id=payload.id,
                 product_id=payload.product_id,
                 warehouse_code=payload.warehouse_code,
                 quantity=Decimal(str(payload.quantity)),
+                unit_of_measure=uom_code,
                 snapshot_date=date.today(),
                 event_id=UUID(event_id) if event_id else None,
             )
