@@ -164,6 +164,11 @@ class GroupManagerDashboardService:
         result = await self.db.execute(query)
         rows = result.all()
 
+        # Build production line UUID -> name map
+        from app.models.personnel import ProductionLine
+        line_result = await self.db.execute(select(ProductionLine.id, ProductionLine.name))
+        line_names = {str(row[0]): row[1] for row in line_result.all()}
+
         lines: List[PlanExecutionLineItem] = []
         total_target = Decimal("0")
         total_actual = Decimal("0")
@@ -178,9 +183,10 @@ class GroupManagerDashboardService:
             )
             total_target += target
             total_actual += actual
+            line_name = line_names.get(str(row.production_line), row.production_line)
             lines.append(
                 PlanExecutionLineItem(
-                    production_line=row.production_line,
+                    production_line=line_name,
                     target_quantity=target,
                     actual_quantity=actual,
                     fulfillment_pct=fulfillment,
