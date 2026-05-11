@@ -243,10 +243,17 @@ class GroupManagerDashboardService:
         result = await self.db.execute(query)
         rows = result.all()
 
+        # Build production line UUID -> name map
+        from app.models.personnel import ProductionLine
+        line_result = await self.db.execute(select(ProductionLine.id, ProductionLine.name))
+        line_names = {str(row[0]): row[1] for row in line_result.all()}
+
         # Aggregate delay stats per line in Python
         line_stats: Dict[Optional[str], Dict] = {}
         for row in rows:
             key = row.production_line
+            if key and key in line_names:
+                key = line_names[key]
             if key not in line_stats:
                 line_stats[key] = {
                     "total_delay_hours": Decimal("0"),
