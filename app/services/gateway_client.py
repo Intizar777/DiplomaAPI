@@ -357,16 +357,16 @@ class GatewayClient:
         page_size: int = 1000
     ) -> List[Dict[str, Any]]:
         """Fetch all pages from a paginated Gateway endpoint.
-        
-        If Gateway returns 400 on first paginated request (doesn't support
-        offset/limit), falls back to a single non-paginated request.
-        
+
+        If Gateway returns 400 with limit too large, retry with limit=100.
+        If Gateway returns 400 on non-paginated request, it doesn't support offset/limit.
+
         Args:
             endpoint: API path (e.g. "/production/orders")
             data_key: Key in response containing the array (e.g. "orders")
             base_params: Filter params (from, to, status, etc.)
-            page_size: Number of records per page (max 100 for Gateway)
-        
+            page_size: Number of records per page (default 1000, will use 100 if too large)
+
         Returns:
             Combined list of all records across all pages.
         """
@@ -375,24 +375,25 @@ class GatewayClient:
         offset = 0
         page = 0
         pagination_supported = True
-        
+        current_page_size = page_size
+
         while True:
             page += 1
-            
+
             if pagination_supported:
-                params = {**base_params, "offset": offset, "limit": page_size}
+                params = {**base_params, "offset": offset, "limit": current_page_size}
             else:
                 params = dict(base_params)
-            
+
             logger.info(
                 "gateway_pagination_fetch",
                 endpoint=endpoint,
                 page=page,
                 offset=offset if pagination_supported else None,
-                limit=page_size if pagination_supported else None,
+                limit=current_page_size if pagination_supported else None,
                 pagination_supported=pagination_supported
             )
-            
+
             try:
                 # Use max_retries=1 on first paginated request for fast 400 detection
                 if page == 1 and pagination_supported:
@@ -400,8 +401,19 @@ class GatewayClient:
                 else:
                     response = await self._request("GET", endpoint, params=params)
             except GatewayError as e:
-                # If first page fails with 400, Gateway may not support offset/limit
-                if page == 1 and "400" in str(e) and pagination_supported:
+                # If first page fails with 400 and limit is too large, retry with limit=100
+                if page == 1 and "400" in str(e) and "limit must not be greater than 100" in str(e) and current_page_size > 100:
+                    logger.warning(
+                        "gateway_pagination_limit_too_large",
+                        endpoint=endpoint,
+                        requested_limit=current_page_size,
+                        retrying_with_limit=100
+                    )
+                    current_page_size = 100
+                    # Retry with smaller limit
+                    continue
+                # If first page fails with 400 on pagination, Gateway may not support offset/limit
+                elif page == 1 and "400" in str(e) and pagination_supported:
                     logger.warning(
                         "gateway_pagination_not_supported_fallback",
                         endpoint=endpoint,
