@@ -273,12 +273,13 @@ class ProductionAnalyticsService:
         offset: int = 0,
         limit: int = 20
     ) -> dict:
-        """Get sales margin by product."""
+        """Get sales margin by product (cost from Gateway API)."""
         query = select(
             SaleRecord.product_id,
             SaleRecord.product_name,
             func.sum(SaleRecord.quantity).label("total_quantity"),
             func.sum(SaleRecord.amount).label("total_revenue"),
+            func.sum(SaleRecord.cost).label("total_cost"),
         ).where(
             SaleRecord.sale_date >= from_date,
             SaleRecord.sale_date <= to_date,
@@ -292,8 +293,7 @@ class ProductionAnalyticsService:
         result = await self.db.execute(query)
         rows = result.all()
 
-        # Calculate margins (cost is estimated as 50% of revenue)
-        COST_RATIO = Decimal("0.5")
+        # Calculate margins (cost from Gateway API)
         margins = []
         total_revenue = Decimal("0")
         total_cost = Decimal("0")
@@ -301,7 +301,7 @@ class ProductionAnalyticsService:
 
         for row in rows:
             revenue = row.total_revenue or Decimal("0")
-            cost = revenue * COST_RATIO
+            cost = row.total_cost or Decimal("0")
             margin = revenue - cost
             margin_percent = (margin / revenue * 100) if revenue > 0 else Decimal("0")
             margin_per_unit = (margin / row.total_quantity) if row.total_quantity > 0 else Decimal("0")

@@ -86,6 +86,7 @@ class SaleRecord(Base, UUIDMixin, TimestampMixin):
     customer_name = Column(String(255), nullable=True)
     quantity = Column(DECIMAL(15, 3), nullable=True)
     amount = Column(DECIMAL(15, 2), nullable=True)
+    cost = Column(DECIMAL(15, 2), nullable=True)
     sale_date = Column(Date, nullable=False, index=True)
     region = Column(String(100), nullable=True, index=True)
     channel = Column(String(50), nullable=True, index=True)
