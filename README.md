@@ -45,10 +45,12 @@ docker-compose up --build
 
 ## API Endpoints
 
-### KPI
-- `GET /api/v1/kpi/current` — Текущие метрики
-- `GET /api/v1/kpi/history` — История KPI
-- `GET /api/v1/kpi/compare` — Сравнение периодов
+### KPI (Production Analytics)
+- `GET /api/production/kpi` — Обогащённые KPI с целевыми показателями
+- `GET /api/production/kpi/otif` — OTIF метрики (On-Time In-Full)
+- `GET /api/production/kpi/breakdown` — Разбор KPI по линиям/продуктам
+- `GET /api/production/kpi/line-productivity` — Производительность линий
+- `GET /api/production/kpi/scrap-percentage` — Процент брака
 
 ### Sales
 - `GET /api/v1/sales/summary` — Сводка продаж

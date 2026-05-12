@@ -1,7 +1,6 @@
 """
 API routers.
 """
-from app.routers.kpi import router as kpi_router
 from app.routers.sales import router as sales_router
 from app.routers.orders import router as orders_router
 from app.routers.quality import router as quality_router
@@ -20,7 +19,6 @@ from app.routers.production_analytics import router as production_analytics_rout
 from app.routers.oee import router as oee_router
 
 __all__ = [
-    "kpi_router",
     "sales_router",
     "orders_router",
     "quality_router",

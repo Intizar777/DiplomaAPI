@@ -62,7 +62,7 @@ app/
 
 | Domain | Purpose | Endpoints |
 |--------|---------|-----------|
-| KPI | Production metrics | `/api/v1/kpi/current`, `/history`, `/compare` |
+| KPI (Production Analytics) | Enriched production metrics | `/api/production/kpi`, `/otif`, `/breakdown`, `/line-productivity` |
 | Sales | Sales data, trends | `/api/v1/sales/summary`, `/trends`, `/top-products` |
 | Orders | Order tracking | `/api/v1/orders/status-summary`, `/list`, `/{id}` |
 | Quality | Quality metrics | `/api/v1/quality/summary`, `/defect-trends`, `/lots` |

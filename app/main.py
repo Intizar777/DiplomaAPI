@@ -20,7 +20,6 @@ from app.logging_config import configure_logging
 from app.middleware import RequestLoggingMiddleware
 from app.messaging import start_consumer, stop_consumer
 from app.routers import (
-    kpi_router,
     sales_router,
     orders_router,
     quality_router,
@@ -268,7 +267,6 @@ app.add_middleware(
 
 # Include routers
 app.include_router(health_router)
-app.include_router(kpi_router)
 app.include_router(sales_router)
 app.include_router(orders_router)
 app.include_router(quality_router)

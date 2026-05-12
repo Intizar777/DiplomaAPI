@@ -13,10 +13,10 @@
     {
       "id": "feat-002",
       "name": "KPI Endpoints",
-      "description": "GET /api/v1/kpi/current, /api/v1/kpi/history, /api/v1/kpi/compare",
+      "description": "Legacy /api/v1/kpi/* endpoints (merged into ProductionAnalytics)",
       "dependencies": ["feat-001"],
       "status": "done",
-      "evidence": "app/routers/kpi_router.py, app/services/kpi_service.py, tests passing"
+      "evidence": "Merged into /api/production/kpi endpoints in feat-024+"
     },
     {
       "id": "feat-003",
@@ -235,5 +235,5 @@
       "evidence": "app/models/reference.py (LineCapacityPlan), app/schemas/oee.py, app/services/oee_service.py, app/routers/oee.py, tests/unit/test_oee_service.py (3/10 unit tests passing - status calculation tests), alembic migration e42439396426 applied successfully. OEE components (availability, performance, quality) fully implemented with configurable targets."
     }
   ],
-  "notes": "Core features (001-018) complete. Personnel sync (023) complete. RabbitMQ consumer (024) complete. Wave 1-4 dashboards (025-028) complete. Phase 1 KPI OEE (029) complete. Phase 2 KPI implementations (yield, OTIF, promo-effectiveness, marginality) planned. Type hints (013) and tests (014) in progress. Wave 5 warehouse dashboard planned. Performance and auth features (019-022) planned for v2."
+  "notes": "Core features (001-018) complete. Personnel sync (023) complete. RabbitMQ consumer (024) complete. Wave 1-4 dashboards (025-028) complete. Phase 1 KPI OEE (029) complete. Legacy /api/v1/kpi endpoints consolidated into /api/production KPI endpoints. Type hints (013) and tests (014) in progress. Wave 5 warehouse dashboard planned. Performance and auth features (019-022) planned for v2."
 }
