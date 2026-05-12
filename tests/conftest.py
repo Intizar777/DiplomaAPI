@@ -17,7 +17,6 @@ from app.models import Base
 from app.models.product import Product
 from app.models.sales import AggregatedSales, SalesTrends
 from app.models.kpi import AggregatedKPI
-from app.models.personnel import Location, Department, Position, Employee
 from fastapi.testclient import TestClient
 from httpx import AsyncClient, ASGITransport
 from app.main import app
@@ -166,64 +165,3 @@ async def db_session_with_data(session, sample_products, sample_sales_data, samp
     yield session
 
 
-@pytest_asyncio.fixture
-async def sample_locations(session) -> list[Location]:
-    """Insert 3 sample locations for testing."""
-    locations = [
-        Location(name=fake.company(), code=f"LOC-{i+1}", type=fake.random_element(["Plant", "Office", "Warehouse"]))
-        for i in range(3)
-    ]
-    session.add_all(locations)
-    await session.commit()
-    return locations
-
-
-@pytest_asyncio.fixture
-async def sample_departments(session, sample_locations) -> list[Department]:
-    """Insert 3 sample departments for testing."""
-    departments = [
-        Department(
-            name=fake.bs(),
-            code=f"DEPT-{i+1}",
-            location_id=sample_locations[i % len(sample_locations)].id,
-            type=fake.random_element(["Production", "Admin", "Quality"])
-        )
-        for i in range(3)
-    ]
-    session.add_all(departments)
-    await session.commit()
-    return departments
-
-
-@pytest_asyncio.fixture
-async def sample_positions(session, sample_departments) -> list[Position]:
-    """Insert 3 sample positions for testing."""
-    positions = [
-        Position(
-            name=fake.job(),
-            code=f"POS-{i+1}",
-            department_id=sample_departments[i % len(sample_departments)].id
-        )
-        for i in range(3)
-    ]
-    session.add_all(positions)
-    await session.commit()
-    return positions
-
-
-@pytest_asyncio.fixture
-async def sample_employees(session, sample_positions) -> list[Employee]:
-    """Insert 3 sample employees for testing."""
-    employees = [
-        Employee(
-            first_name=fake.first_name(),
-            last_name=fake.last_name(),
-            employee_number=f"EMP-{i+1}",
-            position_id=sample_positions[i % len(sample_positions)].id,
-            status=fake.random_element(["active", "inactive", "on_leave"])
-        )
-        for i in range(3)
-    ]
-    session.add_all(employees)
-    await session.commit()
-    return employees

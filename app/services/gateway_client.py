@@ -457,11 +457,11 @@ class GatewayClient:
             if not pagination_supported:
                 break
             
-            # If we got fewer than page_size, this was the last page
-            if len(records) < page_size:
+            # If we got fewer than current_page_size, this was the last page
+            if len(records) < current_page_size:
                 break
-            
-            offset += page_size
+
+            offset += current_page_size
             
             # Rate limit safety: medium profile = 100 req/10s
             await asyncio.sleep(0.15)
