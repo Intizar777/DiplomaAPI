@@ -4,6 +4,7 @@ Production analytics service for enriched KPI, OTIF, breakdown, and margin calcu
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Optional, Literal, List
+from uuid import UUID as UUIDType
 
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -286,7 +287,7 @@ class ProductionAnalyticsService:
         )
 
         if product_id:
-            query = query.where(SaleRecord.product_id == product_id)
+            query = query.where(SaleRecord.product_id == UUIDType(product_id))
 
         query = query.group_by(SaleRecord.product_id, SaleRecord.product_name)
 
@@ -308,7 +309,7 @@ class ProductionAnalyticsService:
 
             margins.append({
                 "product_id": str(row.product_id),
-                "product_code": row.product_id[:6] if row.product_id else "unknown",
+                "product_code": str(row.product_id)[:6] if row.product_id else "unknown",
                 "product_name": row.product_name or "unknown",
                 "total_quantity": row.total_quantity,
                 "total_revenue": revenue,
