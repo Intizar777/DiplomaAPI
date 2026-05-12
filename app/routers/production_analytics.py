@@ -16,7 +16,6 @@ from app.services import (
     PromoCampaignService,
     ProductionAnalyticsService,
     PersonnelService,
-    CostBaseService,
 )
 from app.schemas import (
     BatchInputCreate,
@@ -39,15 +38,6 @@ from app.schemas import (
     ProductionLinesListResponse,
     LineProductivityResponse,
     ScrapPercentageResponse,
-    MarginalityResponse,
-    CostPerKgResponse,
-    EBITDAResponse,
-    MarketShareResponse,
-    CostBaseCreate,
-    CostBaseResponse,
-    CostBaseListResponse,
-    KPIConfigCreate,
-    KPIConfigResponse,
 )
 
 router = APIRouter(prefix="/api/production", tags=["Production Analytics"])
@@ -82,9 +72,6 @@ async def get_personnel_service(db: AsyncSession = Depends(get_db)):
     return PersonnelService(db, gateway)
 
 
-async def get_cost_base_service(db: AsyncSession = Depends(get_db)):
-    """Dependency to get cost base service."""
-    return CostBaseService()
 
 
 # ============ KPI Endpoints ============
@@ -336,142 +323,6 @@ async def get_scrap_percentage(
     """
     return await service.get_scrap_percentage(from_date, to_date, product_id)
 
-
-# ============ Phase 3 KPI Endpoints ============
-
-@router.get("/kpi/marginality", response_model=MarginalityResponse)
-async def get_marginality(
-    from_date: date = Query(..., description="Period start date (YYYY-MM-DD)"),
-    to_date: date = Query(..., description="Period end date (YYYY-MM-DD)"),
-    product_id: Optional[str] = Query(None, description="Filter by product UUID"),
-    service: ProductionAnalyticsService = Depends(get_analytics_service)
-):
-    """
-    Get marginality (profit margin %).
-    KPI: "Маржинальность (%) 18%".
-    """
-    return await service.get_marginality(from_date, to_date, product_id)
-
-
-@router.get("/kpi/cost-per-kg", response_model=CostPerKgResponse)
-async def get_cost_per_kg(
-    from_date: date = Query(..., description="Period start date (YYYY-MM-DD)"),
-    to_date: date = Query(..., description="Period end date (YYYY-MM-DD)"),
-    product_id: Optional[str] = Query(None, description="Filter by product UUID"),
-    service: ProductionAnalyticsService = Depends(get_analytics_service)
-):
-    """
-    Get cost per kg (COGS per unit).
-    KPI: "Себестоимость продукции (руб./кг)".
-    """
-    return await service.get_cost_per_kg(from_date, to_date, product_id)
-
-
-@router.get("/kpi/ebitda", response_model=EBITDAResponse)
-async def get_ebitda(
-    from_date: date = Query(..., description="Period start date (YYYY-MM-DD)"),
-    to_date: date = Query(..., description="Period end date (YYYY-MM-DD)"),
-    service: ProductionAnalyticsService = Depends(get_analytics_service)
-):
-    """
-    Get EBITDA (simplified: Revenue - Operating Costs).
-    KPI: "EBITDA (млн руб.)".
-    """
-    return await service.get_ebitda(from_date, to_date)
-
-
-@router.get("/kpi/market-share", response_model=MarketShareResponse)
-async def get_market_share(
-    from_date: date = Query(..., description="Period start date (YYYY-MM-DD)"),
-    to_date: date = Query(..., description="Period end date (YYYY-MM-DD)"),
-    service: ProductionAnalyticsService = Depends(get_analytics_service)
-):
-    """
-    Get market share % (requires admin-configured market volume).
-    KPI: "Доля рынка (%)".
-    """
-    return await service.get_market_share(from_date, to_date)
-
-
-# ============ Cost Base Management ============
-
-@router.post("/cost-bases", response_model=CostBaseResponse, status_code=201)
-async def create_cost_base(
-    payload: CostBaseCreate,
-    db: AsyncSession = Depends(get_db),
-    service: CostBaseService = Depends(get_cost_base_service)
-):
-    """
-    Create or update a cost base for a product.
-    Admin endpoint for setting product costs.
-    """
-    return await service.create_or_update_cost_base(
-        db,
-        payload.product_id,
-        payload.raw_material_cost,
-        payload.labor_cost_per_hour,
-        payload.depreciation_monthly,
-        payload.period_from,
-        payload.period_to,
-    )
-
-
-@router.get("/cost-bases", response_model=CostBaseListResponse)
-async def list_cost_bases(
-    product_id: Optional[str] = Query(None, description="Filter by product UUID"),
-    offset: int = Query(0, ge=0, description="Pagination offset"),
-    limit: int = Query(20, ge=1, le=100, description="Pagination limit"),
-    db: AsyncSession = Depends(get_db),
-    service: CostBaseService = Depends(get_cost_base_service)
-):
-    """
-    Get all cost bases (paginated).
-    """
-    return await service.get_all_cost_bases(db, product_id, offset, limit)
-
-
-# ============ KPI Configuration (Admin) ============
-
-@router.post("/kpi-config", response_model=KPIConfigResponse, status_code=201)
-async def set_kpi_config(
-    payload: KPIConfigCreate,
-    db: AsyncSession = Depends(get_db),
-    service: CostBaseService = Depends(get_cost_base_service)
-):
-    """
-    Set or update a KPI configuration value.
-    Admin endpoint for configurable KPIs (EBITDA target, market volume, etc.).
-    """
-    return await service.set_kpi_config(
-        db,
-        payload.key,
-        payload.value,
-        payload.description,
-        payload.updated_by,
-    )
-
-
-@router.get("/kpi-config/{key}", response_model=KPIConfigResponse)
-async def get_kpi_config(
-    key: str = Path(..., description="Config key"),
-    db: AsyncSession = Depends(get_db),
-    service: CostBaseService = Depends(get_cost_base_service)
-):
-    """
-    Get a single KPI configuration value.
-    """
-    value = await service.get_kpi_config(db, key)
-    if value is None:
-        raise HTTPException(status_code=404, detail=f"Config key '{key}' not found")
-    return {
-        "id": "",
-        "key": key,
-        "value": value,
-        "description": None,
-        "updated_by": None,
-        "created_at": datetime.now(),
-        "updated_at": datetime.now(),
-    }
 
 
 # ============ Reference Data ============

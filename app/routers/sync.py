@@ -283,7 +283,7 @@ async def _run_initial_sync():
 
             # Level 3: Data tables (no FK dependencies)
             try:
-                logger.info("initial_sync_phase_3", phase="data_tables")
+                logger.info("initial_sync_level_3", phase="data_tables")
 
                 # OrderSnapshot
                 order_service = OrderService(db, gateway)

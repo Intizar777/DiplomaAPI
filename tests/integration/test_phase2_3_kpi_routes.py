@@ -1,5 +1,5 @@
 """
-Integration tests for Phase 2-3 KPI endpoints.
+Integration tests for Phase 2 KPI endpoints.
 """
 import pytest
 from datetime import date
@@ -95,82 +95,6 @@ async def test_get_scrap_percentage_endpoint(client: AsyncClient, session: Async
     assert "rejected_tests" in data
     assert "total_tests" in data
     assert "target" in data
-
-
-@pytest.mark.asyncio
-async def test_get_marginality_endpoint(client: AsyncClient, session: AsyncSession):
-    """Test GET /api/production/kpi/marginality returns valid response."""
-    response = await client.get(
-        "/api/production/kpi/marginality",
-        params={
-            "from_date": "2026-05-01",
-            "to_date": "2026-05-01",
-        },
-    )
-
-    assert response.status_code == 200
-    data = response.json()
-    assert "margin_percent" in data
-    assert "total_revenue" in data
-    assert "material_cost" in data
-    assert "margin" in data
-    assert "target" in data
-
-
-@pytest.mark.asyncio
-async def test_get_cost_per_kg_endpoint(client: AsyncClient, session: AsyncSession):
-    """Test GET /api/production/kpi/cost-per-kg returns valid response."""
-    response = await client.get(
-        "/api/production/kpi/cost-per-kg",
-        params={
-            "from_date": "2026-05-01",
-            "to_date": "2026-05-01",
-        },
-    )
-
-    assert response.status_code == 200
-    data = response.json()
-    assert "cost_per_kg" in data
-    assert "total_cost" in data
-    assert "total_output" in data
-    assert "period" in data
-
-
-@pytest.mark.asyncio
-async def test_get_ebitda_endpoint(client: AsyncClient, session: AsyncSession):
-    """Test GET /api/production/kpi/ebitda returns valid response."""
-    response = await client.get(
-        "/api/production/kpi/ebitda",
-        params={
-            "from_date": "2026-05-01",
-            "to_date": "2026-05-01",
-        },
-    )
-
-    assert response.status_code == 200
-    data = response.json()
-    assert "ebitda_million_rub" in data
-    assert "ebitda_value" in data
-    assert "total_revenue" in data
-    assert "operating_costs" in data
-
-
-@pytest.mark.asyncio
-async def test_get_market_share_endpoint(client: AsyncClient, session: AsyncSession):
-    """Test GET /api/production/kpi/market-share returns valid response."""
-    response = await client.get(
-        "/api/production/kpi/market-share",
-        params={
-            "from_date": "2026-05-01",
-            "to_date": "2026-05-01",
-        },
-    )
-
-    assert response.status_code == 200
-    data = response.json()
-    assert "market_share_percent" in data
-    assert "company_volume_tonnes" in data
-    assert "market_total_tonnes" in data
 
 
 @pytest.mark.asyncio

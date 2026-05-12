@@ -659,7 +659,7 @@ http://localhost:3000/api/production
 
 ---
 
-## 6. Справочники
+## 5. Справочники
 
 ### GET /production/production-lines
 
@@ -697,7 +697,7 @@ http://localhost:3000/api/production
 
 ---
 
-## 7. Фильтрация и фильтры данных
+## 6. Фильтрация и фильтры данных
 
 ### Поддерживаемые фильтры (FR-03)
 
@@ -724,7 +724,7 @@ http://localhost:3000/api/production
 
 ---
 
-## 8. Параметры запроса (Common Query Params)
+## 7. Параметры запроса (Common Query Params)
 
 ### Гранулярность (Granularity) — FR-02
 
@@ -752,7 +752,7 @@ http://localhost:3000/api/production
 
 ---
 
-## 9. Цветовая индикация (Traffic Light) — FR-10
+## 8. Цветовая индикация (Traffic Light) — FR-10
 
 Все метрики с target-значениями возвращают статус:
 
@@ -773,7 +773,7 @@ http://localhost:3000/api/production
 
 ---
 
-## 10. Статусы и ошибки
+## 9. Статусы и ошибки
 
 ### Success Codes
 
@@ -796,7 +796,7 @@ http://localhost:3000/api/production
 
 ---
 
-## 11. Примеры использования
+## 10. Примеры использования
 
 ### cURL: Получить KPI
 
@@ -836,7 +836,7 @@ console.log(`Средняя маржа: ${aggregated.avgMarginPercent}%`);
 
 ---
 
-## 12. Соответствие функциональным требованиям (FR)
+## 11. Соответствие функциональным требованиям (FR)
 
 | FR | Описание | API Endpoint | Статус |
 |----|----------|-----------|--------|
@@ -853,20 +853,27 @@ console.log(`Средняя маржа: ${aggregated.avgMarginPercent}%`);
 
 ---
 
-## 13. Реализованные этапы плана v1.3.0
+## 12. Реализованные этапы плана v1.3.0
 
-- ✅ **Этап 1.** KPI Targets + OTIF
-- ✅ **Этап 2.** Time-series + Granularity (графики)
-- ✅ **Этап 3.** KPI Breakdown + Division (drill-down)
-- ✅ **Этап 4.** BatchInput + DowntimeEvent (производственные KPI)
-- ⏳ **Этап 5.** SSE + Real-time updates (в разработке)
-- ⏳ **Этап 6.** RBAC + Role guards (частично)
-- ✅ **Этап 7.** KPI Export (CSV/JSON)
-- ✅ **Этап 8.** Маржинальность + PromoCampaign
+**Фаза 1 (реализована полностью):**
+- ✅ OEE (Общая эффективность оборудования)
+- ✅ Выход масла с тонны семян
+- ✅ OTIF (On-Time In-Full)
+- ✅ Эффективность промо-акций
+- ✅ KPI Targets + Trends
+- ✅ Time-series + Granularity (графики)
+
+**Фаза 2 (в разработке):**
+- ✅ Производительность линии (т/ч)
+- ✅ Процент брака (defect rate)
+- ✅ Время простоев (downtime summary)
+- ✅ Объём продаж (sales volume)
+- ✅ KPI Breakdown + Division (drill-down)
+- ✅ BatchInput + DowntimeEvent (производственные KPI)
 
 ---
 
-## 14. Performance & Caching
+## 13. Performance & Caching
 
 - `GET /production/kpi`: **30 сек кеш**
 - `GET /production/sales/summary`: **60 сек кеш**
@@ -876,7 +883,19 @@ console.log(`Средняя маржа: ${aggregated.avgMarginPercent}%`);
 
 ---
 
-## 15. Related
+## 📖 Frontend Documentation
+
+**Frontend developers should start here:**
+
+- 🎨 **[Frontend API Guide](frontend-api-guide.md)** — Полный гайд с примерами использования всех эндпоинтов
+- ⚡ **[Quick Reference](FRONTEND_QUICK_REFERENCE.md)** — Краткая справка (Top 5 endpoints, примеры)
+- 💻 **[React Examples](frontend-react-examples.tsx)** — Готовые компоненты для React (KPI Dashboard, Tables, Charts)
+- 📘 **[TypeScript Types](frontend-api-types.ts)** — Полный набор типов + класс ProductionAnalyticsAPI
+- ✅ **[Integration Checklist](FRONTEND_INTEGRATION_CHECKLIST.md)** — Чеклист для интеграции и тестирования
+
+---
+
+## 14. Related
 
 - 📋 [Overview](overview.md)
 - 📊 [Pagination](pagination.md)
