@@ -210,7 +210,7 @@ async def sync_orders_task():
 
 async def sync_quality_task():
     """Sync quality data from Gateway."""
-    from_date = date.today() - timedelta(days=1)
+    from_date = date.today() - timedelta(days=7)
     to_date = date.today()
 
     from app.models import QualityResult
