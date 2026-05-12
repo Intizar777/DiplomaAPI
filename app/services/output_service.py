@@ -9,8 +9,9 @@ from uuid import UUID
 from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import ProductionOutput, Product
+from app.models import ProductionOutput
 from app.services.gateway_client import GatewayClient
+from app.services.reference_sync import get_product_name_map
 from app.utils.logging_utils import track_feature_path, log_data_flow
 import structlog
 
@@ -125,9 +126,7 @@ class OutputService:
         logger.info("output_fetched_from_gateway", total_outputs=len(outputs_response.outputs))
 
         # Get product name map for enrichment
-        product_names = {}
-        product_result = await self.db.execute(select(Product.id, Product.name))
-        product_names = {row[0]: row[1] for row in product_result.all()}
+        product_names = await get_product_name_map(self.db)
 
         records_processed = 0
         batch_size = 50

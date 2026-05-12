@@ -1,0 +1,189 @@
+"""
+Shared reference data sync utilities.
+
+Eliminates duplicate upsert logic across sync_references_task,
+SalesService._sync_customer(), and InventoryService._sync_warehouse().
+"""
+from uuid import UUID
+from typing import Optional, Dict
+
+import structlog
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models import Customer, Warehouse, UnitOfMeasure, SensorParameter, Product
+
+logger = structlog.get_logger()
+
+
+async def get_product_name_map(db: AsyncSession) -> Dict[UUID, str]:
+    """Get mapping of product_id -> product_name for enrichment."""
+    result = await db.execute(select(Product.id, Product.name))
+    return {row[0]: row[1] for row in result.all()}
+
+
+async def upsert_customer(db: AsyncSession, customer_data: dict) -> Optional[UUID]:
+    """Upsert a customer from Gateway data. Returns customer_id."""
+    customer_id_raw = customer_data.get("id")
+    try:
+        customer_id = UUID(customer_id_raw) if isinstance(customer_id_raw, str) else customer_id_raw
+    except (ValueError, AttributeError, TypeError):
+        logger.warning("invalid_customer_id_skipped", raw=customer_id_raw)
+        return None
+
+    code = customer_data.get("code") or str(customer_id)[:8]
+
+    if code:
+        existing = await db.execute(select(Customer).where(Customer.code == code))
+        customer = existing.scalar_one_or_none()
+    else:
+        customer = None
+
+    if not customer and customer_id:
+        existing = await db.execute(select(Customer).where(Customer.id == customer_id))
+        customer = existing.scalar_one_or_none()
+
+    if customer:
+        customer.name = customer_data.get("name", customer.name)
+        customer.region = customer_data.get("region", customer.region)
+        customer.is_active = customer_data.get("isActive", customer.is_active)
+        customer.source_system_id = customer_data.get("sourceSystemId", customer.source_system_id)
+    else:
+        customer = Customer(
+            id=customer_id,
+            code=code,
+            name=customer_data.get("name", ""),
+            region=customer_data.get("region", "Unknown"),
+            is_active=customer_data.get("isActive", True),
+            source_system_id=customer_data.get("sourceSystemId"),
+        )
+        db.add(customer)
+
+    return customer.id
+
+
+async def upsert_warehouse(db: AsyncSession, warehouse_data: dict) -> Optional[UUID]:
+    """Upsert a warehouse from Gateway data. Returns warehouse_id."""
+    warehouse_id_raw = warehouse_data.get("id")
+    try:
+        warehouse_id = UUID(warehouse_id_raw) if isinstance(warehouse_id_raw, str) else warehouse_id_raw
+    except (ValueError, AttributeError, TypeError):
+        logger.warning("invalid_warehouse_id_skipped", raw=warehouse_id_raw)
+        return None
+
+    code = warehouse_data.get("code")
+
+    if code:
+        existing = await db.execute(select(Warehouse).where(Warehouse.code == code))
+        warehouse = existing.scalar_one_or_none()
+    else:
+        warehouse = None
+
+    if not warehouse and warehouse_id:
+        existing = await db.execute(select(Warehouse).where(Warehouse.id == warehouse_id))
+        warehouse = existing.scalar_one_or_none()
+
+    if warehouse:
+        warehouse.code = code or warehouse.code
+        warehouse.name = warehouse_data.get("name", warehouse.name)
+        warehouse.location = warehouse_data.get("location", warehouse.location)
+        warehouse.capacity = warehouse_data.get("capacity", warehouse.capacity)
+        warehouse.is_active = warehouse_data.get("isActive", warehouse.is_active)
+        warehouse.source_system_id = warehouse_data.get("sourceSystemId", warehouse.source_system_id)
+    else:
+        warehouse = Warehouse(
+            id=warehouse_id,
+            code=code or f"warehouse_{warehouse_id}",
+            name=warehouse_data.get("name", ""),
+            location=warehouse_data.get("location", "Unknown"),
+            capacity=warehouse_data.get("capacity", 0),
+            is_active=warehouse_data.get("isActive", True),
+            source_system_id=warehouse_data.get("sourceSystemId"),
+        )
+        db.add(warehouse)
+
+    return warehouse.id
+
+
+async def upsert_unit_of_measure(db: AsyncSession, unit_data: dict) -> Optional[UUID]:
+    """Upsert a unit of measure from Gateway data. Returns unit_id."""
+    unit_id_raw = unit_data.get("id")
+    try:
+        unit_id = UUID(unit_id_raw) if isinstance(unit_id_raw, str) else unit_id_raw
+    except (ValueError, AttributeError, TypeError):
+        logger.warning("invalid_unit_of_measure_id_skipped", raw=unit_id_raw)
+        return None
+
+    code = unit_data.get("code")
+    name = unit_data.get("name", "")
+    source_system_id = unit_data.get("sourceSystemId")
+
+    if code:
+        existing = await db.execute(select(UnitOfMeasure).where(UnitOfMeasure.code == code))
+        unit = existing.scalar_one_or_none()
+    else:
+        unit = None
+
+    if not unit and unit_id:
+        existing = await db.execute(select(UnitOfMeasure).where(UnitOfMeasure.id == unit_id))
+        unit = existing.scalar_one_or_none()
+
+    if unit:
+        unit.code = code or unit.code
+        unit.name = name or unit.name
+        unit.source_system_id = source_system_id or unit.source_system_id
+    else:
+        unit = UnitOfMeasure(
+            id=unit_id,
+            code=code or f"unit_{unit_id}",
+            name=name or "",
+            source_system_id=source_system_id,
+        )
+        db.add(unit)
+
+    return unit.id
+
+
+async def upsert_sensor_parameter(db: AsyncSession, param_data: dict) -> Optional[UUID]:
+    """Upsert a sensor parameter from Gateway data. Returns parameter_id."""
+    param_id_raw = param_data.get("id")
+    try:
+        param_id = UUID(param_id_raw) if isinstance(param_id_raw, str) else param_id_raw
+    except (ValueError, AttributeError, TypeError):
+        logger.warning("invalid_sensor_parameter_id_skipped", raw=param_id_raw)
+        return None
+
+    code = param_data.get("code")
+    name = param_data.get("name", "")
+    unit = param_data.get("unit", "")
+    description = param_data.get("description")
+    is_active = param_data.get("isActive", True)
+
+    if code:
+        existing = await db.execute(select(SensorParameter).where(SensorParameter.code == code))
+        param = existing.scalar_one_or_none()
+    else:
+        param = None
+
+    if not param and param_id:
+        existing = await db.execute(select(SensorParameter).where(SensorParameter.id == param_id))
+        param = existing.scalar_one_or_none()
+
+    if param:
+        param.code = code or param.code
+        param.name = name or param.name
+        param.unit = unit or param.unit
+        param.description = description or param.description
+        param.is_active = is_active
+    else:
+        param = SensorParameter(
+            id=param_id,
+            code=code or f"param_{param_id}",
+            name=name or "",
+            unit=unit or "",
+            description=description,
+            is_active=is_active,
+        )
+        db.add(param)
+
+    return param.id

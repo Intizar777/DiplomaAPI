@@ -20,6 +20,13 @@ from app.services.promo_campaign_service import PromoCampaignService
 from app.services.production_analytics_service import ProductionAnalyticsService
 from app.services.oee_service import OEEService
 from app.services.cost_base_service import CostBaseService
+from app.services.reference_sync import (
+    upsert_customer,
+    upsert_warehouse,
+    upsert_unit_of_measure,
+    upsert_sensor_parameter,
+    get_product_name_map,
+)
 
 __all__ = [
     "GatewayClient",
@@ -41,4 +48,9 @@ __all__ = [
     "ProductionAnalyticsService",
     "OEEService",
     "CostBaseService",
+    "upsert_customer",
+    "upsert_warehouse",
+    "upsert_unit_of_measure",
+    "upsert_sensor_parameter",
+    "get_product_name_map",
 ]

@@ -9,7 +9,7 @@ from uuid import UUID
 from sqlalchemy import select, func, desc, cast, String, outerjoin
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import InventorySnapshot, Product, Warehouse
+from app.models import InventorySnapshot, Product
 from app.services.gateway_client import GatewayClient
 from app.utils.logging_utils import track_feature_path, log_data_flow
 import structlog
@@ -113,53 +113,10 @@ class InventoryService:
     
     async def _sync_warehouse(self, warehouse_data: dict) -> Optional[UUID]:
         """Sync a warehouse and return its ID."""
+        from app.services.reference_sync import upsert_warehouse
         if not warehouse_data:
             return None
-
-        warehouse_id_raw = warehouse_data.get("id")
-        try:
-            warehouse_id = UUID(warehouse_id_raw) if isinstance(warehouse_id_raw, str) else warehouse_id_raw
-        except (ValueError, AttributeError, TypeError):
-            logger.warning("invalid_warehouse_id_skipped", raw=warehouse_id_raw)
-            return None
-
-        code = warehouse_data.get("code")
-
-        # Try to find existing by code or id
-        if code:
-            existing = await self.db.execute(
-                select(Warehouse).where(Warehouse.code == code)
-            )
-            warehouse = existing.scalar_one_or_none()
-        else:
-            warehouse = None
-
-        if not warehouse and warehouse_id:
-            existing = await self.db.execute(
-                select(Warehouse).where(Warehouse.id == warehouse_id)
-            )
-            warehouse = existing.scalar_one_or_none()
-
-        if warehouse:
-            warehouse.code = code or warehouse.code
-            warehouse.name = warehouse_data.get("name", warehouse.name)
-            warehouse.location = warehouse_data.get("location", warehouse.location)
-            warehouse.capacity = warehouse_data.get("capacity", warehouse.capacity)
-            warehouse.is_active = warehouse_data.get("isActive", warehouse.is_active)
-            warehouse.source_system_id = warehouse_data.get("sourceSystemId", warehouse.source_system_id)
-        else:
-            warehouse = Warehouse(
-                id=warehouse_id,
-                code=code or f"warehouse_{warehouse_id}",
-                name=warehouse_data.get("name", ""),
-                location=warehouse_data.get("location", ""),
-                capacity=warehouse_data.get("capacity"),
-                is_active=warehouse_data.get("isActive", True),
-                source_system_id=warehouse_data.get("sourceSystemId"),
-            )
-            self.db.add(warehouse)
-
-        return warehouse.id
+        return await upsert_warehouse(self.db, warehouse_data)
 
     @track_feature_path(feature_name="inventory.sync_from_gateway", log_result=True)
     async def sync_from_gateway(self, from_date=None, to_date=None) -> int:

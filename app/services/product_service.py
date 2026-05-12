@@ -3,12 +3,12 @@ Product business logic service.
 """
 from datetime import date
 from typing import Optional, List, Dict
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Product, UnitOfMeasure
+from app.models import Product
 from app.services.gateway_client import GatewayClient
 from app.utils.logging_utils import track_feature_path, log_data_flow
 import structlog
@@ -53,72 +53,17 @@ class ProductService:
     
     async def _sync_unit_of_measure(self, unit_data) -> Optional[UUID]:
         """Sync a unit of measure and return its ID."""
+        from app.services.reference_sync import upsert_unit_of_measure
         if not unit_data:
             return None
 
-        # Gateway returns unitOfMeasure as a plain string (e.g. "kg", "liters")
         if isinstance(unit_data, str):
-            code = unit_data.strip()
-            if not code:
+            unit_data = {"code": unit_data.strip()}
+            if not unit_data["code"]:
                 return None
-            existing = await self.db.execute(
-                select(UnitOfMeasure).where(UnitOfMeasure.code == code)
-            )
-            unit = existing.scalar_one_or_none()
-            if not unit:
-                unit = UnitOfMeasure(id=uuid4(), code=code, name=code)
-                self.db.add(unit)
-                await self.db.flush()
-            return unit.id
 
-        # Handle Pydantic models and dictionaries
-        if hasattr(unit_data, '__dict__'):  # Pydantic model or dataclass
-            unit_id_raw = getattr(unit_data, 'id', None)
-            code = getattr(unit_data, 'code', None)
-            name = getattr(unit_data, 'name', '')
-            source_system_id = getattr(unit_data, 'sourceSystemId', None)
-        else:  # Dictionary
-            unit_id_raw = unit_data.get("id")
-            code = unit_data.get("code")
-            name = unit_data.get("name", "")
-            source_system_id = unit_data.get("sourceSystemId")
-
-        try:
-            unit_id = UUID(unit_id_raw) if isinstance(unit_id_raw, str) else unit_id_raw
-        except (ValueError, AttributeError, TypeError):
-            logger.warning("invalid_unit_of_measure_id_skipped", raw=unit_id_raw)
-            return None
-
-        # Try to find existing by code or id
-        if code:
-            existing = await self.db.execute(
-                select(UnitOfMeasure).where(UnitOfMeasure.code == code)
-            )
-            unit = existing.scalar_one_or_none()
-        else:
-            unit = None
-
-        if not unit and unit_id:
-            existing = await self.db.execute(
-                select(UnitOfMeasure).where(UnitOfMeasure.id == unit_id)
-            )
-            unit = existing.scalar_one_or_none()
-
-        if unit:
-            unit.code = code or unit.code
-            unit.name = name or unit.name
-            unit.source_system_id = source_system_id or unit.source_system_id
-        else:
-            unit = UnitOfMeasure(
-                id=unit_id,
-                code=code or f"unit_{unit_id}",
-                name=name or "",
-                source_system_id=source_system_id,
-            )
-            self.db.add(unit)
-            await self.db.flush()
-
-        return unit.id
+        unit_data_dict = unit_data.__dict__ if hasattr(unit_data, '__dict__') else unit_data
+        return await upsert_unit_of_measure(self.db, unit_data_dict)
 
     @track_feature_path(feature_name="products.sync_from_gateway", log_result=True)
     async def sync_from_gateway(self, from_date=None, to_date=None) -> int:

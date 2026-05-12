@@ -3,6 +3,7 @@ Cron job definitions for data synchronization with full error context logging.
 """
 import traceback
 from datetime import date, timedelta
+from decimal import Decimal
 import structlog
 
 from app.database import AsyncSessionLocal
@@ -64,6 +65,7 @@ async def _run_sync_task(
     from_date: date = None,
     to_date: date = None,
     full_sync: bool = False,
+    method_name: str = "sync_from_gateway",
 ):
     """
     Generic sync task runner with full error context logging.
@@ -96,7 +98,7 @@ async def _run_sync_task(
                     from_date=from_date.isoformat() if from_date else None,
                     to_date=to_date.isoformat() if to_date else None,
                 )
-                records = await service.sync_from_gateway(from_date, to_date)
+                records = await getattr(service, method_name)(from_date, to_date)
             else:
                 logger.info(
                     "sync_task_checkpoint",
@@ -106,7 +108,7 @@ async def _run_sync_task(
                     from_date=from_date.isoformat() if from_date else None,
                     to_date=to_date.isoformat() if to_date else None,
                 )
-                records = await service.sync_from_gateway(from_date, to_date)
+                records = await getattr(service, method_name)(from_date, to_date)
 
             await complete_sync_log(db, log, SyncStatus.COMPLETED, records)
             logger.info(
@@ -166,68 +168,14 @@ async def sync_kpi_per_line_task():
     to_date = sunday
 
     from app.models import AggregatedKPI
-
-    logger.info(
-        "sync_task_started",
-        task="kpi_per_line",
-        phase="entry",
-        from_date=from_date.isoformat(),
-        to_date=to_date.isoformat(),
+    await _run_sync_task(
+        task_name="kpi_per_line",
+        model_class=AggregatedKPI,
+        service_class=KPIService,
+        from_date=from_date,
+        to_date=to_date,
+        method_name="sync_kpi_per_line",
     )
-
-    async with AsyncSessionLocal() as db:
-        log = await create_sync_log(db, "kpi_per_line")
-        gateway = GatewayClient()
-        service = KPIService(db, gateway)
-
-        try:
-            if not await _has_any_records(AggregatedKPI):
-                logger.info(
-                    "sync_task_checkpoint",
-                    task="kpi_per_line",
-                    checkpoint="initial_sync_detected",
-                    mode="full",
-                )
-                records = await service.sync_kpi_per_line(None, None)
-            else:
-                logger.info(
-                    "sync_task_checkpoint",
-                    task="kpi_per_line",
-                    checkpoint="incremental_sync",
-                    mode="incremental",
-                    from_date=from_date.isoformat(),
-                    to_date=to_date.isoformat(),
-                )
-                records = await service.sync_kpi_per_line(from_date, to_date)
-
-            await complete_sync_log(db, log, SyncStatus.COMPLETED, records)
-            logger.info(
-                "sync_task_completed",
-                task="kpi_per_line",
-                phase="exit",
-                status="success",
-                records_processed=records,
-            )
-        except Exception as e:
-            tb_str = traceback.format_exc()
-            error_msg = f"{type(e).__name__}: {e}"
-
-            await complete_sync_log(db, log, SyncStatus.FAILED, error_message=error_msg)
-
-            logger.error(
-                "sync_task_failed",
-                task="kpi_per_line",
-                phase="exit",
-                status="failed",
-                error_type=type(e).__name__,
-                error_message=str(e),
-                traceback=tb_str,
-                from_date=from_date.isoformat(),
-                to_date=to_date.isoformat(),
-            )
-            raise
-        finally:
-            await gateway.close()
 
 
 async def sync_sales_task():
@@ -303,7 +251,7 @@ async def sync_output_task():
 
 async def sync_sensors_task():
     """Sync sensor readings from Gateway."""
-    from_date = date.today() - timedelta(days=1)
+    from_date = date.today() - timedelta(days=30)
     to_date = date.today()
 
     from app.models import SensorReading
@@ -333,9 +281,7 @@ async def sync_references_task():
     Each reference type is wrapped in its own try/except so that a failure
     in one (e.g. 404 on a missing endpoint) does not kill the entire task.
     """
-    from app.models import UnitOfMeasure, Warehouse, Customer
-    from app.services import ProductService, SensorService
-    from datetime import datetime
+    from app.services.reference_sync import upsert_unit_of_measure, upsert_customer, upsert_warehouse
 
     logger.info("sync_task_started", task="references", phase="entry")
 
@@ -347,13 +293,13 @@ async def sync_references_task():
 
         # UnitOfMeasure
         try:
-            product_service = ProductService(db, gateway)
             count = 0
             gateway_data = await gateway.get_units_of_measure()
             units = gateway_data.unitsOfMeasure
             logger.info("sync_references_units_fetched", count=len(units))
             for unit_data in units:
-                await product_service._sync_unit_of_measure(unit_data)
+                unit_data_dict = unit_data.__dict__ if hasattr(unit_data, '__dict__') else unit_data
+                await upsert_unit_of_measure(db, unit_data_dict)
                 count += 1
             await db.commit()
             total += count
@@ -362,23 +308,6 @@ async def sync_references_task():
             logger.warning("sync_references_units_error", error=str(e)[:200])
             errors.append(f"units: {e}")
 
-        # SensorParameter (endpoint may not exist; parameters sync via sensors)
-        try:
-            sensor_service = SensorService(db, gateway)
-            count = 0
-            gateway_data = await gateway.get_sensor_parameters()
-            params = gateway_data.get("parameters", [])
-            logger.info("sync_references_sensor_params_fetched", count=len(params))
-            for param_data in params:
-                await sensor_service._sync_sensor_parameter(param_data)
-                count += 1
-            await db.commit()
-            total += count
-            logger.info("sync_references_sensor_params_done", count=count)
-        except Exception as e:
-            logger.warning("sync_references_sensor_params_error", error=str(e)[:200])
-            errors.append(f"sensor_params: {e}")
-
         # Customer
         try:
             count = 0
@@ -386,26 +315,10 @@ async def sync_references_task():
             customers = gateway_data.customers
             logger.info("sync_references_customers_fetched", count=len(customers))
             for customer_data in customers:
-                customer_id = customer_data.id
-                code = getattr(customer_data, "code", None) or str(customer_id)[:8]
-                if not customer_id:
+                customer_data_dict = customer_data.__dict__ if hasattr(customer_data, '__dict__') else customer_data
+                if not customer_data_dict.get("id"):
                     continue
-                existing = await db.execute(
-                    select(Customer).where(Customer.id == customer_id)
-                )
-                customer = existing.scalar_one_or_none()
-                if customer:
-                    customer.name = customer_data.name
-                    customer.region = getattr(customer_data, "region", "Unknown")
-                    customer.is_active = getattr(customer_data, "isActive", True)
-                else:
-                    db.add(Customer(
-                        id=customer_id,
-                        code=code,
-                        name=customer_data.name,
-                        region=getattr(customer_data, "region", "Unknown"),
-                        is_active=getattr(customer_data, "isActive", True)
-                    ))
+                await upsert_customer(db, customer_data_dict)
                 count += 1
             await db.commit()
             total += count
@@ -421,29 +334,10 @@ async def sync_references_task():
             warehouses = gateway_data.warehouses
             logger.info("sync_references_warehouses_fetched", count=len(warehouses))
             for warehouse_data in warehouses:
-                warehouse_id = warehouse_data.id
-                code = warehouse_data.code
-                if not warehouse_id:
+                warehouse_data_dict = warehouse_data.__dict__ if hasattr(warehouse_data, '__dict__') else warehouse_data
+                if not warehouse_data_dict.get("id"):
                     continue
-                existing = await db.execute(
-                    select(Warehouse).where(Warehouse.id == warehouse_id)
-                )
-                warehouse = existing.scalar_one_or_none()
-                if warehouse:
-                    warehouse.code = code or warehouse.code
-                    warehouse.name = warehouse_data.name
-                    warehouse.location = getattr(warehouse_data, "location", "Unknown")
-                    warehouse.capacity = getattr(warehouse_data, "capacity", 0)
-                    warehouse.is_active = getattr(warehouse_data, "isActive", True)
-                else:
-                    db.add(Warehouse(
-                        id=warehouse_id,
-                        code=code,
-                        name=warehouse_data.name,
-                        location=getattr(warehouse_data, "location", "Unknown"),
-                        capacity=getattr(warehouse_data, "capacity", 0),
-                        is_active=getattr(warehouse_data, "isActive", True)
-                    ))
+                await upsert_warehouse(db, warehouse_data_dict)
                 count += 1
             await db.commit()
             total += count
@@ -524,6 +418,110 @@ async def sync_promo_campaigns_task():
         from_date=from_date,
         to_date=to_date,
     )
+
+
+async def aggregate_sales_trends_task():
+    """Aggregate sale_records into sales_trends for day/week/month intervals."""
+    from datetime import datetime
+    from sqlalchemy import delete, text
+    from app.models.sales import SaleRecord, SalesTrends
+
+    period_days = 35  # slightly wider than sync window to catch week/month boundaries
+    from_date = date.today() - timedelta(days=period_days)
+    to_date = date.today()
+
+    logger.info(
+        "sync_task_started",
+        task="aggregate_sales_trends",
+        phase="entry",
+        from_date=from_date.isoformat(),
+        to_date=to_date.isoformat(),
+    )
+
+    async with AsyncSessionLocal() as db:
+        log = await create_sync_log(db, "aggregate_sales_trends")
+
+        try:
+            total_inserted = 0
+
+            for interval_type in ("day", "week", "month"):
+                if interval_type == "day":
+                    date_expr = SaleRecord.sale_date
+                elif interval_type == "week":
+                    date_expr = func.date_trunc("week", SaleRecord.sale_date).cast(SaleRecord.sale_date.type)
+                else:
+                    date_expr = func.date_trunc("month", SaleRecord.sale_date).cast(SaleRecord.sale_date.type)
+
+                agg_result = await db.execute(
+                    select(
+                        date_expr.label("trend_date"),
+                        SaleRecord.region,
+                        SaleRecord.channel,
+                        func.sum(SaleRecord.amount).label("total_amount"),
+                        func.sum(SaleRecord.quantity).label("total_quantity"),
+                        func.count(SaleRecord.id).label("order_count"),
+                    )
+                    .where(
+                        SaleRecord.sale_date >= from_date,
+                        SaleRecord.sale_date <= to_date,
+                    )
+                    .group_by(date_expr, SaleRecord.region, SaleRecord.channel)
+                )
+                rows = agg_result.all()
+
+                if not rows:
+                    continue
+
+                # Delete existing rows for this interval+date range to handle NULL uniqueness
+                await db.execute(
+                    delete(SalesTrends).where(
+                        SalesTrends.interval_type == interval_type,
+                        SalesTrends.trend_date >= from_date,
+                        SalesTrends.trend_date <= to_date,
+                    )
+                )
+
+                for row in rows:
+                    db.add(SalesTrends(
+                        trend_date=row.trend_date,
+                        interval_type=interval_type,
+                        region=row.region,
+                        channel=row.channel,
+                        total_amount=row.total_amount or Decimal("0"),
+                        total_quantity=row.total_quantity or Decimal("0"),
+                        order_count=row.order_count or 0,
+                    ))
+                    total_inserted += 1
+
+                await db.commit()
+                logger.info(
+                    "sales_trends_interval_done",
+                    interval=interval_type,
+                    rows=len(rows),
+                )
+
+            await complete_sync_log(db, log, SyncStatus.COMPLETED, total_inserted)
+            logger.info(
+                "sync_task_completed",
+                task="aggregate_sales_trends",
+                phase="exit",
+                status="success",
+                records_processed=total_inserted,
+            )
+
+        except Exception as e:
+            tb_str = traceback.format_exc()
+            await db.rollback()
+            await complete_sync_log(db, log, SyncStatus.FAILED, error_message=f"{type(e).__name__}: {e}")
+            logger.error(
+                "sync_task_failed",
+                task="aggregate_sales_trends",
+                phase="exit",
+                error_type=type(e).__name__,
+                error_message=str(e),
+                traceback=tb_str,
+            )
+            raise
 
 
 async def cleanup_old_data_task():

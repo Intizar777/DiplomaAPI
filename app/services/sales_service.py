@@ -9,7 +9,7 @@ from uuid import UUID
 from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import AggregatedSales, SalesTrends, SaleRecord, Product, Customer
+from app.models import AggregatedSales, SalesTrends, SaleRecord
 from app.schemas import (
     SalesSummaryResponse,
     SalesTrendsResponse,
@@ -17,6 +17,7 @@ from app.schemas import (
     SalesRegionsResponse
 )
 from app.services.gateway_client import GatewayClient
+from app.services.reference_sync import get_product_name_map
 from app.utils.logging_utils import track_feature_path, log_data_flow
 import structlog
 
@@ -32,51 +33,10 @@ class SalesService:
 
     async def _sync_customer(self, customer_data: dict) -> Optional[UUID]:
         """Sync a customer and return its ID."""
+        from app.services.reference_sync import upsert_customer
         if not customer_data:
             return None
-
-        customer_id_raw = customer_data.get("id")
-        try:
-            customer_id = UUID(customer_id_raw) if isinstance(customer_id_raw, str) else customer_id_raw
-        except (ValueError, AttributeError, TypeError):
-            logger.warning("invalid_customer_id_skipped", raw=customer_id_raw)
-            return None
-
-        code = customer_data.get("code")
-
-        # Try to find existing by code or id
-        if code:
-            existing = await self.db.execute(
-                select(Customer).where(Customer.code == code)
-            )
-            customer = existing.scalar_one_or_none()
-        else:
-            customer = None
-
-        if not customer and customer_id:
-            existing = await self.db.execute(
-                select(Customer).where(Customer.id == customer_id)
-            )
-            customer = existing.scalar_one_or_none()
-
-        if customer:
-            customer.code = code or customer.code
-            customer.name = customer_data.get("name", customer.name)
-            customer.region = customer_data.get("region", customer.region)
-            customer.is_active = customer_data.get("isActive", customer.is_active)
-            customer.source_system_id = customer_data.get("sourceSystemId", customer.source_system_id)
-        else:
-            customer = Customer(
-                id=customer_id,
-                code=code or f"customer_{customer_id}",
-                name=customer_data.get("name", ""),
-                region=customer_data.get("region", ""),
-                is_active=customer_data.get("isActive", True),
-                source_system_id=customer_data.get("sourceSystemId"),
-            )
-            self.db.add(customer)
-
-        return customer.id
+        return await upsert_customer(self.db, customer_data)
 
     async def _aggregate_from_raw(
         self,
@@ -382,8 +342,7 @@ class SalesService:
 
             if sales_response.sales:
                 # Get product name map for enrichment
-                product_result = await self.db.execute(select(Product.id, Product.name))
-                product_names = {row[0]: row[1] for row in product_result.all()}
+                product_names = await get_product_name_map(self.db)
 
                 batch_size = 50
                 batch = []
@@ -443,12 +402,12 @@ class SalesService:
         except Exception as e:
             logger.error("sales_raw_sync_error", error=str(e)[:200])
         
-        # Aggregate from raw SaleRecord into AggregatedSales if summary was empty
-        if records_processed > 0:
+        # Aggregate from raw SaleRecord into AggregatedSales only if gateway summary was empty
+        if records_processed > 0 and not summary_response.summary:
             try:
                 for group_type in ["region", "channel"]:
                     group_col = SaleRecord.region if group_type == "region" else SaleRecord.channel
-                    
+
                     agg_query = select(
                         group_col.label("group_key"),
                         func.sum(SaleRecord.quantity).label("total_quantity"),
@@ -458,10 +417,10 @@ class SalesService:
                         SaleRecord.sale_date >= period_from,
                         SaleRecord.sale_date <= period_to
                     ).group_by(group_col)
-                    
+
                     agg_result = await self.db.execute(agg_query)
                     agg_rows = agg_result.all()
-                    
+
                     for row in agg_rows:
                         if not row.group_key:
                             continue
@@ -475,14 +434,14 @@ class SalesService:
                             sales_count=row.sales_count or 0
                         )
                         self.db.add(aggregated)
-                    
+
                     if agg_rows:
                         logger.info(
                             "sales_aggregated_from_raw",
                             group_by=group_type,
                             groups=len(agg_rows)
                         )
-                
+
                 await self.db.commit()
             except Exception as e:
                 await self.db.rollback()

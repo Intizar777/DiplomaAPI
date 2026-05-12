@@ -66,12 +66,16 @@ async def _run_initial_sync():
     """
     from app.database import AsyncSessionLocal
     from app.models import (
-        SyncLog, SyncStatus, Customer, Warehouse
+        SyncLog, SyncStatus
     )
     from app.services import (
         ProductService, SensorService, SalesService,
         InventoryService, OutputService, QualityService, OrderService,
         KPIService
+    )
+    from app.services.reference_sync import (
+        upsert_customer, upsert_warehouse,
+        upsert_unit_of_measure, upsert_sensor_parameter,
     )
 
     async with AsyncSessionLocal() as db:
@@ -122,22 +126,6 @@ async def _run_initial_sync():
                 summary["level_0"]["units_of_measure"] = count
                 total_records += count
 
-                # SensorParameter via Sensor service (endpoint may not exist)
-                count = 0
-                try:
-                    sensor_service = SensorService(db, gateway)
-                    gateway_data = await gateway.get_sensor_parameters()
-                    params = gateway_data.get("parameters", [])
-                    logger.info("initial_sync_sensor_params_fetched", count=len(params))
-                    for param_data in params:
-                        await sensor_service._sync_sensor_parameter(param_data)
-                        count += 1
-                    await db.commit()
-                except Exception as e:
-                    logger.warning("initial_sync_sensor_parameters_error", error=str(e)[:100])
-                summary["level_0"]["sensor_parameters"] = count
-                total_records += count
-
                 # Customer (needed by SaleRecord)
                 count = 0
                 try:
@@ -145,26 +133,9 @@ async def _run_initial_sync():
                     customers = gateway_data.customers
                     logger.info("initial_sync_customers_fetched", count=len(customers))
                     for customer_data in customers:
-                        customer_id = customer_data.id
-                        code = getattr(customer_data, "code", None) or str(customer_id)[:8]
-                        if customer_id:
-                            existing = await db.execute(
-                                select(Customer).where(Customer.id == customer_id)
-                            )
-                            customer = existing.scalar_one_or_none()
-                            if customer:
-                                customer.name = customer_data.name
-                                customer.region = getattr(customer_data, "region", "Unknown")
-                                customer.is_active = getattr(customer_data, "isActive", True)
-                            else:
-                                customer = Customer(
-                                    id=customer_id,
-                                    code=code,
-                                    name=customer_data.name,
-                                    region=getattr(customer_data, "region", "Unknown"),
-                                    is_active=getattr(customer_data, "isActive", True)
-                                )
-                                db.add(customer)
+                        customer_data_dict = customer_data.__dict__ if hasattr(customer_data, '__dict__') else customer_data
+                        if customer_data_dict.get("id"):
+                            await upsert_customer(db, customer_data_dict)
                             count += 1
                     await db.commit()
                 except Exception as e:
@@ -179,29 +150,9 @@ async def _run_initial_sync():
                     warehouses = gateway_data.warehouses
                     logger.info("initial_sync_warehouses_fetched", count=len(warehouses))
                     for warehouse_data in warehouses:
-                        warehouse_id = warehouse_data.id
-                        code = warehouse_data.code
-                        if warehouse_id:
-                            existing = await db.execute(
-                                select(Warehouse).where(Warehouse.id == warehouse_id)
-                            )
-                            warehouse = existing.scalar_one_or_none()
-                            if warehouse:
-                                warehouse.code = code or warehouse.code
-                                warehouse.name = warehouse_data.name
-                                warehouse.location = getattr(warehouse_data, "location", "Unknown")
-                                warehouse.capacity = getattr(warehouse_data, "capacity", 0)
-                                warehouse.is_active = getattr(warehouse_data, "isActive", True)
-                            else:
-                                warehouse = Warehouse(
-                                    id=warehouse_id,
-                                    code=code,
-                                    name=warehouse_data.name,
-                                    location=getattr(warehouse_data, "location", "Unknown"),
-                                    capacity=getattr(warehouse_data, "capacity", 0),
-                                    is_active=getattr(warehouse_data, "isActive", True)
-                                )
-                                db.add(warehouse)
+                        warehouse_data_dict = warehouse_data.__dict__ if hasattr(warehouse_data, '__dict__') else warehouse_data
+                        if warehouse_data_dict.get("id"):
+                            await upsert_warehouse(db, warehouse_data_dict)
                             count += 1
                     await db.commit()
                 except Exception as e:
@@ -211,7 +162,6 @@ async def _run_initial_sync():
 
                 logger.info("initial_sync_phase_0_complete",
                            units=summary["level_0"].get("units_of_measure", 0),
-                           params=summary["level_0"].get("sensor_parameters", 0),
                            customers=summary["level_0"].get("customers", 0),
                            warehouses=summary["level_0"].get("warehouses", 0))
 

@@ -745,8 +745,9 @@ class GatewayClient:
         """Get sensor readings from Gateway (paginated).
 
         GET /production/sensors returns {readings: [...], total: N}
+        Always includes sensorParameter data in the response.
         """
-        params = {}
+        params = {"include": "sensorParameter"}
         if production_line:
             params["productionLineId"] = production_line
         if parameter_name:
@@ -926,7 +927,7 @@ class GatewayClient:
             if isinstance(data, list):
                 return {"parameters": data}
             if isinstance(data, dict):
-                for key in ("parameters", "data", "items", "list"):
+                for key in ("sensorParameters", "parameters", "data", "items", "list"):
                     if key in data:
                         return {"parameters": data[key]}
                 if "id" in data:

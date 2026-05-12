@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select, func, desc, case, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import OrderSnapshot, Product, ProductionLine
+from app.models import OrderSnapshot, ProductionLine
 from app.schemas import (
     OrderStatusSummaryResponse,
     OrderListResponse,
@@ -20,6 +20,7 @@ from app.schemas import (
     DowntimeResponse,
 )
 from app.services.gateway_client import GatewayClient
+from app.services.reference_sync import get_product_name_map
 from app.utils.logging_utils import track_feature_path, log_data_flow
 from app.config import settings
 import structlog
@@ -344,9 +345,7 @@ class OrderService:
         logger.info("orders_fetched_from_gateway", total_orders=len(orders_response.orders))
 
         # Load product names for enrichment
-        product_names: Dict[UUID, str] = {}
-        product_result = await self.db.execute(select(Product.id, Product.name))
-        product_names = {row[0]: row[1] for row in product_result.all()}
+        product_names = await get_product_name_map(self.db)
 
         batch = []
         for order_item in orders_response.orders:

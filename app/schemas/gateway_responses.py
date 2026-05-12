@@ -467,6 +467,22 @@ class QualityResponse(BaseModel):
     total: int
 
 
+class SensorParameterEmbedded(BaseModel):
+    """Embedded sensor parameter from /production/sensors with include=sensorParameter"""
+    id: UUID
+    name: str
+    unit: str
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": "6b0ea8f9-168b-406e-8015-879fd71016fc",
+                "name": "Расход жидкости",
+                "unit": "л/ч"
+            }
+        }
+
+
 class SensorReadingItem(BaseModel):
     """Single sensor reading from /production/sensors"""
     id: UUID
@@ -477,6 +493,7 @@ class SensorReadingItem(BaseModel):
     value: float
     quality: str
     recordedAt: datetime
+    sensorParameter: Optional[SensorParameterEmbedded] = None
 
     class Config:
         json_schema_extra = {
@@ -488,7 +505,12 @@ class SensorReadingItem(BaseModel):
                 "sensorParameterId": "6b0ea8f9-168b-406e-8015-879fd71016fc",
                 "value": 4360.7101,
                 "quality": "bad",
-                "recordedAt": "2026-05-05T12:59:00.000Z"
+                "recordedAt": "2026-05-05T12:59:00.000Z",
+                "sensorParameter": {
+                    "id": "6b0ea8f9-168b-406e-8015-879fd71016fc",
+                    "name": "Расход жидкости",
+                    "unit": "л/ч"
+                }
             }
         }
 

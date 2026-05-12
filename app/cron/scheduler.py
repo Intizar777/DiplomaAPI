@@ -10,7 +10,7 @@ from app.cron.jobs import (
     sync_kpi_task, sync_kpi_per_line_task, sync_sales_task, sync_orders_task, sync_quality_task,
     sync_products_task, sync_output_task, sync_sensors_task, sync_inventory_task,
     sync_references_task, sync_batch_inputs_task, sync_downtime_events_task,
-    sync_promo_campaigns_task,
+    sync_promo_campaigns_task, aggregate_sales_trends_task,
 )
 
 logger = structlog.get_logger()
@@ -40,6 +40,8 @@ async def run_scheduled_jobs():
                 jobs_to_run.append(("kpi_per_line", sync_kpi_per_line_task))
             elif current_minute == 5:
                 jobs_to_run.append(("sales", sync_sales_task))
+            elif current_minute == 7:
+                jobs_to_run.append(("aggregate_sales_trends", aggregate_sales_trends_task))
             elif current_minute == 10:
                 jobs_to_run.append(("orders", sync_orders_task))
             elif current_minute == 15:

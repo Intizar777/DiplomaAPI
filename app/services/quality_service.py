@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select, func, desc, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import QualityResult, QualitySpec, Product
+from app.models import QualityResult, QualitySpec
 from app.models.output import ProductionOutput
 from app.models.orders import OrderSnapshot
 from app.schemas import QualitySummaryResponse, DefectTrendsResponse, QualityLotsResponse, LotDeviationItem, LotDeviationsResponse
@@ -21,6 +21,7 @@ from app.schemas.qe_dashboard import (
     DefectParetoResponse,
 )
 from app.services.gateway_client import GatewayClient
+from app.services.reference_sync import get_product_name_map
 from app.utils.logging_utils import track_feature_path, log_data_flow
 import structlog
 
@@ -524,9 +525,7 @@ class QualityService:
         logger.info("quality_filtered_by_date", filtered_results=len(results), from_date=from_date, to_date=to_date)
 
         # Load product names for enrichment
-        product_names: Dict[UUID, str] = {}
-        product_result = await self.db.execute(select(Product.id, Product.name))
-        product_names = {row[0]: row[1] for row in product_result.all()}
+        product_names = await get_product_name_map(self.db)
 
         batch = []
         for quality_item in results:
