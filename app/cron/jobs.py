@@ -484,6 +484,57 @@ async def sync_references_task():
         await gateway.close()
 
 
+async def sync_batch_inputs_task():
+    """Sync batch inputs from Gateway."""
+    from_date = date.today() - timedelta(days=7)
+    to_date = date.today()
+
+    from app.models import BatchInput
+    from app.services import BatchInputService
+
+    await _run_sync_task(
+        task_name="batch_inputs",
+        model_class=BatchInput,
+        service_class=BatchInputService,
+        from_date=from_date,
+        to_date=to_date,
+    )
+
+
+async def sync_downtime_events_task():
+    """Sync downtime events from Gateway."""
+    from_date = date.today() - timedelta(days=7)
+    to_date = date.today()
+
+    from app.models import DowntimeEvent
+    from app.services import DowntimeEventService
+
+    await _run_sync_task(
+        task_name="downtime_events",
+        model_class=DowntimeEvent,
+        service_class=DowntimeEventService,
+        from_date=from_date,
+        to_date=to_date,
+    )
+
+
+async def sync_promo_campaigns_task():
+    """Sync promo campaigns from Gateway."""
+    from_date = date.today() - timedelta(days=30)
+    to_date = date.today() + timedelta(days=30)
+
+    from app.models import PromoCampaign
+    from app.services import PromoCampaignService
+
+    await _run_sync_task(
+        task_name="promo_campaigns",
+        model_class=PromoCampaign,
+        service_class=PromoCampaignService,
+        from_date=from_date,
+        to_date=to_date,
+    )
+
+
 async def cleanup_old_data_task():
     """Cleanup old data based on retention settings."""
     from datetime import datetime, timedelta

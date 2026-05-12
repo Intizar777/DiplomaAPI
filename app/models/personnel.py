@@ -33,6 +33,7 @@ class ProductionLine(Base, UUIDMixin, TimestampMixin):
     code = Column(String(100), nullable=True, index=True)
     location_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     description = Column(String(500), nullable=True)
+    division = Column(String(255), nullable=True)
     is_active = Column(Boolean, nullable=True, default=True)
 
     def __repr__(self):

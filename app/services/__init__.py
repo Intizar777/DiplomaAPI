@@ -20,6 +20,7 @@ from app.services.downtime_event_service import DowntimeEventService
 from app.services.promo_campaign_service import PromoCampaignService
 from app.services.production_analytics_service import ProductionAnalyticsService
 from app.services.oee_service import OEEService
+from app.services.cost_base_service import CostBaseService
 
 __all__ = [
     "GatewayClient",
@@ -41,4 +42,5 @@ __all__ = [
     "PromoCampaignService",
     "ProductionAnalyticsService",
     "OEEService",
+    "CostBaseService",
 ]

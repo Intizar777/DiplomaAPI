@@ -949,6 +949,90 @@ class GatewayClient:
             logger.error("gateway_warehouses_validation_error", error=str(e))
             raise
 
+    async def get_batch_inputs(
+        self,
+        from_date: Optional[date] = None,
+        to_date: Optional[date] = None,
+        order_id: Optional[str] = None,
+        product_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Get batch inputs from Gateway (paginated)."""
+        params = {}
+        if from_date:
+            params["from"] = from_date.isoformat()
+        if to_date:
+            params["to"] = to_date.isoformat()
+        if order_id:
+            params["orderId"] = order_id
+        if product_id:
+            params["productId"] = product_id
+
+        items = await self._fetch_all_pages("/production/batch-inputs", "items", params)
+
+        log_data_flow(
+            source="gateway_api",
+            target="batch_input_service",
+            operation="fetch_batch_inputs",
+            records_count=len(items),
+        )
+        return {"items": items, "total": len(items)}
+
+    async def get_downtime_events(
+        self,
+        from_date: Optional[date] = None,
+        to_date: Optional[date] = None,
+        production_line_id: Optional[str] = None,
+        category: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Get downtime events from Gateway (paginated)."""
+        params = {}
+        if from_date:
+            params["from"] = from_date.isoformat()
+        if to_date:
+            params["to"] = to_date.isoformat()
+        if production_line_id:
+            params["productionLineId"] = production_line_id
+        if category:
+            params["category"] = category
+
+        items = await self._fetch_all_pages("/production/downtime-events", "items", params)
+
+        log_data_flow(
+            source="gateway_api",
+            target="downtime_event_service",
+            operation="fetch_downtime_events",
+            records_count=len(items),
+        )
+        return {"items": items, "total": len(items)}
+
+    async def get_promo_campaigns(
+        self,
+        from_date: Optional[date] = None,
+        to_date: Optional[date] = None,
+        channel: Optional[str] = None,
+        status: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Get promo campaigns from Gateway (paginated)."""
+        params = {}
+        if from_date:
+            params["from"] = from_date.isoformat()
+        if to_date:
+            params["to"] = to_date.isoformat()
+        if channel:
+            params["channel"] = channel
+        if status:
+            params["status"] = status
+
+        items = await self._fetch_all_pages("/production/promo-campaigns", "items", params)
+
+        log_data_flow(
+            source="gateway_api",
+            target="promo_campaign_service",
+            operation="fetch_promo_campaigns",
+            records_count=len(items),
+        )
+        return {"items": items, "total": len(items)}
+
     # Convenience aliases used by initial sync
 
     async def get_locations(self) -> Dict[str, Any]:

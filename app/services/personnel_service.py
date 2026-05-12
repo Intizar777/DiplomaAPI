@@ -65,6 +65,43 @@ class PersonnelService:
         result = await self.db.execute(query)
         return result.scalars().all()
 
+    async def get_production_lines(
+        self,
+        division: Optional[str] = None,
+        offset: int = 0,
+        limit: int = 20
+    ) -> dict:
+        """Get production lines with optional division filter."""
+        query = select(ProductionLine).order_by(ProductionLine.name)
+
+        if division:
+            query = query.where(ProductionLine.division == division)
+
+        # Get total count
+        count_stmt = select(func.count()).select_from(ProductionLine)
+        if division:
+            count_stmt = count_stmt.where(ProductionLine.division == division)
+        total = await self.db.scalar(count_stmt)
+
+        # Get paginated results
+        result = await self.db.execute(query.offset(offset).limit(limit))
+        lines = result.scalars().all()
+
+        return {
+            "production_lines": [
+                {
+                    "id": str(line.id),
+                    "code": line.code,
+                    "name": line.name,
+                    "description": line.description,
+                    "division": line.division,
+                    "is_active": line.is_active,
+                }
+                for line in lines
+            ],
+            "total": total,
+        }
+
     async def get_summary(self) -> Dict[str, int]:
         """Get counts for all personnel entities."""
         counts = {}
@@ -259,6 +296,7 @@ class PersonnelService:
             except (ValueError, AttributeError):
                 pass
         line.description = data.get("description", line.description)
+        line.division = data.get("division", line.division)
         line.is_active = data.get("isActive", line.is_active)
 
     def _apply_department_fields(self, dept: Department, data: Dict[str, Any], skip_parent: bool = False, **kwargs) -> None:

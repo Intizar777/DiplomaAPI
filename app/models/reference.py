@@ -162,3 +162,46 @@ class LineCapacityPlan(Base, UUIDMixin, TimestampMixin):
 
     def __repr__(self):
         return f"<LineCapacityPlan(line={self.production_line_id}, {self.period_from}-{self.period_to})>"
+
+
+class CostBase(Base, UUIDMixin, TimestampMixin):
+    """
+    Product cost base for margin and COGS calculations.
+    Stores raw material costs, labor, and depreciation per product and period.
+    """
+    __tablename__ = "cost_bases"
+
+    product_id = Column(UUID(as_uuid=True), nullable=True, index=True)  # NULL = global default
+    raw_material_cost = Column(DECIMAL(15, 4), nullable=False)  # руб./кг
+    labor_cost_per_hour = Column(DECIMAL(10, 2), nullable=True)  # руб./ч
+    depreciation_monthly = Column(DECIMAL(15, 2), nullable=True)  # руб./месяц
+    period_from = Column(Date, nullable=False, index=True)
+    period_to = Column(Date, nullable=True)  # NULL = still active
+
+    __table_args__ = (
+        Index('idx_cost_base_product_period', 'product_id', 'period_from'),
+        Index('idx_cost_base_period', 'period_from', 'period_to'),
+    )
+
+    def __repr__(self):
+        return f"<CostBase(product_id={self.product_id}, raw_material_cost={self.raw_material_cost}, {self.period_from}-{self.period_to})>"
+
+
+class KPIConfig(Base, UUIDMixin, TimestampMixin):
+    """
+    KPI configuration for admin-settable targets and parameters.
+    Used for EBITDA targets, market volume, and other configurable metrics.
+    """
+    __tablename__ = "kpi_configs"
+
+    key = Column(String(100), nullable=False, unique=True, index=True)  # e.g. "market_total_volume_tonnes"
+    value = Column(DECIMAL(20, 4), nullable=False)
+    description = Column(String(500), nullable=True)
+    updated_by = Column(String(255), nullable=True)
+
+    __table_args__ = (
+        Index('idx_kpi_config_key', 'key'),
+    )
+
+    def __repr__(self):
+        return f"<KPIConfig(key={self.key}, value={self.value})>"
