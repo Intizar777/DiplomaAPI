@@ -4,6 +4,7 @@ Downtime event business logic service.
 from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
+from dateutil import parser as dateutil_parser
 
 from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import insert
@@ -46,12 +47,19 @@ class DowntimeEventService:
             try:
                 event_id = item.get("eventId") or item.get("event_id")
 
+                # Parse ISO 8601 datetime strings
+                started_at_str = item.get("startedAt") or item.get("started_at")
+                ended_at_str = item.get("endedAt") or item.get("ended_at")
+
+                started_at = dateutil_parser.isoparse(started_at_str) if started_at_str else None
+                ended_at = dateutil_parser.isoparse(ended_at_str) if ended_at_str else None
+
                 stmt = insert(DowntimeEvent).values(
                     production_line_id=item.get("productionLineId") or item.get("production_line_id"),
                     reason=item.get("reason", ""),
                     category=item.get("category", "OTHER"),
-                    started_at=item.get("startedAt") or item.get("started_at"),
-                    ended_at=item.get("endedAt") or item.get("ended_at"),
+                    started_at=started_at,
+                    ended_at=ended_at,
                     duration_minutes=item.get("durationMinutes") or item.get("duration_minutes"),
                     event_id=event_id,
                 ).on_conflict_do_nothing(index_elements=["event_id"])

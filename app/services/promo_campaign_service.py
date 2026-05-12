@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
+from dateutil import parser as dateutil_parser
 
 from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import insert
@@ -47,14 +48,21 @@ class PromoCampaignService:
             try:
                 event_id = item.get("eventId") or item.get("event_id")
 
+                # Parse ISO 8601 date strings
+                start_date_str = item.get("startDate") or item.get("start_date")
+                end_date_str = item.get("endDate") or item.get("end_date")
+
+                start_date = dateutil_parser.isoparse(start_date_str).date() if start_date_str else None
+                end_date = dateutil_parser.isoparse(end_date_str).date() if end_date_str else None
+
                 stmt = insert(PromoCampaign).values(
                     name=item.get("name", ""),
                     description=item.get("description"),
                     channel=item.get("channel", "DIRECT"),
                     product_id=item.get("productId") or item.get("product_id"),
                     discount_percent=item.get("discountPercent") or item.get("discount_percent"),
-                    start_date=item.get("startDate") or item.get("start_date"),
-                    end_date=item.get("endDate") or item.get("end_date"),
+                    start_date=start_date,
+                    end_date=end_date,
                     budget=item.get("budget"),
                     event_id=event_id,
                 ).on_conflict_do_nothing(index_elements=["event_id"])

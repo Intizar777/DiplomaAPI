@@ -1,9 +1,10 @@
 """
 Batch input business logic service.
 """
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
+from dateutil import parser as dateutil_parser
 
 from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import insert
@@ -46,11 +47,15 @@ class BatchInputService:
             try:
                 event_id = item.get("eventId") or item.get("event_id")
 
+                # Parse ISO 8601 datetime string
+                input_date_str = item.get("inputDate") or item.get("input_date")
+                input_date = dateutil_parser.isoparse(input_date_str) if input_date_str else None
+
                 stmt = insert(BatchInput).values(
                     order_id=item.get("orderId") or item.get("order_id"),
                     product_id=item.get("productId") or item.get("product_id"),
                     quantity=item.get("quantity"),
-                    input_date=item.get("inputDate") or item.get("input_date"),
+                    input_date=input_date,
                     event_id=event_id,
                 ).on_conflict_do_nothing(index_elements=["event_id"])
 
