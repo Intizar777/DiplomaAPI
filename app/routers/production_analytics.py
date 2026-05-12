@@ -339,6 +339,9 @@ async def list_production_lines(
     total = count_result.scalar()
 
     return ProductionLinesListResponse(
-        data=[ProductionLineResponse(id=str(l.id), name=l.name, code=l.code, division=l.division) for l in lines],
+        production_lines=[ProductionLineResponse(
+            id=str(l.id), name=l.name, code=l.code, division=l.division,
+            is_active=l.is_active, description=l.description
+        ) for l in lines],
         total=total
     )
