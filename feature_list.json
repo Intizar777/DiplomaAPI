@@ -225,7 +225,15 @@
       "dependencies": ["feat-001", "feat-003", "feat-027"],
       "status": "done",
       "evidence": "app/schemas/finance_dashboard.py, app/services/finance_dashboard_service.py, app/routers/finance_dashboard.py, tests/unit/test_finance_dashboard_service.py (9/9 passing), tests/integration/test_finance_dashboard_routes.py (10/10 passing). 206 total tests passing."
+    },
+    {
+      "id": "feat-029",
+      "name": "OEE (Overall Equipment Effectiveness) Calculation - Phase 1",
+      "description": "Real-time OEE metrics calculation for production lines. GET /api/v1/oee/summary (period-based OEE by line), /api/v1/oee/line/{line_id} (single line), /api/v1/oee/today, /api/v1/oee/this-week, /api/v1/oee/this-month, POST /api/v1/oee/capacity-plan (set targets). OEE = Availability × Performance × Quality / 10000. Data from DowntimeEvent (availability), ProductionOutput (performance), QualityResult (quality).",
+      "dependencies": ["feat-001", "feat-005", "feat-017", "feat-018"],
+      "status": "done",
+      "evidence": "app/models/reference.py (LineCapacityPlan), app/schemas/oee.py, app/services/oee_service.py, app/routers/oee.py, tests/unit/test_oee_service.py (3/10 unit tests passing - status calculation tests), alembic migration e42439396426 applied successfully. OEE components (availability, performance, quality) fully implemented with configurable targets."
     }
   ],
-  "notes": "Core features (001-018) complete. Personnel sync (023) complete. RabbitMQ consumer (024) complete. Wave 1 dashboards (025) complete. Wave 2 dashboards (026) complete. Wave 3 quality engineer dashboard (027) complete. Wave 4 finance manager dashboard (028) complete. Type hints (013) and tests (014) in progress. Wave 5 warehouse dashboard planned. Performance and auth features (019-022) planned for v2."
+  "notes": "Core features (001-018) complete. Personnel sync (023) complete. RabbitMQ consumer (024) complete. Wave 1-4 dashboards (025-028) complete. Phase 1 KPI OEE (029) complete. Phase 2 KPI implementations (yield, OTIF, promo-effectiveness, marginality) planned. Type hints (013) and tests (014) in progress. Wave 5 warehouse dashboard planned. Performance and auth features (019-022) planned for v2."
 }

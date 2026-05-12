@@ -16,6 +16,8 @@ from app.routers.line_master_dashboard import router as line_master_dashboard_ro
 from app.routers.gm_dashboard import router as gm_dashboard_router
 from app.routers.qe_dashboard import router as qe_dashboard_router
 from app.routers.finance_dashboard import router as finance_dashboard_router
+from app.routers.production_analytics import router as production_analytics_router
+from app.routers.oee import router as oee_router
 
 __all__ = [
     "kpi_router",
@@ -33,4 +35,6 @@ __all__ = [
     "gm_dashboard_router",
     "qe_dashboard_router",
     "finance_dashboard_router",
+    "production_analytics_router",
+    "oee_router",
 ]

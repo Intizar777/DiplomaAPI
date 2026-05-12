@@ -70,6 +70,33 @@ from app.schemas.finance_dashboard import (
     TopProductItem,
     TopProductsResponse as FinanceTopProductsResponse,
 )
+from app.schemas.analytics import (
+    BatchInputCreate,
+    BatchInputResponse,
+    BatchInputListResponse,
+    YieldResponse,
+    DowntimeEventCreate,
+    DowntimeEventResponse,
+    DowntimeEventListResponse,
+    DowntimeSummaryResponse,
+    PromoCampaignCreate,
+    PromoCampaignResponse,
+    PromoCampaignListResponse,
+    PromoCampaignEffectivenessResponse,
+    KPIResponse,
+    OTIFResponse,
+    KPIBreakdownResponse,
+    SalesMarginResponse,
+    ProductionLineResponse,
+    ProductionLinesListResponse,
+)
+from app.schemas.oee import (
+    OEEComponentResponse,
+    OEELineResponse,
+    OEESummaryResponse as OEECalculationSummaryResponse,
+    LineCapacityPlanRequest,
+    LineCapacityPlanResponse,
+)
 
 __all__ = [
     # Common
@@ -141,4 +168,29 @@ __all__ = [
     "RevenueTrendResponse",
     "TopProductItem",
     "FinanceTopProductsResponse",
+    # Analytics
+    "BatchInputCreate",
+    "BatchInputResponse",
+    "BatchInputListResponse",
+    "YieldResponse",
+    "DowntimeEventCreate",
+    "DowntimeEventResponse",
+    "DowntimeEventListResponse",
+    "DowntimeSummaryResponse",
+    "PromoCampaignCreate",
+    "PromoCampaignResponse",
+    "PromoCampaignListResponse",
+    "PromoCampaignEffectivenessResponse",
+    "KPIResponse",
+    "OTIFResponse",
+    "KPIBreakdownResponse",
+    "SalesMarginResponse",
+    "ProductionLineResponse",
+    "ProductionLinesListResponse",
+    # OEE
+    "OEEComponentResponse",
+    "OEELineResponse",
+    "OEECalculationSummaryResponse",
+    "LineCapacityPlanRequest",
+    "LineCapacityPlanResponse",
 ]

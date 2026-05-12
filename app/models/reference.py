@@ -1,7 +1,7 @@
 """
 Reference data models (normalized dictionaries from Gateway).
 """
-from sqlalchemy import Column, String, Integer, DECIMAL, Boolean, Index
+from sqlalchemy import Column, String, Integer, DECIMAL, Boolean, Index, Date, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.models.base import Base, TimestampMixin, UUIDMixin
@@ -141,3 +141,24 @@ class QualitySpec(Base, UUIDMixin, TimestampMixin):
 
     def __repr__(self):
         return f"<QualitySpec(product_id={self.product_id}, param={self.parameter_name})>"
+
+
+class LineCapacityPlan(Base, UUIDMixin, TimestampMixin):
+    """
+    Production line capacity plan (planed hours and target OEE).
+    Used for calculating OEE metrics.
+    """
+    __tablename__ = "line_capacity_plans"
+
+    production_line_id = Column(UUID(as_uuid=True), ForeignKey("production_lines.id", ondelete="CASCADE"), nullable=False, index=True)
+    planned_hours_per_day = Column(Integer, nullable=False)
+    target_oee_percent = Column(DECIMAL(5, 2), nullable=False, default=85)
+    period_from = Column(Date, nullable=False, index=True)
+    period_to = Column(Date, nullable=True)
+
+    __table_args__ = (
+        Index('idx_line_capacity_plan_line_period', 'production_line_id', 'period_from'),
+    )
+
+    def __repr__(self):
+        return f"<LineCapacityPlan(line={self.production_line_id}, {self.period_from}-{self.period_to})>"

@@ -15,6 +15,11 @@ from app.services.line_master_dashboard_service import LineMasterDashboardServic
 from app.services.gm_dashboard_service import GroupManagerDashboardService
 from app.services.qe_dashboard_service import QualityEngineerDashboardService
 from app.services.finance_dashboard_service import FinanceManagerDashboardService
+from app.services.batch_input_service import BatchInputService
+from app.services.downtime_event_service import DowntimeEventService
+from app.services.promo_campaign_service import PromoCampaignService
+from app.services.production_analytics_service import ProductionAnalyticsService
+from app.services.oee_service import OEEService
 
 __all__ = [
     "GatewayClient",
@@ -31,4 +36,9 @@ __all__ = [
     "GroupManagerDashboardService",
     "QualityEngineerDashboardService",
     "FinanceManagerDashboardService",
+    "BatchInputService",
+    "DowntimeEventService",
+    "PromoCampaignService",
+    "ProductionAnalyticsService",
+    "OEEService",
 ]

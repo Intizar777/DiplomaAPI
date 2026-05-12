@@ -12,7 +12,8 @@ from app.models.sensor import SensorReading
 from app.models.inventory import InventorySnapshot
 from app.models.sync_log import SyncLog, SyncError
 from app.models.personnel import Location, ProductionLine, Department, Position, Workstation, Employee
-from app.models.reference import UnitOfMeasure, Warehouse, SensorParameter, Sensor, Customer, QualitySpec
+from app.models.reference import UnitOfMeasure, Warehouse, SensorParameter, Sensor, Customer, QualitySpec, LineCapacityPlan
+from app.models.analytics import BatchInput, DowntimeEvent, PromoCampaign
 
 __all__ = [
     "Base",
@@ -41,4 +42,8 @@ __all__ = [
     "Sensor",
     "Customer",
     "QualitySpec",
+    "LineCapacityPlan",
+    "BatchInput",
+    "DowntimeEvent",
+    "PromoCampaign",
 ]
