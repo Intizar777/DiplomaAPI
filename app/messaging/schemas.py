@@ -68,6 +68,7 @@ class SaleRecordedPayload(BaseModel):
     external_id: str | None = Field(default=None, alias="externalId")
     product_id: UUID = Field(alias="productId")
     amount: float
+    cost: float | None = Field(default=None, alias="cost")
     channel: str | None = None
 
     model_config = {"populate_by_name": True}

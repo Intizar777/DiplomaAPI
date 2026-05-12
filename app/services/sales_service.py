@@ -412,6 +412,7 @@ class SalesService:
                         customer_name=None,
                         quantity=Decimal(str(sale_item.quantity)),
                         amount=Decimal(str(sale_item.amount)),
+                        cost=Decimal(str(sale_item.cost)) if sale_item.cost else None,
                         sale_date=parsed_sale_date,
                         region=sale_item.region,
                         channel=sale_item.channel.lower() if sale_item.channel else None,
@@ -529,6 +530,8 @@ class SalesService:
 
         if record:
             record.amount = Decimal(str(payload.amount))
+            if payload.cost:
+                record.cost = Decimal(str(payload.cost))
             if payload.channel:
                 record.channel = payload.channel.lower()
             if customer_id:
@@ -543,6 +546,7 @@ class SalesService:
                 product_id=payload.product_id,
                 customer_id=customer_id,
                 amount=Decimal(str(payload.amount)),
+                cost=Decimal(str(payload.cost)) if payload.cost else None,
                 channel=payload.channel.lower() if payload.channel else None,
                 sale_date=date.today(),
                 snapshot_date=date.today(),

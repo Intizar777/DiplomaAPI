@@ -361,6 +361,7 @@ class SaleItem(BaseModel):
     customerId: UUID
     quantity: float
     amount: float
+    cost: float = None
     saleDate: datetime
     region: str
     channel: str
@@ -374,6 +375,7 @@ class SaleItem(BaseModel):
                 "customerId": "7fbf1f89-f3b7-463c-9c8f-fdf628c23195",
                 "quantity": 1501.444,
                 "amount": 1728026.56,
+                "cost": 1123216.86,
                 "saleDate": "2026-05-04T00:00:00.000Z",
                 "region": "ПФО",
                 "channel": "retail"
