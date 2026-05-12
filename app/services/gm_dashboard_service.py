@@ -165,7 +165,7 @@ class GroupManagerDashboardService:
         rows = result.all()
 
         # Build production line UUID -> name map
-        from app.models.personnel import ProductionLine
+        from app.models.reference import ProductionLine
         line_result = await self.db.execute(select(ProductionLine.id, ProductionLine.name))
         line_names = {str(row[0]): row[1] for row in line_result.all()}
 
@@ -250,7 +250,7 @@ class GroupManagerDashboardService:
         rows = result.all()
 
         # Build production line UUID -> name map
-        from app.models.personnel import ProductionLine
+        from app.models.reference import ProductionLine
         line_result = await self.db.execute(select(ProductionLine.id, ProductionLine.name))
         line_names = {str(row[0]): row[1] for row in line_result.all()}
 

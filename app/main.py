@@ -29,7 +29,6 @@ from app.routers import (
     output_router,
     sensors_router,
     inventory_router,
-    personnel_router,
     line_master_dashboard_router,
     gm_dashboard_router,
     qe_dashboard_router,
@@ -275,7 +274,6 @@ app.include_router(products_router)
 app.include_router(output_router)
 app.include_router(sensors_router)
 app.include_router(inventory_router)
-app.include_router(personnel_router)
 app.include_router(line_master_dashboard_router)
 app.include_router(gm_dashboard_router)
 app.include_router(qe_dashboard_router)

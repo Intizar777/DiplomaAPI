@@ -29,7 +29,7 @@ async def _run_sync_task(task_name: str):
     from app.cron.jobs import (
         sync_kpi_task, sync_kpi_per_line_task, sync_sales_task, sync_orders_task, sync_quality_task,
         sync_products_task, sync_output_task, sync_sensors_task, sync_inventory_task,
-        sync_personnel_task, sync_references_task,
+        sync_references_task,
     )
 
     task_map = {
@@ -42,7 +42,6 @@ async def _run_sync_task(task_name: str):
         "output": sync_output_task,
         "sensors": sync_sensors_task,
         "inventory": sync_inventory_task,
-        "personnel": sync_personnel_task,
         "references": sync_references_task,
     }
 
@@ -72,7 +71,7 @@ async def _run_initial_sync():
     from app.services import (
         ProductService, SensorService, SalesService,
         InventoryService, OutputService, QualityService, OrderService,
-        PersonnelService, KPIService
+        KPIService
     )
 
     async with AsyncSessionLocal() as db:
@@ -253,13 +252,6 @@ async def _run_initial_sync():
                 total_records += count
                 logger.info("initial_sync_inventory_synced", count=count)
 
-                # Personnel entities (Location, ProductionLine, Department, Workstation, Position, Employee)
-                personnel_service = PersonnelService(db, gateway)
-                count = await personnel_service.sync_from_gateway()
-                summary["level_1"]["personnel"] = count
-                total_records += count
-                logger.info("initial_sync_personnel_synced", count=count)
-
             except Exception as e:
                 error_msg = f"Level 1 error: {str(e)[:200]}"
                 logger.error("initial_sync_level_1_failed", error=error_msg)
@@ -347,7 +339,7 @@ async def get_sync_status(
 
     Returns current status, last run time, and statistics for each task.
     """
-    tasks = ["kpi", "kpi_per_line", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "personnel", "references"]
+    tasks = ["kpi", "kpi_per_line", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "references"]
     task_statuses = []
     
     for task_name in tasks:
@@ -417,7 +409,7 @@ async def trigger_sync_all():
     Check /sync/status for progress.
     Stop with POST /api/v1/sync/stop or /api/v1/sync/stop/all
     """
-    all_tasks = ["kpi", "kpi_per_line", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "personnel", "references"]
+    all_tasks = ["kpi", "kpi_per_line", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "references"]
     triggered = []
     skipped = []
 
@@ -450,7 +442,7 @@ async def trigger_sync_task(
     Available tasks: kpi, kpi_per_line, sales, orders, quality, products, output, sensors, inventory, personnel, references
     Tasks run as background tasks — API returns immediately.
     """
-    valid_tasks = ["kpi", "kpi_per_line", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "personnel", "references"]
+    valid_tasks = ["kpi", "kpi_per_line", "sales", "orders", "quality", "products", "output", "sensors", "inventory", "references"]
 
     if task_name not in valid_tasks:
         raise HTTPException(

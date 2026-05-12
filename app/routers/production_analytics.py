@@ -6,16 +6,17 @@ from typing import Optional, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Path, HTTPException
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models import ProductionLine
 from app.services import (
     GatewayClient,
     BatchInputService,
     DowntimeEventService,
     PromoCampaignService,
     ProductionAnalyticsService,
-    PersonnelService,
 )
 from app.schemas import (
     BatchInputCreate,
@@ -34,11 +35,11 @@ from app.schemas import (
     OTIFResponse,
     KPIBreakdownResponse,
     SalesMarginResponse,
-    ProductionLineResponse,
     ProductionLinesListResponse,
     LineProductivityResponse,
     ScrapPercentageResponse,
 )
+from app.schemas.analytics import ProductionLineResponse
 
 router = APIRouter(prefix="/api/production", tags=["Production Analytics"])
 
@@ -64,14 +65,6 @@ async def get_promo_campaign_service(db: AsyncSession = Depends(get_db)):
     """Dependency to get promo campaign service."""
     gateway = GatewayClient()
     return PromoCampaignService(db, gateway)
-
-
-async def get_personnel_service(db: AsyncSession = Depends(get_db)):
-    """Dependency to get personnel service."""
-    gateway = GatewayClient()
-    return PersonnelService(db, gateway)
-
-
 
 
 # ============ KPI Endpoints ============
@@ -332,7 +325,20 @@ async def list_production_lines(
     division: Optional[str] = Query(None, description="Filter by division"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
     limit: int = Query(20, ge=1, le=100, description="Pagination limit"),
-    service: PersonnelService = Depends(get_personnel_service)
+    db: AsyncSession = Depends(get_db)
 ):
-    """Get production lines (from personnel reference data)."""
-    return await service.get_production_lines(division, offset, limit)
+    """Get production lines (from reference data)."""
+    query = select(ProductionLine).where(ProductionLine.is_active == True)
+    if division:
+        query = query.where(ProductionLine.division == division)
+
+    result = await db.execute(query.offset(offset).limit(limit))
+    lines = result.scalars().all()
+
+    count_result = await db.execute(select(func.count()).select_from(ProductionLine).where(ProductionLine.is_active == True))
+    total = count_result.scalar()
+
+    return ProductionLinesListResponse(
+        data=[ProductionLineResponse(id=str(l.id), name=l.name, code=l.code, division=l.division) for l in lines],
+        total=total
+    )

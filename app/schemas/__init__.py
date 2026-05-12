@@ -26,15 +26,6 @@ from app.schemas.quality import (
     LotDeviationsResponse,
 )
 from app.schemas.sync import SyncStatusResponse, SyncTriggerResponse
-from app.schemas.personnel import (
-    LocationResponse,
-    ProductionLineResponse,
-    DepartmentResponse,
-    PositionResponse,
-    WorkstationResponse,
-    EmployeeResponse,
-    PersonnelSummaryResponse,
-)
 from app.schemas.line_master_dashboard import (
     ShiftProgressResponse,
     ShiftComparisonResponse,
@@ -130,14 +121,6 @@ __all__ = [
     # Sync
     "SyncStatusResponse",
     "SyncTriggerResponse",
-    # Personnel
-    "LocationResponse",
-    "ProductionLineResponse",
-    "DepartmentResponse",
-    "PositionResponse",
-    "WorkstationResponse",
-    "EmployeeResponse",
-    "PersonnelSummaryResponse",
     # Line Master Dashboard
     "ShiftProgressResponse",
     "ShiftComparisonResponse",

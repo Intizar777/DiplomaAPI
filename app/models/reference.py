@@ -7,6 +7,24 @@ from sqlalchemy.dialects.postgresql import UUID
 from app.models.base import Base, TimestampMixin, UUIDMixin
 
 
+class ProductionLine(Base, UUIDMixin, TimestampMixin):
+    """
+    Production line reference data.
+    Synced from Gateway personnel service.
+    """
+    __tablename__ = "production_lines"
+
+    name = Column(String(255), nullable=False)
+    code = Column(String(100), nullable=True, index=True)
+    location_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    description = Column(String(500), nullable=True)
+    division = Column(String(255), nullable=True)
+    is_active = Column(Boolean, nullable=True, default=True)
+
+    def __repr__(self):
+        return f"<ProductionLine(code={self.code}, name={self.name})>"
+
+
 class UnitOfMeasure(Base, UUIDMixin, TimestampMixin):
     """
     Unit of measure reference (kg, liters, pieces, etc).

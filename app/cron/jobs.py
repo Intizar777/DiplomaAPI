@@ -7,7 +7,7 @@ import structlog
 
 from app.database import AsyncSessionLocal
 from app.models import SyncLog, SyncStatus
-from app.services import GatewayClient, KPIService, SalesService, OrderService, QualityService, ProductService, OutputService, SensorService, InventoryService, PersonnelService
+from app.services import GatewayClient, KPIService, SalesService, OrderService, QualityService, ProductService, OutputService, SensorService, InventoryService
 from app.config import settings
 from sqlalchemy import select, func
 
@@ -321,17 +321,6 @@ async def sync_inventory_task():
         task_name="inventory",
         model_class=InventorySnapshot,
         service_class=InventoryService,
-        full_sync=True,
-    )
-
-
-async def sync_personnel_task():
-    """Sync personnel data from Gateway (full upsert each time)."""
-    from app.models import PersonnelEmployee
-    await _run_sync_task(
-        task_name="personnel",
-        model_class=PersonnelEmployee,
-        service_class=PersonnelService,
         full_sync=True,
     )
 
