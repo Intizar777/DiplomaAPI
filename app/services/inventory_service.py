@@ -10,6 +10,7 @@ from sqlalchemy import select, func, desc, cast, String, outerjoin
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import InventorySnapshot, Product
+from app.models.reference import Warehouse
 from app.services.gateway_client import GatewayClient
 from app.utils.logging_utils import track_feature_path, log_data_flow
 import structlog
