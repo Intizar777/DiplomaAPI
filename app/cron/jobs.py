@@ -93,8 +93,10 @@ async def _run_sync_task(
                     task=task_name,
                     checkpoint="initial_sync_detected",
                     mode="full",
+                    from_date=from_date.isoformat() if from_date else None,
+                    to_date=to_date.isoformat() if to_date else None,
                 )
-                records = await service.sync_from_gateway(None, None)
+                records = await service.sync_from_gateway(from_date, to_date)
             else:
                 logger.info(
                     "sync_task_checkpoint",

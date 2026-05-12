@@ -968,12 +968,13 @@ class GatewayClient:
         order_id: Optional[str] = None,
         product_id: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Get batch inputs from Gateway (paginated)."""
+        """Get batch inputs from Gateway (paginated).
+
+        Note: batch_inputs endpoint doesn't support date filtering (from/to parameters).
+        All records are returned regardless of date parameters.
+        """
         params = {}
-        if from_date:
-            params["from"] = from_date.isoformat()
-        if to_date:
-            params["to"] = to_date.isoformat()
+        # Note: batch_inputs endpoint doesn't accept from/to parameters
         if order_id:
             params["orderId"] = order_id
         if product_id:
