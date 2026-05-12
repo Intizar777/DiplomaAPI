@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "lastUpdated": "2026-05-07",
+  "lastUpdated": "2026-05-12",
   "features": [
     {
       "id": "feat-001",
@@ -181,10 +181,10 @@
     {
       "id": "feat-023",
       "name": "Personnel Sync and Endpoints",
-      "description": "Sync locations, production lines, departments, positions, workstations, employees from Gateway. Endpoints: /api/v1/personnel/departments, /positions, /employees, /locations, /summary",
+      "description": "REMOVED - Personnel/HR management was removed as it's no longer within the API's scope. Production lines and locations remain as reference data for KPI analytics.",
       "dependencies": ["feat-001", "feat-007"],
-      "status": "done",
-      "evidence": "app/models/personnel.py, app/services/personnel_service.py, app/routers/personnel.py, tests passing"
+      "status": "deprecated",
+      "evidence": "Removed in commit 16fc5a9; personnel tables dropped (except locations); PersonnelService removed; endpoints deprecated"
     },
     {
       "id": "feat-024",
@@ -235,5 +235,5 @@
       "evidence": "app/models/reference.py (LineCapacityPlan), app/schemas/oee.py, app/services/oee_service.py, app/routers/oee.py, tests/unit/test_oee_service.py (3/10 unit tests passing - status calculation tests), alembic migration e42439396426 applied successfully. OEE components (availability, performance, quality) fully implemented with configurable targets."
     }
   ],
-  "notes": "Core features (001-018) complete. Personnel sync (023) complete. RabbitMQ consumer (024) complete. Wave 1-4 dashboards (025-028) complete. Phase 1 KPI OEE (029) complete. Legacy /api/v1/kpi endpoints consolidated into /api/production KPI endpoints. Type hints (013) and tests (014) in progress. Wave 5 warehouse dashboard planned. Performance and auth features (019-022) planned for v2."
+  "notes": "Core features (001-018) complete. Personnel sync (023) REMOVED - out of scope. RabbitMQ consumer (024) complete. Wave 1-4 dashboards (025-028) complete. Phase 1 KPI OEE (029) complete. Legacy /api/v1/kpi endpoints consolidated into /api/production KPI endpoints. Type hints (013) and tests (014) in progress. Production lines and locations retained as reference data for KPI analytics. Wave 5 warehouse dashboard planned. Performance and auth features (019-022) planned for v2."
 }
