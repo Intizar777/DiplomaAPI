@@ -626,7 +626,7 @@ async def sync_quality_specs_task():
         try:
             count = 0
             gateway_data = await gateway.get_quality_specs()
-            specs = gateway_data.qualitySpecs
+            specs = gateway_data.get("qualitySpecs", []) if isinstance(gateway_data, dict) else gateway_data.qualitySpecs
             logger.info("sync_quality_specs_fetched", count=len(specs))
 
             for spec_data in specs:
