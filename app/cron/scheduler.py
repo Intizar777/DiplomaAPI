@@ -10,7 +10,7 @@ from app.cron.jobs import (
     sync_kpi_task, sync_kpi_per_line_task, sync_sales_task, sync_orders_task, sync_quality_task,
     sync_products_task, sync_output_task, sync_sensors_task, sync_inventory_task,
     sync_references_task, sync_batch_inputs_task, sync_downtime_events_task,
-    sync_promo_campaigns_task, aggregate_sales_trends_task,
+    sync_promo_campaigns_task, aggregate_sales_trends_task, sync_quality_specs_task,
 )
 
 logger = structlog.get_logger()
@@ -34,34 +34,39 @@ async def run_scheduled_jobs():
             logger.info("scheduler_check", current_minute=current_minute, current_time=now.isoformat())
 
             jobs_to_run = []
+            # Level 0: reference tables first (other tasks have FK deps on these)
             if current_minute == 0:
-                jobs_to_run.append(("kpi", sync_kpi_task))
-            elif current_minute == 2:
-                jobs_to_run.append(("kpi_per_line", sync_kpi_per_line_task))
-            elif current_minute == 5:
-                jobs_to_run.append(("sales", sync_sales_task))
-            elif current_minute == 7:
-                jobs_to_run.append(("aggregate_sales_trends", aggregate_sales_trends_task))
-            elif current_minute == 10:
-                jobs_to_run.append(("orders", sync_orders_task))
-            elif current_minute == 15:
-                jobs_to_run.append(("quality", sync_quality_task))
-            elif current_minute == 20:
-                jobs_to_run.append(("products", sync_products_task))
-            elif current_minute == 25:
-                jobs_to_run.append(("output", sync_output_task))
-            elif current_minute == 30:
-                jobs_to_run.append(("sensors", sync_sensors_task))
-            elif current_minute == 35:
-                jobs_to_run.append(("inventory", sync_inventory_task))
-            elif current_minute == 45:
                 jobs_to_run.append(("references", sync_references_task))
+            elif current_minute == 5:
+                jobs_to_run.append(("products", sync_products_task))
+            elif current_minute == 10:
+                jobs_to_run.append(("quality_specs", sync_quality_specs_task))
+            # Level 1: transactional data
+            elif current_minute == 15:
+                jobs_to_run.append(("kpi", sync_kpi_task))
+            elif current_minute == 20:
+                jobs_to_run.append(("kpi_per_line", sync_kpi_per_line_task))
+            elif current_minute == 25:
+                jobs_to_run.append(("sales", sync_sales_task))
+            elif current_minute == 30:
+                jobs_to_run.append(("orders", sync_orders_task))
+            elif current_minute == 35:
+                jobs_to_run.append(("quality", sync_quality_task))
+            elif current_minute == 40:
+                jobs_to_run.append(("output", sync_output_task))
+            elif current_minute == 45:
+                jobs_to_run.append(("sensors", sync_sensors_task))
             elif current_minute == 48:
+                jobs_to_run.append(("inventory", sync_inventory_task))
+            elif current_minute == 50:
                 jobs_to_run.append(("batch_inputs", sync_batch_inputs_task))
             elif current_minute == 52:
                 jobs_to_run.append(("downtime_events", sync_downtime_events_task))
-            elif current_minute == 55:
+            elif current_minute == 54:
                 jobs_to_run.append(("promo_campaigns", sync_promo_campaigns_task))
+            # Level 2: local aggregations (after source data is fresh)
+            elif current_minute == 57:
+                jobs_to_run.append(("aggregate_sales_trends", aggregate_sales_trends_task))
 
             # Run jobs
             for job_name, job_func in jobs_to_run:

@@ -11,7 +11,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Customer, Warehouse, UnitOfMeasure, SensorParameter, Product
+from app.models import Customer, Warehouse, UnitOfMeasure, SensorParameter, Product, QualitySpec
 
 logger = structlog.get_logger()
 
@@ -187,3 +187,60 @@ async def upsert_sensor_parameter(db: AsyncSession, param_data: dict) -> Optiona
         db.add(param)
 
     return param.id
+
+
+async def upsert_quality_spec(db: AsyncSession, spec_data: dict) -> Optional[UUID]:
+    """Upsert a quality spec from Gateway data. Returns spec_id."""
+    spec_id_raw = spec_data.get("id")
+    try:
+        spec_id = UUID(spec_id_raw) if isinstance(spec_id_raw, str) else spec_id_raw
+    except (ValueError, AttributeError, TypeError):
+        logger.warning("invalid_quality_spec_id_skipped", raw=spec_id_raw)
+        return None
+
+    product_id_raw = spec_data.get("productId")
+    try:
+        product_id = UUID(product_id_raw) if isinstance(product_id_raw, str) else product_id_raw
+    except (ValueError, AttributeError, TypeError):
+        logger.warning("invalid_product_id_in_quality_spec_skipped", spec_id=spec_id_raw)
+        return None
+
+    parameter_name = spec_data.get("parameterName", "")
+    lower_limit = spec_data.get("lowerLimit")
+    upper_limit = spec_data.get("upperLimit")
+    is_active = spec_data.get("isActive", True)
+
+    # Find existing spec by product_id + parameter_name (natural key)
+    if parameter_name:
+        existing = await db.execute(
+            select(QualitySpec).where(
+                (QualitySpec.product_id == product_id) &
+                (QualitySpec.parameter_name == parameter_name)
+            )
+        )
+        spec = existing.scalar_one_or_none()
+    else:
+        spec = None
+
+    # Fall back to UUID lookup
+    if not spec and spec_id:
+        existing = await db.execute(select(QualitySpec).where(QualitySpec.id == spec_id))
+        spec = existing.scalar_one_or_none()
+
+    if spec:
+        spec.parameter_name = parameter_name or spec.parameter_name
+        spec.lower_limit = lower_limit if lower_limit is not None else spec.lower_limit
+        spec.upper_limit = upper_limit if upper_limit is not None else spec.upper_limit
+        spec.is_active = is_active
+    else:
+        spec = QualitySpec(
+            id=spec_id,
+            product_id=product_id,
+            parameter_name=parameter_name,
+            lower_limit=lower_limit,
+            upper_limit=upper_limit,
+            is_active=is_active,
+        )
+        db.add(spec)
+
+    return spec.id

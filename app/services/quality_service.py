@@ -1,7 +1,7 @@
 """
 Quality business logic service.
 """
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Dict, List, Optional
 from uuid import UUID, uuid4
@@ -511,6 +511,8 @@ class QualityService:
                     td_parsed = date.fromisoformat(td[:10])
                 except ValueError:
                     td_parsed = None
+            elif isinstance(td, datetime):
+                td_parsed = td.date()
             elif isinstance(td, date):
                 td_parsed = td
             else:
@@ -551,6 +553,8 @@ class QualityService:
                     test_date_parsed = date.fromisoformat(test_date_raw[:10])
                 except ValueError:
                     test_date_parsed = date.today()
+            elif isinstance(test_date_raw, datetime):
+                test_date_parsed = test_date_raw.date()
             elif isinstance(test_date_raw, date):
                 test_date_parsed = test_date_raw
             else:

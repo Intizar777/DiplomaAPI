@@ -1072,3 +1072,27 @@ class GatewayClient:
     async def get_employees(self) -> Dict[str, Any]:
         """Alias for get_personnel_employees."""
         return await self.get_personnel_employees()
+
+    async def get_quality_specs(
+        self,
+        product_id: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0
+    ) -> Dict[str, Any]:
+        """Get quality specifications from Gateway (paginated).
+
+        Returns a dict with qualitySpecs list and total count.
+        """
+        params = {"limit": limit, "offset": offset}
+        if product_id:
+            params["productId"] = product_id
+
+        specs = await self._fetch_all_pages("/production/quality-specs", "qualitySpecs", params)
+
+        log_data_flow(
+            source="gateway_api",
+            target="quality_specs_service",
+            operation="fetch_quality_specs",
+            records_count=len(specs),
+        )
+        return {"qualitySpecs": specs, "total": len(specs)}

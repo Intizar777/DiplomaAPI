@@ -88,6 +88,27 @@ async def lifespan(app: FastAPI):
         )
         raise
 
+    # Mark any sync_logs left as RUNNING from a previous crash as FAILED
+    try:
+        from app.database import AsyncSessionLocal
+        from sqlalchemy import text as sql_text
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(sql_text(
+                "UPDATE sync_logs SET status = 'failed', completed_at = NOW(), "
+                "error_message = 'Process terminated before completion' "
+                "WHERE status = 'running'"
+            ))
+            await db.commit()
+            if result.rowcount:
+                logger.info(
+                    "lifecycle_startup_checkpoint",
+                    phase="startup",
+                    checkpoint="stale_sync_logs_cleared",
+                    count=result.rowcount,
+                )
+    except Exception as e:
+        logger.warning("lifecycle_stale_sync_logs_cleanup_failed", error=str(e))
+
     # Start scheduler
     try:
         start_scheduler()

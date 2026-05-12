@@ -610,3 +610,45 @@ async def cleanup_old_data_task():
                 traceback=tb_str,
             )
             raise
+
+
+async def sync_quality_specs_task():
+    """Sync quality specifications from Gateway."""
+    from app.models import QualitySpec
+    from app.services.reference_sync import upsert_quality_spec
+
+    logger.info("sync_task_started", task="quality_specs", phase="entry")
+
+    async with AsyncSessionLocal() as db:
+        log = await create_sync_log(db, "quality_specs")
+        gateway = GatewayClient()
+
+        try:
+            count = 0
+            gateway_data = await gateway.get_quality_specs()
+            specs = gateway_data.qualitySpecs
+            logger.info("sync_quality_specs_fetched", count=len(specs))
+
+            for spec_data in specs:
+                spec_data_dict = spec_data.__dict__ if hasattr(spec_data, '__dict__') else spec_data
+                if not spec_data_dict.get("productId"):
+                    logger.warning("quality_spec_no_product_id_skipped", spec=spec_data_dict)
+                    continue
+                await upsert_quality_spec(db, spec_data_dict)
+                count += 1
+
+            await db.commit()
+            logger.info("sync_quality_specs_done", count=count)
+            await complete_sync_log(db, log, SyncStatus.COMPLETED, records_processed=count)
+
+        except Exception as e:
+            await db.rollback()
+            tb_str = traceback.format_exc()
+            logger.error(
+                "sync_task_failed",
+                task="quality_specs",
+                error_type=type(e).__name__,
+                error_message=str(e),
+                traceback=tb_str,
+            )
+            await complete_sync_log(db, log, SyncStatus.FAILED, error_message=str(e))
