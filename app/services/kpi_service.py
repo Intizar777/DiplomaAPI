@@ -62,7 +62,7 @@ class KPIService:
                 "completed_orders": kpi.completed_orders,
                 "total_orders": kpi.total_orders,
                 "oee_estimate": kpi.oee_estimate,
-                "product_line_id": kpi.production_line
+                "product_line_id": kpi.product_line_id
             },
             period_from=kpi.period_from,
             period_to=kpi.period_to
@@ -90,7 +90,7 @@ class KPIService:
             {
                 "period_from": kpi.period_from,
                 "period_to": kpi.period_to,
-                "product_line_id": kpi.production_line,
+                "product_line_id": kpi.product_line_id,
                 "total_output": kpi.total_output,
                 "defect_rate": kpi.defect_rate,
                 "completed_orders": kpi.completed_orders,
@@ -99,7 +99,7 @@ class KPIService:
             }
             for kpi in kpis
         ]
-        
+
         return KPIHistoryResponse(
             items=items,
             period_from=from_date,
@@ -123,7 +123,7 @@ class KPIService:
             {
                 "period_from": kpi.period_from,
                 "period_to": kpi.period_to,
-                "product_line_id": kpi.production_line,
+                "product_line_id": kpi.product_line_id,
                 "total_output": kpi.total_output,
                 "defect_rate": kpi.defect_rate,
                 "completed_orders": kpi.completed_orders,
@@ -132,7 +132,7 @@ class KPIService:
             }
             for kpi in kpis
         ]
-        
+
         period_from = kpis[0].period_from if kpis else date.today()
         period_to = kpis[-1].period_to if kpis else date.today()
         

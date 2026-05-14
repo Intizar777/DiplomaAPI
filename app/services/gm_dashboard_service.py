@@ -46,7 +46,8 @@ class GroupManagerDashboardService:
         # Pass 1 — aggregate per line
         agg_query = (
             select(
-                AggregatedKPI.production_line,
+                AggregatedKPI.product_line_id,
+                AggregatedKPI.production_line_name,
                 func.avg(AggregatedKPI.oee_estimate).label("avg_oee"),
                 func.sum(AggregatedKPI.completed_orders).label("completed_orders"),
                 func.sum(AggregatedKPI.total_orders).label("total_orders"),
@@ -54,7 +55,7 @@ class GroupManagerDashboardService:
                 func.count(AggregatedKPI.id).label("data_points"),
             )
             .where(AggregatedKPI.period_from >= period_from)
-            .group_by(AggregatedKPI.production_line)
+            .group_by(AggregatedKPI.product_line_id, AggregatedKPI.production_line_name)
             .order_by(func.avg(AggregatedKPI.oee_estimate).desc().nulls_last())
         )
         agg_result = await self.db.execute(agg_query)
@@ -63,7 +64,7 @@ class GroupManagerDashboardService:
         # Pass 2 — raw data points for trend (only non-NULL oee_estimate)
         trend_query = (
             select(
-                AggregatedKPI.production_line,
+                AggregatedKPI.product_line_id,
                 AggregatedKPI.period_from,
                 AggregatedKPI.period_to,
                 AggregatedKPI.oee_estimate,
@@ -72,15 +73,15 @@ class GroupManagerDashboardService:
                 AggregatedKPI.period_from >= period_from,
                 AggregatedKPI.oee_estimate.isnot(None),
             )
-            .order_by(AggregatedKPI.production_line, AggregatedKPI.period_from)
+            .order_by(AggregatedKPI.product_line_id, AggregatedKPI.period_from)
         )
         trend_result = await self.db.execute(trend_query)
         trend_rows = trend_result.all()
 
-        # Build trend map keyed by production_line (None is a valid key)
+        # Build trend map keyed by product_line_id (None is a valid key)
         trend_map: Dict[Optional[str], List[OEEDataPoint]] = {}
         for row in trend_rows:
-            key = row.production_line
+            key = row.product_line_id
             if key not in trend_map:
                 trend_map[key] = []
             trend_map[key].append(
@@ -98,14 +99,14 @@ class GroupManagerDashboardService:
             vs_target = (avg_oee - OEE_TARGET).quantize(Decimal("0.01"))
             lines.append(
                 OEELineItem(
-                    production_line=row.production_line,
+                    production_line=row.production_line_name or row.product_line_id,
                     avg_oee=avg_oee,
                     vs_target_pct=vs_target,
                     completed_orders=int(row.completed_orders or 0),
                     total_orders=int(row.total_orders or 0),
                     avg_defect_rate=Decimal(str(row.avg_defect_rate or 0)).quantize(Decimal("0.01")),
                     data_points=int(row.data_points),
-                    trend=trend_map.get(row.production_line, []),
+                    trend=trend_map.get(row.product_line_id, []),
                 )
             )
 

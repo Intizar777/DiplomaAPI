@@ -270,7 +270,7 @@ class ReportService:
         )
         
         if filters.get("production_line"):
-            query = query.where(AggregatedKPI.production_line == filters["production_line"])
+            query = query.where(AggregatedKPI.product_line_id == filters["production_line"])
         
         query = query.order_by(desc(AggregatedKPI.period_from))
         
@@ -282,7 +282,7 @@ class ReportService:
             data.append({
                 "period_from": r.period_from.isoformat(),
                 "period_to": r.period_to.isoformat(),
-                "line": r.production_line or "Все линии",
+                "line": r.production_line_name or r.product_line_id or "Все линии",
                 "total_output": float(r.total_output) if r.total_output else 0,
                 "defect_rate_pct": float(r.defect_rate) if r.defect_rate else 0,
                 "completed_orders": r.completed_orders,

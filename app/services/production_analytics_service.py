@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Optional, Literal, List
 from uuid import UUID as UUIDType
 
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, String
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import AggregatedKPI, OrderSnapshot, QualityResult, SaleRecord, ProductionLine, BatchInput, ProductionOutput, DowntimeEvent
@@ -234,7 +234,7 @@ class ProductionAnalyticsService:
                 ProductionLine.division.label("group_key"),
                 func.avg(AggregatedKPI.oee_estimate).label("oee_estimate"),
             ).join(
-                ProductionLine, AggregatedKPI.product_line_id == ProductionLine.code
+                ProductionLine, AggregatedKPI.product_line_id == func.cast(ProductionLine.id, String)
             ).where(
                 AggregatedKPI.period_from >= from_date,
                 AggregatedKPI.period_to <= to_date,
@@ -376,7 +376,7 @@ class ProductionAnalyticsService:
             target = Decimal("2.5")  # tonnes/hour target
 
             items.append({
-                "product_line_id": row.production_line or "unknown",
+                "product_line_id": row.product_line_id or "unknown",
                 "productivity": productivity,
                 "total_output": total_output,
                 "days": days,
