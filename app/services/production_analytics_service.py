@@ -37,10 +37,10 @@ class ProductionAnalyticsService:
         )
 
         if production_line_id:
-            kpi_query = kpi_query.where(AggregatedKPI.production_line == production_line_id)
+            kpi_query = kpi_query.where(AggregatedKPI.product_line_id == production_line_id)
         else:
             # Use aggregated across all lines (production_line is NULL)
-            kpi_query = kpi_query.where(AggregatedKPI.production_line == None)
+            kpi_query = kpi_query.where(AggregatedKPI.product_line_id == None)
 
         result = await self.db.execute(kpi_query)
         kpi_records = result.scalars().all()
@@ -116,9 +116,9 @@ class ProductionAnalyticsService:
                 AggregatedKPI.period_to <= prev_to,
             )
             if production_line_id:
-                prev_query = prev_query.where(AggregatedKPI.production_line == production_line_id)
+                prev_query = prev_query.where(AggregatedKPI.product_line_id == production_line_id)
             else:
-                prev_query = prev_query.where(AggregatedKPI.production_line == None)
+                prev_query = prev_query.where(AggregatedKPI.product_line_id == None)
 
             prev_result = await self.db.execute(prev_query)
             prev_records = prev_result.scalars().all()
@@ -191,15 +191,15 @@ class ProductionAnalyticsService:
         if group_by == "productionLine":
             # Group by production_line from aggregated_kpi
             query = select(
-                AggregatedKPI.production_line.label("group_key"),
+                AggregatedKPI.product_line_id.label("group_key"),
                 func.avg(AggregatedKPI.oee_estimate).label("oee_estimate"),
                 func.avg(AggregatedKPI.defect_rate).label("defect_rate"),
                 func.sum(AggregatedKPI.total_output).label("total_output"),
             ).where(
                 AggregatedKPI.period_from >= from_date,
                 AggregatedKPI.period_to <= to_date,
-                AggregatedKPI.production_line != None,
-            ).group_by(AggregatedKPI.production_line)
+                AggregatedKPI.product_line_id != None,
+            ).group_by(AggregatedKPI.product_line_id)
 
             result = await self.db.execute(query)
             rows = result.all()
@@ -234,7 +234,7 @@ class ProductionAnalyticsService:
                 ProductionLine.division.label("group_key"),
                 func.avg(AggregatedKPI.oee_estimate).label("oee_estimate"),
             ).join(
-                ProductionLine, AggregatedKPI.production_line == ProductionLine.code
+                ProductionLine, AggregatedKPI.product_line_id == ProductionLine.code
             ).where(
                 AggregatedKPI.period_from >= from_date,
                 AggregatedKPI.period_to <= to_date,
@@ -349,18 +349,18 @@ class ProductionAnalyticsService:
         logger.info("get_line_productivity", from_date=from_date, to_date=to_date)
 
         query = select(
-            AggregatedKPI.production_line,
+            AggregatedKPI.product_line_id,
             func.sum(AggregatedKPI.total_output).label("total_output"),
         ).where(
             and_(
                 AggregatedKPI.period_from >= from_date,
                 AggregatedKPI.period_to <= to_date,
-                AggregatedKPI.production_line != None,
+                AggregatedKPI.product_line_id != None,
             )
-        ).group_by(AggregatedKPI.production_line)
+        ).group_by(AggregatedKPI.product_line_id)
 
         if production_line_id:
-            query = query.where(AggregatedKPI.production_line == production_line_id)
+            query = query.where(AggregatedKPI.product_line_id == production_line_id)
 
         result = await self.db.execute(query)
         rows = result.all()
@@ -376,7 +376,7 @@ class ProductionAnalyticsService:
             target = Decimal("2.5")  # tonnes/hour target
 
             items.append({
-                "production_line": row.production_line or "unknown",
+                "product_line_id": row.production_line or "unknown",
                 "productivity": productivity,
                 "total_output": total_output,
                 "days": days,

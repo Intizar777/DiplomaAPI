@@ -21,7 +21,7 @@ class AggregatedKPI(Base, UUIDMixin, TimestampMixin):
     period_to = Column(Date, nullable=False, index=True)
 
     # Production line (NULL = all lines)
-    production_line = Column(String(50), nullable=True, index=True)
+    product_line_id = Column(String(50), nullable=True, index=True)
     production_line_name = Column(String(255), nullable=True)
     
     # Metrics
@@ -34,9 +34,9 @@ class AggregatedKPI(Base, UUIDMixin, TimestampMixin):
     
     # Constraints
     __table_args__ = (
-        UniqueConstraint('period_from', 'period_to', 'production_line', 
+        UniqueConstraint('period_from', 'period_to', 'product_line_id',
                          name='uix_kpi_period_line'),
     )
     
     def __repr__(self):
-        return f"<AggregatedKPI({self.period_from} to {self.period_to}, line={self.production_line})>"
+        return f"<AggregatedKPI({self.period_from} to {self.period_to}, line={self.product_line_id})>"

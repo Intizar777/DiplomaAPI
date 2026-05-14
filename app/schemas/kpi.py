@@ -15,7 +15,7 @@ class KPIData(BaseModel):
     completed_orders: int = Field(description="Number of completed orders")
     total_orders: int = Field(description="Total number of orders")
     oee_estimate: Optional[Decimal] = Field(default=None, description="OEE estimate percentage")
-    production_line: Optional[str] = Field(default=None, description="Production line")
+    product_line_id: Optional[str] = Field(default=None, description="Production line")
 
 
 class KPICurrentResponse(BaseModel):
@@ -32,7 +32,7 @@ class KPIHistoryItem(BaseModel):
     """Single KPI history record."""
     period_from: date
     period_to: date
-    production_line: Optional[str]
+    product_line_id: Optional[str]
     total_output: Decimal
     defect_rate: Decimal
     completed_orders: int

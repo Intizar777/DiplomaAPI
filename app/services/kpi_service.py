@@ -33,7 +33,7 @@ class KPIService:
         query = select(AggregatedKPI).order_by(AggregatedKPI.period_to.desc())
         
         if production_line:
-            query = query.where(AggregatedKPI.production_line == production_line)
+            query = query.where(AggregatedKPI.product_line_id == production_line)
         
         query = query.limit(1)
         result = await self.db.execute(query)
@@ -49,7 +49,7 @@ class KPIService:
                     "completed_orders": 0,
                     "total_orders": 0,
                     "oee_estimate": None,
-                    "production_line": production_line
+                    "product_line_id": production_line
                 },
                 period_from=today - timedelta(days=30),
                 period_to=today
@@ -62,7 +62,7 @@ class KPIService:
                 "completed_orders": kpi.completed_orders,
                 "total_orders": kpi.total_orders,
                 "oee_estimate": kpi.oee_estimate,
-                "production_line": kpi.production_line
+                "product_line_id": kpi.production_line
             },
             period_from=kpi.period_from,
             period_to=kpi.period_to
@@ -81,7 +81,7 @@ class KPIService:
         ).order_by(AggregatedKPI.period_from)
         
         if production_line:
-            query = query.where(AggregatedKPI.production_line == production_line)
+            query = query.where(AggregatedKPI.product_line_id == production_line)
         
         result = await self.db.execute(query)
         kpis = result.scalars().all()
@@ -90,7 +90,7 @@ class KPIService:
             {
                 "period_from": kpi.period_from,
                 "period_to": kpi.period_to,
-                "production_line": kpi.production_line,
+                "product_line_id": kpi.production_line,
                 "total_output": kpi.total_output,
                 "defect_rate": kpi.defect_rate,
                 "completed_orders": kpi.completed_orders,
@@ -114,7 +114,7 @@ class KPIService:
         query = select(AggregatedKPI).order_by(AggregatedKPI.period_from)
         
         if production_line:
-            query = query.where(AggregatedKPI.production_line == production_line)
+            query = query.where(AggregatedKPI.product_line_id == production_line)
         
         result = await self.db.execute(query)
         kpis = result.scalars().all()
@@ -123,7 +123,7 @@ class KPIService:
             {
                 "period_from": kpi.period_from,
                 "period_to": kpi.period_to,
-                "production_line": kpi.production_line,
+                "product_line_id": kpi.production_line,
                 "total_output": kpi.total_output,
                 "defect_rate": kpi.defect_rate,
                 "completed_orders": kpi.completed_orders,
