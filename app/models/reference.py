@@ -95,12 +95,16 @@ class Sensor(Base, UUIDMixin, TimestampMixin):
     """
     IoT Sensor device reference.
     Synced from Gateway Production Service.
+    Denormalized: line_name, parameter_name, parameter_unit for reporting without JOIN.
     """
     __tablename__ = "sensors"
 
     device_id = Column(String(50), nullable=False, unique=True, index=True)
     production_line_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    line_name = Column(String(255), nullable=True)
     sensor_parameter_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    parameter_name = Column(String(100), nullable=True)
+    parameter_unit = Column(String(20), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True, index=True)
 
     __table_args__ = (

@@ -342,6 +342,8 @@ class KPIService:
             logger.warning("no_active_production_lines_found")
             return 0
 
+        # Map line_id to line_name for denormalization
+        line_map = {str(pl.id): pl.name for pl in production_lines}
         line_ids = [str(pl.id) for pl in production_lines]
         logger.info("kpi_sync_per_line_found_lines", lines_count=len(line_ids), lines=line_ids)
 
@@ -417,6 +419,7 @@ class KPIService:
                                 period_from=month_start,
                                 period_to=month_end,
                                 production_line=line_id,
+                                production_line_name=line_map.get(line_id),
                                 total_output=Decimal(str(kpi_response.totalOutput)),
                                 defect_rate=Decimal(str(kpi_response.defectRate)),
                                 completed_orders=kpi_response.completedOrders,

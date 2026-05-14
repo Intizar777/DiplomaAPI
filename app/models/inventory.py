@@ -14,12 +14,15 @@ class InventorySnapshot(Base, UUIDMixin, TimestampMixin):
     """
     Warehouse inventory snapshots.
     Normalized: warehouse_id links to Warehouse table.
+    Denormalized: warehouse_name, warehouse_code for reporting without JOIN.
     """
     __tablename__ = "inventory_snapshots"
 
     product_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     product_name = Column(String(255), nullable=True)
     warehouse_id = Column(UUID(as_uuid=True), ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True)
+    warehouse_name = Column(String(150), nullable=True)
+    warehouse_code = Column(String(20), nullable=True, index=True)
     lot_number = Column(String(100), nullable=True)
     quantity = Column(DECIMAL(15, 3), nullable=True)
     unit_of_measure = Column(String(20), nullable=True)

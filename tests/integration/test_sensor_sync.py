@@ -10,8 +10,7 @@ from uuid import uuid4
 from datetime import datetime, timezone
 
 from app.models.sensor import SensorReading
-from app.models.reference import Sensor, SensorParameter
-from app.models.personnel import ProductionLine
+from app.models.reference import Sensor, SensorParameter, ProductionLine
 from app.services.sensor_service import SensorService
 from app.schemas.gateway_responses import (
     SensorReadingsResponse, SensorReadingItem

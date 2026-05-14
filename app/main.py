@@ -111,7 +111,7 @@ async def lifespan(app: FastAPI):
 
     # Start scheduler
     try:
-        start_scheduler()
+        # start_scheduler()
         logger.info(
             "lifecycle_startup_checkpoint",
             phase="startup",

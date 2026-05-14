@@ -39,37 +39,29 @@ class InventoryService:
         if not latest_date:
             return {"items": [], "snapshot_date": None}
 
-        # Join with Product and Warehouse to get enriched data
-        query = select(
-            InventorySnapshot,
-            Product.name.label("product_name"),
-            Warehouse.code.label("wh_code")
-        ).outerjoin(
-            Product, cast(InventorySnapshot.product_id, String) == Product.source_system_id
-        ).outerjoin(
-            Warehouse, InventorySnapshot.warehouse_id == Warehouse.id
-        ).where(
+        # Use denormalized columns; no JOIN needed
+        query = select(InventorySnapshot).where(
             InventorySnapshot.snapshot_date == latest_date
-        ).order_by(InventorySnapshot.warehouse_id, Product.name)
+        ).order_by(InventorySnapshot.warehouse_id, InventorySnapshot.product_name)
 
         if warehouse_code:
-            query = query.where(Warehouse.code == warehouse_code)
+            query = query.where(InventorySnapshot.warehouse_code == warehouse_code)
         if product_id:
             query = query.where(InventorySnapshot.product_id == product_id)
 
         result = await self.db.execute(query)
-        rows = result.all()
+        rows = result.scalars().all()
 
         return {
             "items": [
                 {
-                    "product_id": str(row.InventorySnapshot.product_id),
-                    "product_name": row.product_name or row.InventorySnapshot.product_name,
-                    "warehouse_code": row.wh_code or "",
-                    "lot_number": row.InventorySnapshot.lot_number,
-                    "quantity": float(row.InventorySnapshot.quantity) if row.InventorySnapshot.quantity else 0,
-                    "unit_of_measure": row.InventorySnapshot.unit_of_measure,
-                    "last_updated": row.InventorySnapshot.last_updated.isoformat() if row.InventorySnapshot.last_updated else None,
+                    "product_id": str(row.product_id),
+                    "product_name": row.product_name,
+                    "warehouse_code": row.warehouse_code or "",
+                    "lot_number": row.lot_number,
+                    "quantity": float(row.quantity) if row.quantity else 0,
+                    "unit_of_measure": row.unit_of_measure,
+                    "last_updated": row.last_updated.isoformat() if row.last_updated else None,
                 }
                 for row in rows
             ],
@@ -139,6 +131,14 @@ class InventoryService:
             product_names[row[0]] = row[1]
             product_uom_codes[row[0]] = row[2]
 
+        # Get warehouse name + code map for enrichment
+        warehouse_result = await self.db.execute(select(Warehouse.id, Warehouse.name, Warehouse.code))
+        warehouse_names = {}
+        warehouse_codes = {}
+        for row in warehouse_result.all():
+            warehouse_names[row[0]] = row[1]
+            warehouse_codes[row[0]] = row[2]
+
         records_processed = 0
         batch_size = 50
         batch = []
@@ -150,6 +150,8 @@ class InventoryService:
 
             # Warehouse ID from the inventory item
             warehouse_id = inventory_item.warehouseId
+            warehouse_name = warehouse_names.get(warehouse_id) if warehouse_id else None
+            warehouse_code = warehouse_codes.get(warehouse_id) if warehouse_id else None
 
             # Parse last_updated
             last_updated_raw = inventory_item.lastUpdated
@@ -166,6 +168,8 @@ class InventoryService:
                 product_id=product_id,
                 product_name=product_name,
                 warehouse_id=warehouse_id,
+                warehouse_name=warehouse_name,
+                warehouse_code=warehouse_code,
                 lot_number=inventory_item.lotNumber,
                 quantity=Decimal(str(inventory_item.quantity)),
                 unit_of_measure=product_uom_codes.get(product_id),

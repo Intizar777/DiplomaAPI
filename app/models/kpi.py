@@ -12,15 +12,17 @@ from app.models.base import Base, TimestampMixin, UUIDMixin
 class AggregatedKPI(Base, UUIDMixin, TimestampMixin):
     """
     Aggregated KPI metrics by period and production line.
+    Denormalized: production_line_name for reporting without JOIN.
     """
     __tablename__ = "aggregated_kpi"
-    
+
     # Period
     period_from = Column(Date, nullable=False, index=True)
     period_to = Column(Date, nullable=False, index=True)
-    
+
     # Production line (NULL = all lines)
     production_line = Column(String(50), nullable=True, index=True)
+    production_line_name = Column(String(255), nullable=True)
     
     # Metrics
     total_output = Column(DECIMAL(15, 3), nullable=False, default=0)

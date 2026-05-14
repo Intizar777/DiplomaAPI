@@ -13,12 +13,15 @@ from app.models.base import Base, TimestampMixin, UUIDMixin
 class ProductionOutput(Base, UUIDMixin, TimestampMixin):
     """
     Production output records (batch/lot level).
+    Denormalized: production_line_name for reporting without JOIN.
     """
     __tablename__ = "production_output"
 
     order_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     product_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     product_name = Column(String(255), nullable=True)
+    production_line_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    production_line_name = Column(String(255), nullable=True)
     lot_number = Column(String(100), nullable=False, index=True)
     quantity = Column(DECIMAL(15, 3), nullable=True)
     quality_status = Column(String(20), nullable=True)

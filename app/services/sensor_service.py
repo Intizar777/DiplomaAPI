@@ -38,18 +38,16 @@ class SensorService:
             SensorReading,
             Sensor.device_id,
             Sensor.production_line_id,
-            SensorParameter.name.label("param_name"),
-            SensorParameter.unit
-        ).outerjoin(
+            Sensor.parameter_name,
+            Sensor.parameter_unit
+        ).join(
             Sensor, SensorReading.sensor_id == Sensor.id
-        ).outerjoin(
-            SensorParameter, Sensor.sensor_parameter_id == SensorParameter.id
         ).order_by(desc(SensorReading.recorded_at))
 
         if production_line_id:
             query = query.where(Sensor.production_line_id == production_line_id)
         if parameter_name:
-            query = query.where(SensorParameter.name == parameter_name)
+            query = query.where(Sensor.parameter_name == parameter_name)
         if from_date:
             query = query.where(SensorReading.recorded_at >= from_date)
         if to_date:
@@ -63,9 +61,9 @@ class SensorService:
             {
                 "device_id": row.device_id,
                 "production_line_id": str(row.production_line_id) if row.production_line_id else None,
-                "parameter_name": row.param_name,
+                "parameter_name": row.parameter_name,
                 "value": float(row.SensorReading.value) if row.SensorReading.value else None,
-                "unit": row.unit,
+                "unit": row.parameter_unit,
                 "quality": row.SensorReading.quality,
                 "recorded_at": row.SensorReading.recorded_at.isoformat() if row.SensorReading.recorded_at else None,
             }
@@ -85,12 +83,10 @@ class SensorService:
             SensorReading,
             Sensor.device_id,
             Sensor.production_line_id,
-            SensorParameter.name.label("param_name"),
-            SensorParameter.unit
-        ).outerjoin(
+            Sensor.parameter_name,
+            Sensor.parameter_unit
+        ).join(
             Sensor, SensorReading.sensor_id == Sensor.id
-        ).outerjoin(
-            SensorParameter, Sensor.sensor_parameter_id == SensorParameter.id
         ).where(
             SensorReading.quality.in_(["bad", "degraded"])
         ).order_by(desc(SensorReading.recorded_at))
@@ -108,9 +104,9 @@ class SensorService:
             {
                 "device_id": row.device_id,
                 "production_line_id": str(row.production_line_id) if row.production_line_id else None,
-                "parameter_name": row.param_name,
+                "parameter_name": row.parameter_name,
                 "value": float(row.SensorReading.value) if row.SensorReading.value else None,
-                "unit": row.unit,
+                "unit": row.parameter_unit,
                 "quality": row.SensorReading.quality,
                 "recorded_at": row.SensorReading.recorded_at.isoformat() if row.SensorReading.recorded_at else None,
             }
@@ -167,6 +163,8 @@ class SensorService:
 
     async def _sync_sensor(self, sensor_data: dict) -> Optional[UUID]:
         """Upsert a sensor device and return its ID."""
+        from app.models.reference import ProductionLine
+
         if not sensor_data:
             return None
 
@@ -196,9 +194,13 @@ class SensorService:
             sensor = existing.scalar_one_or_none()
 
         param_id = None
+        param_name = None
+        param_unit = None
         param_data = sensor_data.get("sensorParameter")
         if param_data:
             param_id = await upsert_sensor_parameter(self.db, param_data)
+            param_name = param_data.get("name")
+            param_unit = param_data.get("unit")
         else:
             param_id_raw = sensor_data.get("sensorParameterId")
             if param_id_raw:
@@ -206,22 +208,46 @@ class SensorService:
                     param_id = UUID(param_id_raw) if isinstance(param_id_raw, str) else param_id_raw
                 except (ValueError, AttributeError, TypeError):
                     pass
+            # If no param_id, try to get it from SensorParameter table
+            if param_id:
+                param_result = await self.db.execute(
+                    select(SensorParameter.name, SensorParameter.unit).where(SensorParameter.id == param_id)
+                )
+                param_row = param_result.scalar_one_or_none()
+                if param_row:
+                    param_name = param_row[0]
+                    param_unit = param_row[1]
 
         prod_line_id = sensor_data.get("productionLineId")
         if prod_line_id:
             prod_line_id = UUID(str(prod_line_id)) if not isinstance(prod_line_id, UUID) else prod_line_id
 
+        line_name = None
+        if prod_line_id:
+            line_result = await self.db.execute(
+                select(ProductionLine.name).where(ProductionLine.id == prod_line_id)
+            )
+            line_row = line_result.scalar()
+            if line_row:
+                line_name = line_row
+
         if sensor:
             sensor.device_id = device_id or sensor.device_id
             sensor.production_line_id = prod_line_id or sensor.production_line_id
+            sensor.line_name = line_name or sensor.line_name
             sensor.sensor_parameter_id = param_id or sensor.sensor_parameter_id
+            sensor.parameter_name = param_name or sensor.parameter_name
+            sensor.parameter_unit = param_unit or sensor.parameter_unit
             sensor.is_active = sensor_data.get("isActive", sensor.is_active)
         else:
             sensor = Sensor(
                 id=sensor_id,
                 device_id=device_id or f"sensor_{sensor_id}",
                 production_line_id=prod_line_id,
+                line_name=line_name,
                 sensor_parameter_id=param_id,
+                parameter_name=param_name,
+                parameter_unit=param_unit,
                 is_active=sensor_data.get("isActive", True),
             )
             self.db.add(sensor)

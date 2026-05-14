@@ -1,0 +1,73 @@
+"""Unit tests for unified API error handlers."""
+
+from fastapi.exceptions import HTTPException, RequestValidationError
+import pytest
+from starlette.requests import Request
+
+from app.main import (
+    global_exception_handler,
+    http_exception_handler,
+    validation_exception_handler,
+)
+
+pytestmark = pytest.mark.asyncio
+
+
+def _build_request(trace_id: str = "trace-test-123") -> Request:
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/test",
+        "headers": [],
+        "query_string": b"",
+        "client": ("127.0.0.1", 12345),
+        "server": ("testserver", 80),
+        "scheme": "http",
+        "http_version": "1.1",
+    }
+    request = Request(scope)
+    request.state.trace_id = trace_id
+    return request
+
+
+async def test_http_exception_handler_envelope_404():
+    request = _build_request()
+
+    response = await http_exception_handler(
+        request,
+        HTTPException(status_code=404, detail="Order not found"),
+    )
+
+    assert response.status_code == 404
+    payload = response.body.decode("utf-8")
+    assert '"error":{"code":"http_404"' in payload
+    assert '"message":"Order not found"' in payload
+    assert '"detail":"Order not found"' in payload
+    assert '"trace_id":"trace-test-123"' in payload
+
+
+async def test_validation_exception_handler_envelope_422():
+    request = _build_request()
+
+    exc = RequestValidationError(
+        [{"loc": ["path", "order_id"], "msg": "invalid uuid", "type": "uuid_parsing"}]
+    )
+    response = await validation_exception_handler(request, exc)
+
+    assert response.status_code == 422
+    payload = response.body.decode("utf-8")
+    assert '"error":{"code":"validation_error"' in payload
+    assert '"message":"Request validation failed"' in payload
+    assert '"detail":[{' in payload
+
+
+async def test_global_exception_handler_envelope_500():
+    request = _build_request()
+
+    response = await global_exception_handler(request, RuntimeError("boom"))
+
+    assert response.status_code == 500
+    payload = response.body.decode("utf-8")
+    assert '"error":{"code":"internal_server_error"' in payload
+    assert '"message":"Internal server error"' in payload
+    assert '"detail":"Internal server error"' in payload

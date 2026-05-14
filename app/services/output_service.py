@@ -125,8 +125,11 @@ class OutputService:
         outputs_response = await self.gateway.get_output(from_date, to_date)
         logger.info("output_fetched_from_gateway", total_outputs=len(outputs_response.outputs))
 
-        # Get product name map for enrichment
+        # Get product name map and production line map for enrichment
         product_names = await get_product_name_map(self.db)
+        from app.models.reference import ProductionLine
+        line_result = await self.db.execute(select(ProductionLine.id, ProductionLine.name))
+        line_names = {str(row[0]): row[1] for row in line_result.all()}
 
         records_processed = 0
         batch_size = 50
@@ -147,11 +150,16 @@ class OutputService:
             product_id = output_item.productId
             product_name = product_names.get(product_id) if product_id else None
 
+            production_line_id = output_item.productionLineId if hasattr(output_item, 'productionLineId') else None
+            production_line_name = line_names.get(str(production_line_id)) if production_line_id else None
+
             output = ProductionOutput(
                 id=output_item.id,
                 order_id=output_item.orderId,
                 product_id=product_id,
                 product_name=product_name,
+                production_line_id=production_line_id,
+                production_line_name=production_line_name,
                 lot_number=output_item.lotNumber,
                 quantity=Decimal(str(output_item.quantity)),
                 quality_status=output_item.qualityStatus.lower() if output_item.qualityStatus else None,
@@ -217,10 +225,21 @@ class OutputService:
                 output.event_id = UUID(event_id)
             logger.info("output_updated_from_event", lot_number=payload.lot_number)
         else:
+            # Look up production_line_name if production_line_id provided
+            production_line_name = None
+            if hasattr(payload, 'production_line_id') and payload.production_line_id:
+                from app.models.reference import ProductionLine
+                line_result = await self.db.execute(
+                    select(ProductionLine.name).where(ProductionLine.id == payload.production_line_id)
+                )
+                production_line_name = line_result.scalar()
+
             output = ProductionOutput(
                 id=payload.id,
                 order_id=payload.order_id,
                 lot_number=payload.lot_number,
+                production_line_id=payload.production_line_id if hasattr(payload, 'production_line_id') else None,
+                production_line_name=production_line_name,
                 quantity=Decimal(str(payload.quantity)),
                 production_date=date.today(),
                 snapshot_date=date.today(),

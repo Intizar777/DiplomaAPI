@@ -1,0 +1,2 @@
+"""DiplomaAPI application package."""
+
