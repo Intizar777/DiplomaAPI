@@ -47,7 +47,6 @@ async def upsert_customer(db: AsyncSession, customer_data: dict) -> Optional[UUI
         customer.name = customer_data.get("name", customer.name)
         customer.region = customer_data.get("region", customer.region)
         customer.is_active = customer_data.get("isActive", customer.is_active)
-        customer.source_system_id = customer_data.get("sourceSystemId", customer.source_system_id)
     else:
         customer = Customer(
             id=customer_id,
@@ -55,7 +54,6 @@ async def upsert_customer(db: AsyncSession, customer_data: dict) -> Optional[UUI
             name=customer_data.get("name", ""),
             region=customer_data.get("region", "Unknown"),
             is_active=customer_data.get("isActive", True),
-            source_system_id=customer_data.get("sourceSystemId"),
         )
         db.add(customer)
 
@@ -86,19 +84,15 @@ async def upsert_warehouse(db: AsyncSession, warehouse_data: dict) -> Optional[U
     if warehouse:
         warehouse.code = code or warehouse.code
         warehouse.name = warehouse_data.get("name", warehouse.name)
-        warehouse.location = warehouse_data.get("location", warehouse.location)
         warehouse.capacity = warehouse_data.get("capacity", warehouse.capacity)
         warehouse.is_active = warehouse_data.get("isActive", warehouse.is_active)
-        warehouse.source_system_id = warehouse_data.get("sourceSystemId", warehouse.source_system_id)
     else:
         warehouse = Warehouse(
             id=warehouse_id,
             code=code or f"warehouse_{warehouse_id}",
             name=warehouse_data.get("name", ""),
-            location=warehouse_data.get("location", "Unknown"),
             capacity=warehouse_data.get("capacity", 0),
             is_active=warehouse_data.get("isActive", True),
-            source_system_id=warehouse_data.get("sourceSystemId"),
         )
         db.add(warehouse)
 
@@ -116,7 +110,6 @@ async def upsert_unit_of_measure(db: AsyncSession, unit_data: dict) -> Optional[
 
     code = unit_data.get("code")
     name = unit_data.get("name", "")
-    source_system_id = unit_data.get("sourceSystemId")
 
     if code:
         existing = await db.execute(select(UnitOfMeasure).where(UnitOfMeasure.code == code))
@@ -131,13 +124,11 @@ async def upsert_unit_of_measure(db: AsyncSession, unit_data: dict) -> Optional[
     if unit:
         unit.code = code or unit.code
         unit.name = name or unit.name
-        unit.source_system_id = source_system_id or unit.source_system_id
     else:
         unit = UnitOfMeasure(
             id=unit_id,
             code=code or f"unit_{unit_id}",
             name=name or "",
-            source_system_id=source_system_id,
         )
         db.add(unit)
 

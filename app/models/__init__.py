@@ -11,7 +11,7 @@ from app.models.output import ProductionOutput
 from app.models.sensor import SensorReading
 from app.models.inventory import InventorySnapshot
 from app.models.sync_log import SyncLog, SyncError
-from app.models.reference import ProductionLine, UnitOfMeasure, Warehouse, SensorParameter, Sensor, Customer, QualitySpec, LineCapacityPlan, CostBase, KPIConfig
+from app.models.reference import ProductionLine, UnitOfMeasure, Warehouse, SensorParameter, Sensor, Customer, QualitySpec, LineCapacityPlan, KPIConfig
 from app.models.analytics import BatchInput, DowntimeEvent, PromoCampaign
 
 __all__ = [
@@ -37,7 +37,6 @@ __all__ = [
     "Customer",
     "QualitySpec",
     "LineCapacityPlan",
-    "CostBase",
     "KPIConfig",
     "BatchInput",
     "DowntimeEvent",

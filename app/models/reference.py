@@ -28,14 +28,12 @@ class ProductionLine(Base, UUIDMixin, TimestampMixin):
 class UnitOfMeasure(Base, UUIDMixin, TimestampMixin):
     """
     Unit of measure reference (kg, liters, pieces, etc).
-    Synced from Gateway Production Service.
+    Synced from Gateway Production Service. ID must be provided from Gateway.
     """
     __tablename__ = "units_of_measure"
 
     code = Column(String(20), nullable=False, unique=True, index=True)
     name = Column(String(100), nullable=False)
-
-    source_system_id = Column(String(100), nullable=True, unique=True, index=True)
 
     __table_args__ = (
         Index('idx_unit_of_measure_code', 'code'),
@@ -48,17 +46,14 @@ class UnitOfMeasure(Base, UUIDMixin, TimestampMixin):
 class Warehouse(Base, UUIDMixin, TimestampMixin):
     """
     Warehouse reference data.
-    Synced from Gateway Production Service.
+    Synced from Gateway Production Service. ID must be provided from Gateway.
     """
     __tablename__ = "warehouses"
 
     name = Column(String(150), nullable=False)
     code = Column(String(20), nullable=False, unique=True, index=True)
-    location = Column(String(200), nullable=False)
     capacity = Column(DECIMAL(15, 2), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True, index=True)
-
-    source_system_id = Column(String(100), nullable=True, unique=True, index=True)
 
     __table_args__ = (
         Index('idx_warehouse_code', 'code'),
@@ -121,7 +116,7 @@ class Sensor(Base, UUIDMixin, TimestampMixin):
 class Customer(Base, UUIDMixin, TimestampMixin):
     """
     Customer reference for sales.
-    Synced from Gateway Production Service.
+    Synced from Gateway Production Service. ID must be provided from Gateway.
     """
     __tablename__ = "customers"
 
@@ -129,8 +124,6 @@ class Customer(Base, UUIDMixin, TimestampMixin):
     code = Column(String(20), nullable=False, unique=True, index=True)
     region = Column(String(100), nullable=False, index=True)
     is_active = Column(Boolean, nullable=False, default=True, index=True)
-
-    source_system_id = Column(String(100), nullable=True, unique=True, index=True)
 
     __table_args__ = (
         Index('idx_customer_code', 'code'),
@@ -184,29 +177,6 @@ class LineCapacityPlan(Base, UUIDMixin, TimestampMixin):
 
     def __repr__(self):
         return f"<LineCapacityPlan(line={self.production_line_id}, {self.period_from}-{self.period_to})>"
-
-
-class CostBase(Base, UUIDMixin, TimestampMixin):
-    """
-    Product cost base for margin and COGS calculations.
-    Stores raw material costs, labor, and depreciation per product and period.
-    """
-    __tablename__ = "cost_bases"
-
-    product_id = Column(UUID(as_uuid=True), nullable=True, index=True)  # NULL = global default
-    raw_material_cost = Column(DECIMAL(15, 4), nullable=False)  # руб./кг
-    labor_cost_per_hour = Column(DECIMAL(10, 2), nullable=True)  # руб./ч
-    depreciation_monthly = Column(DECIMAL(15, 2), nullable=True)  # руб./месяц
-    period_from = Column(Date, nullable=False, index=True)
-    period_to = Column(Date, nullable=True)  # NULL = still active
-
-    __table_args__ = (
-        Index('idx_cost_base_product_period', 'product_id', 'period_from'),
-        Index('idx_cost_base_period', 'period_from', 'period_to'),
-    )
-
-    def __repr__(self):
-        return f"<CostBase(product_id={self.product_id}, raw_material_cost={self.raw_material_cost}, {self.period_from}-{self.period_to})>"
 
 
 class KPIConfig(Base, UUIDMixin, TimestampMixin):

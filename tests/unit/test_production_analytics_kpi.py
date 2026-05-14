@@ -17,7 +17,6 @@ from app.models import (
     ProductionOutput,
     DowntimeEvent,
     KPIConfig,
-    CostBase,
 )
 from app.services import ProductionAnalyticsService
 
@@ -87,24 +86,6 @@ async def sample_quality_results(session: AsyncSession):
     session.add_all(results)
     await session.commit()
     return results
-
-
-@pytest.fixture
-async def sample_cost_base(session: AsyncSession):
-    """Fixture for sample cost base."""
-    product_id = uuid4()
-    cost_base = CostBase(
-        product_id=product_id,
-        raw_material_cost=Decimal("50.0"),
-        labor_cost_per_hour=Decimal("500.0"),
-        depreciation_monthly=Decimal("10000.0"),
-        period_from=date(2026, 1, 1),
-        period_to=None,
-    )
-    session.add(cost_base)
-    await session.commit()
-    await session.refresh(cost_base)
-    return cost_base
 
 
 # ============ Phase 2 KPI Tests ============
