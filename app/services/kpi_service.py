@@ -239,14 +239,14 @@ class KPIService:
             stmt = insert(AggregatedKPI).values(
                 period_from=from_date,
                 period_to=to_date,
-                production_line=None,
+                product_line_id=None,
                 total_output=Decimal(str(kpi_response.totalOutput)),
                 defect_rate=Decimal(str(kpi_response.defectRate)),
                 completed_orders=kpi_response.completedOrders,
                 total_orders=kpi_response.totalOrders,
                 oee_estimate=Decimal(str(kpi_response.oeeEstimate)) if kpi_response.oeeEstimate else None
             ).on_conflict_do_update(
-                index_elements=['period_from', 'period_to', 'production_line'],
+                index_elements=['period_from', 'period_to', 'product_line_id'],
                 set_=dict(
                     total_output=Decimal(str(kpi_response.totalOutput)),
                     defect_rate=Decimal(str(kpi_response.defectRate)),
@@ -283,7 +283,7 @@ class KPIService:
                         aggregated = AggregatedKPI(
                             period_from=month_start,
                             period_to=month_end,
-                            production_line=None,
+                            product_line_id=None,
                             total_output=Decimal(str(kpi_response.totalOutput)),
                             defect_rate=Decimal(str(kpi_response.defectRate)),
                             completed_orders=kpi_response.completedOrders,
@@ -359,14 +359,14 @@ class KPIService:
                     stmt = insert(AggregatedKPI).values(
                         period_from=from_date,
                         period_to=to_date,
-                        production_line=line_id,
+                        product_line_id=line_id,
                         total_output=Decimal(str(kpi_response.totalOutput)),
                         defect_rate=Decimal(str(kpi_response.defectRate)),
                         completed_orders=kpi_response.completedOrders,
                         total_orders=kpi_response.totalOrders,
                         oee_estimate=Decimal(str(kpi_response.oeeEstimate)) if kpi_response.oeeEstimate else None
                     ).on_conflict_do_update(
-                        index_elements=['period_from', 'period_to', 'production_line'],
+                        index_elements=['period_from', 'period_to', 'product_line_id'],
                         set_=dict(
                             total_output=Decimal(str(kpi_response.totalOutput)),
                             defect_rate=Decimal(str(kpi_response.defectRate)),
@@ -418,7 +418,7 @@ class KPIService:
                             aggregated = AggregatedKPI(
                                 period_from=month_start,
                                 period_to=month_end,
-                                production_line=line_id,
+                                product_line_id=line_id,
                                 production_line_name=line_map.get(line_id),
                                 total_output=Decimal(str(kpi_response.totalOutput)),
                                 defect_rate=Decimal(str(kpi_response.defectRate)),

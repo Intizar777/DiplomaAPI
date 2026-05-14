@@ -11,6 +11,7 @@ from app.models import SyncLog, SyncStatus
 from app.services import GatewayClient, KPIService, SalesService, OrderService, QualityService, ProductService, OutputService, SensorService, InventoryService
 from app.config import settings
 from sqlalchemy import select, func
+from sqlalchemy.dialects.postgresql import insert
 
 logger = structlog.get_logger()
 
@@ -118,6 +119,7 @@ async def _run_sync_task(
                 status="success",
                 records_processed=records,
             )
+            return records
         except Exception as e:
             tb_str = traceback.format_exc()
             error_msg = f"{type(e).__name__}: {e}"
@@ -150,7 +152,7 @@ async def sync_kpi_task():
     to_date = sunday
 
     from app.models import AggregatedKPI
-    await _run_sync_task(
+    return await _run_sync_task(
         task_name="kpi",
         model_class=AggregatedKPI,
         service_class=KPIService,
@@ -168,7 +170,7 @@ async def sync_kpi_per_line_task():
     to_date = sunday
 
     from app.models import AggregatedKPI
-    await _run_sync_task(
+    return await _run_sync_task(
         task_name="kpi_per_line",
         model_class=AggregatedKPI,
         service_class=KPIService,
@@ -184,7 +186,7 @@ async def sync_sales_task():
     to_date = date.today()
 
     from app.models import AggregatedSales
-    await _run_sync_task(
+    return await _run_sync_task(
         task_name="sales",
         model_class=AggregatedSales,
         service_class=SalesService,
@@ -199,7 +201,7 @@ async def sync_orders_task():
     to_date = date.today()
 
     from app.models import OrderSnapshot
-    await _run_sync_task(
+    return await _run_sync_task(
         task_name="orders",
         model_class=OrderSnapshot,
         service_class=OrderService,
@@ -214,7 +216,7 @@ async def sync_quality_task():
     to_date = date.today()
 
     from app.models import QualityResult
-    await _run_sync_task(
+    return await _run_sync_task(
         task_name="quality",
         model_class=QualityResult,
         service_class=QualityService,
@@ -226,7 +228,7 @@ async def sync_quality_task():
 async def sync_products_task():
     """Sync products from Gateway (full upsert each time)."""
     from app.models import Product
-    await _run_sync_task(
+    return await _run_sync_task(
         task_name="products",
         model_class=Product,
         service_class=ProductService,
@@ -240,7 +242,7 @@ async def sync_output_task():
     to_date = date.today()
 
     from app.models import ProductionOutput
-    await _run_sync_task(
+    return await _run_sync_task(
         task_name="output",
         model_class=ProductionOutput,
         service_class=OutputService,
@@ -255,7 +257,7 @@ async def sync_sensors_task():
     to_date = date.today()
 
     from app.models import SensorReading
-    await _run_sync_task(
+    return await _run_sync_task(
         task_name="sensors",
         model_class=SensorReading,
         service_class=SensorService,
@@ -267,7 +269,7 @@ async def sync_sensors_task():
 async def sync_inventory_task():
     """Sync inventory from Gateway (snapshot current state)."""
     from app.models import InventorySnapshot
-    await _run_sync_task(
+    return await _run_sync_task(
         task_name="inventory",
         model_class=InventorySnapshot,
         service_class=InventoryService,
@@ -281,7 +283,7 @@ async def sync_references_task():
     Each reference type is wrapped in its own try/except so that a failure
     in one (e.g. 404 on a missing endpoint) does not kill the entire task.
     """
-    from app.services.reference_sync import upsert_unit_of_measure, upsert_customer, upsert_warehouse
+    from app.services.reference_sync import upsert_unit_of_measure, upsert_customer, upsert_warehouse, upsert_production_line
 
     logger.info("sync_task_started", task="references", phase="entry")
 
@@ -346,6 +348,25 @@ async def sync_references_task():
             logger.warning("sync_references_warehouses_error", error=str(e)[:200])
             errors.append(f"warehouses: {e}")
 
+        # ProductionLine
+        try:
+            count = 0
+            gateway_data = await gateway.get_personnel_production_lines()
+            lines = gateway_data.productionLines
+            logger.info("sync_references_production_lines_fetched", count=len(lines))
+            for line_data in lines:
+                line_data_dict = line_data.__dict__ if hasattr(line_data, '__dict__') else line_data
+                if not line_data_dict.get("id"):
+                    continue
+                await upsert_production_line(db, line_data_dict)
+                count += 1
+            await db.commit()
+            total += count
+            logger.info("sync_references_production_lines_done", count=count)
+        except Exception as e:
+            logger.warning("sync_references_production_lines_error", error=str(e)[:200])
+            errors.append(f"production_lines: {e}")
+
         # Finalize
         if errors:
             await complete_sync_log(
@@ -367,6 +388,7 @@ async def sync_references_task():
             )
 
         await gateway.close()
+        return total
 
 
 async def sync_batch_inputs_task():
@@ -377,7 +399,7 @@ async def sync_batch_inputs_task():
     from app.models import BatchInput
     from app.services import BatchInputService
 
-    await _run_sync_task(
+    return await _run_sync_task(
         task_name="batch_inputs",
         model_class=BatchInput,
         service_class=BatchInputService,
@@ -394,7 +416,7 @@ async def sync_downtime_events_task():
     from app.models import DowntimeEvent
     from app.services import DowntimeEventService
 
-    await _run_sync_task(
+    return await _run_sync_task(
         task_name="downtime_events",
         model_class=DowntimeEvent,
         service_class=DowntimeEventService,
@@ -411,7 +433,7 @@ async def sync_promo_campaigns_task():
     from app.models import PromoCampaign
     from app.services import PromoCampaignService
 
-    await _run_sync_task(
+    return await _run_sync_task(
         task_name="promo_campaigns",
         model_class=PromoCampaign,
         service_class=PromoCampaignService,
@@ -508,6 +530,7 @@ async def aggregate_sales_trends_task():
                 status="success",
                 records_processed=total_inserted,
             )
+            return total_inserted
 
         except Exception as e:
             tb_str = traceback.format_exc()
@@ -588,6 +611,11 @@ async def cleanup_old_data_task():
 
             await db.commit()
 
+            total_deleted = (
+                orders_deleted + quality_deleted + output_deleted +
+                sensors_deleted + inventory_deleted + sales_raw_deleted + logs_deleted
+            )
+
             logger.info(
                 "cleanup_task_completed",
                 task="cleanup_old_data",
@@ -599,6 +627,7 @@ async def cleanup_old_data_task():
                 sales_raw_deleted=sales_raw_deleted,
                 logs_deleted=logs_deleted,
             )
+            return total_deleted
         except Exception as e:
             await db.rollback()
             tb_str = traceback.format_exc()
@@ -640,6 +669,7 @@ async def sync_quality_specs_task():
             await db.commit()
             logger.info("sync_quality_specs_done", count=count)
             await complete_sync_log(db, log, SyncStatus.COMPLETED, records_processed=count)
+            return count
 
         except Exception as e:
             await db.rollback()
@@ -652,3 +682,360 @@ async def sync_quality_specs_task():
                 traceback=tb_str,
             )
             await complete_sync_log(db, log, SyncStatus.FAILED, error_message=str(e))
+            raise
+
+
+
+async def truncate_all_data_task():
+    """Truncate all data tables (DANGEROUS - use with caution)."""
+    from sqlalchemy import text
+    from app.models import (
+        AggregatedKPI, AggregatedSales, SalesTrends, SaleRecord,
+        OrderSnapshot, QualityResult, Product, ProductionOutput,
+        SensorReading, InventorySnapshot, SyncLog, SyncError,
+        ProductionLine, UnitOfMeasure, Warehouse, SensorParameter,
+        Sensor, Customer, QualitySpec, LineCapacityPlan, KPIConfig,
+        BatchInput, DowntimeEvent, PromoCampaign
+    )
+
+    logger.warning(
+        "truncate_all_data_started",
+        phase="entry",
+        warning="This will delete ALL data from all tables"
+    )
+
+    async with AsyncSessionLocal() as db:
+        try:
+            tables = [
+                # Transactional data (delete first)
+                AggregatedKPI, AggregatedSales, SalesTrends, SaleRecord,
+                OrderSnapshot, QualityResult, ProductionOutput,
+                SensorReading, InventorySnapshot, BatchInput,
+                DowntimeEvent, PromoCampaign,
+                # Reference data (delete last)
+                SyncLog, SyncError, QualitySpec, Sensor,
+                Product, SensorParameter, Customer, Warehouse,
+                UnitOfMeasure, LineCapacityPlan, KPIConfig,
+                ProductionLine,
+            ]
+
+            total_deleted = 0
+            for table_model in tables:
+                table_name = table_model.__tablename__
+                try:
+                    result = await db.execute(text(f"TRUNCATE TABLE {table_name} CASCADE"))
+                    await db.commit()
+                    logger.info("truncate_table_done", table=table_name)
+                except Exception as e:
+                    logger.warning("truncate_table_failed", table=table_name, error=str(e))
+                    await db.rollback()
+
+            logger.warning(
+                "truncate_all_data_completed",
+                phase="exit",
+                status="success",
+                tables_truncated=len(tables)
+            )
+            return total_deleted
+
+        except Exception as e:
+            tb_str = traceback.format_exc()
+            logger.error(
+                "truncate_all_data_failed",
+                phase="exit",
+                error_type=type(e).__name__,
+                error_message=str(e),
+                traceback=tb_str,
+            )
+            raise
+
+
+# Initial sync tasks (full data load without time restrictions)
+
+async def initial_sync_kpi_task():
+    """Full KPI sync from 2024-01 to today (no time restrictions)."""
+    from app.models import AggregatedKPI
+    return await _run_sync_task(
+        task_name="initial_sync_kpi",
+        model_class=AggregatedKPI,
+        service_class=KPIService,
+        full_sync=True,
+        method_name="sync_from_gateway",
+    )
+
+
+async def initial_sync_kpi_per_line_task():
+    """Full KPI per line sync from 2024-01 to today (no time restrictions)."""
+    from app.models import AggregatedKPI
+    return await _run_sync_task(
+        task_name="initial_sync_kpi_per_line",
+        model_class=AggregatedKPI,
+        service_class=KPIService,
+        full_sync=True,
+        method_name="sync_kpi_per_line",
+    )
+
+
+async def initial_sync_sales_task():
+    """Full sales sync from 2024-01 to today (no time restrictions)."""
+    from app.models import AggregatedSales
+    return await _run_sync_task(
+        task_name="initial_sync_sales",
+        model_class=AggregatedSales,
+        service_class=SalesService,
+        full_sync=True,
+    )
+
+
+async def initial_sync_orders_task():
+    """Full orders sync from 2024-01 to today (no time restrictions)."""
+    from app.models import OrderSnapshot
+    return await _run_sync_task(
+        task_name="initial_sync_orders",
+        model_class=OrderSnapshot,
+        service_class=OrderService,
+        full_sync=True,
+    )
+
+
+async def initial_sync_quality_task():
+    """Full quality sync from 2024-01 to today (no time restrictions)."""
+    from app.models import QualityResult
+    return await _run_sync_task(
+        task_name="initial_sync_quality",
+        model_class=QualityResult,
+        service_class=QualityService,
+        full_sync=True,
+    )
+
+
+async def initial_sync_output_task():
+    """Full output sync from 2024-01 to today (no time restrictions)."""
+    from app.models import ProductionOutput
+    return await _run_sync_task(
+        task_name="initial_sync_output",
+        model_class=ProductionOutput,
+        service_class=OutputService,
+        full_sync=True,
+    )
+
+
+async def initial_sync_sensors_task():
+    """Full sensor sync from 2024-01 to today (no time restrictions)."""
+    from app.models import SensorReading
+    return await _run_sync_task(
+        task_name="initial_sync_sensors",
+        model_class=SensorReading,
+        service_class=SensorService,
+        full_sync=True,
+    )
+
+
+async def initial_sync_inventory_task():
+    """Full inventory sync from 2024-01 to today (no time restrictions)."""
+    from app.models import InventoryLevel
+    return await _run_sync_task(
+        task_name="initial_sync_inventory",
+        model_class=InventoryLevel,
+        service_class=InventoryService,
+        full_sync=True,
+    )
+
+
+async def initial_sync_batch_inputs_task():
+    """Full batch inputs sync (no time restrictions, limit 100)."""
+    from app.models import BatchInput
+    from app.services import BatchInputService
+
+    async with AsyncSessionLocal() as db:
+        gateway = GatewayClient()
+        service = BatchInputService(db, gateway)
+        
+        logger.info("initial_sync_batch_inputs_started", phase="entry")
+        try:
+            response = await gateway.get_batch_inputs()
+            items = response.get("items", [])
+            
+            if not items:
+                logger.info("initial_sync_batch_inputs_no_items")
+                return 0
+            
+            inserted = 0
+            for item in items:
+                try:
+                    from datetime import datetime
+                    import dateutil.parser as dateutil_parser
+                    
+                    item_id = item.get("id")
+                    input_date_str = item.get("inputDate")
+                    input_date = dateutil_parser.isoparse(input_date_str) if input_date_str else None
+                    
+                    stmt = insert(BatchInput).values(
+                        id=item_id,
+                        order_id=item.get("orderId"),
+                        product_id=item.get("productId"),
+                        quantity=item.get("quantity"),
+                        input_date=input_date,
+                    ).on_conflict_do_nothing(index_elements=["id"])
+                    
+                    result = await db.execute(stmt)
+                    if result.rowcount > 0:
+                        inserted += 1
+                except Exception as e:
+                    await db.rollback()
+                    logger.error("initial_sync_batch_inputs_item_error", error=str(e))
+            
+            await db.commit()
+            logger.info("initial_sync_batch_inputs_completed", records_inserted=inserted)
+            return inserted
+        except Exception as e:
+            logger.error("initial_sync_batch_inputs_failed", error=str(e))
+            raise
+
+
+async def initial_sync_downtime_events_task():
+    """Full downtime events sync (no time restrictions, limit 100)."""
+    from app.models import DowntimeEvent
+    from app.services import DowntimeEventService
+
+    async with AsyncSessionLocal() as db:
+        gateway = GatewayClient()
+        service = DowntimeEventService(db, gateway)
+        
+        logger.info("initial_sync_downtime_events_started", phase="entry")
+        try:
+            response = await gateway.get_downtime_events()
+            items = response.get("items", [])
+            
+            if not items:
+                logger.info("initial_sync_downtime_events_no_items")
+                return 0
+            
+            inserted = 0
+            for item in items:
+                try:
+                    from datetime import datetime
+                    import dateutil.parser as dateutil_parser
+                    
+                    item_id = item.get("id")
+                    started_at_str = item.get("startedAt")
+                    ended_at_str = item.get("endedAt")
+                    started_at = dateutil_parser.isoparse(started_at_str) if started_at_str else None
+                    ended_at = dateutil_parser.isoparse(ended_at_str) if ended_at_str else None
+                    
+                    # Skip if started_at is missing (required field)
+                    if not started_at:
+                        continue
+                    
+                    stmt = insert(DowntimeEvent).values(
+                        id=item_id,
+                        production_line_id=item.get("productionLineId"),
+                        category=item.get("category"),
+                        reason=item.get("reason"),
+                        started_at=started_at,
+                        ended_at=ended_at,
+                        duration_minutes=item.get("durationMinutes"),
+                    ).on_conflict_do_nothing(index_elements=["id"])
+                    
+                    result = await db.execute(stmt)
+                    if result.rowcount > 0:
+                        inserted += 1
+                except Exception as e:
+                    await db.rollback()
+                    logger.error("initial_sync_downtime_events_item_error", error=str(e))
+            
+            await db.commit()
+            logger.info("initial_sync_downtime_events_completed", records_inserted=inserted)
+            return inserted
+        except Exception as e:
+            logger.error("initial_sync_downtime_events_failed", error=str(e))
+            raise
+
+
+async def initial_sync_promo_campaigns_task():
+    """Full promo campaigns sync (no time restrictions, limit 100)."""
+    from app.models import PromoCampaign
+    from app.services import PromoCampaignService
+
+    async with AsyncSessionLocal() as db:
+        gateway = GatewayClient()
+        service = PromoCampaignService(db, gateway)
+        
+        logger.info("initial_sync_promo_campaigns_started", phase="entry")
+        try:
+            response = await gateway.get_promo_campaigns()
+            items = response.get("items", [])
+            
+            if not items:
+                logger.info("initial_sync_promo_campaigns_no_items")
+                return 0
+            
+            inserted = 0
+            for item in items:
+                try:
+                    from datetime import datetime
+                    import dateutil.parser as dateutil_parser
+                    
+                    item_id = item.get("id")
+                    start_date_str = item.get("startDate")
+                    end_date_str = item.get("endDate")
+                    start_date = dateutil_parser.isoparse(start_date_str) if start_date_str else None
+                    end_date = dateutil_parser.isoparse(end_date_str) if end_date_str else None
+                    
+                    stmt = insert(PromoCampaign).values(
+                        id=item_id,
+                        name=item.get("name", ""),
+                        product_id=item.get("productId"),
+                        channel=item.get("channel"),
+                        start_date=start_date,
+                        end_date=end_date,
+                        discount_percent=item.get("discountPercent"),
+                    ).on_conflict_do_nothing(index_elements=["id"])
+                    
+                    result = await db.execute(stmt)
+                    if result.rowcount > 0:
+                        inserted += 1
+                except Exception as e:
+                    await db.rollback()
+                    logger.error("initial_sync_promo_campaigns_item_error", error=str(e))
+            
+            await db.commit()
+            logger.info("initial_sync_promo_campaigns_completed", records_inserted=inserted)
+            return inserted
+        except Exception as e:
+            logger.error("initial_sync_promo_campaigns_failed", error=str(e))
+            raise
+
+
+async def initial_sync_task():
+    """Run all initial sync tasks in order."""
+    tasks = [
+        ("references", sync_references_task),
+        ("products", sync_products_task),
+        ("quality_specs", sync_quality_specs_task),
+        ("initial_sync_kpi", initial_sync_kpi_task),
+        ("initial_sync_kpi_per_line", initial_sync_kpi_per_line_task),
+        ("initial_sync_sales", initial_sync_sales_task),
+        ("initial_sync_orders", initial_sync_orders_task),
+        ("initial_sync_quality", initial_sync_quality_task),
+        ("initial_sync_output", initial_sync_output_task),
+        ("initial_sync_sensors", initial_sync_sensors_task),
+        ("initial_sync_inventory", initial_sync_inventory_task),
+        ("initial_sync_batch_inputs", initial_sync_batch_inputs_task),
+        ("initial_sync_downtime_events", initial_sync_downtime_events_task),
+        ("initial_sync_promo_campaigns", initial_sync_promo_campaigns_task),
+        ("aggregate_sales_trends", aggregate_sales_trends_task),
+    ]
+    
+    total = 0
+    for task_name, task_func in tasks:
+        try:
+            logger.info("initial_sync_task_running", task=task_name)
+            result = await task_func()
+            total += result if result else 0
+            logger.info("initial_sync_task_completed", task=task_name, records=result)
+        except Exception as e:
+            logger.error("initial_sync_task_failed", task=task_name, error=str(e))
+            raise
+    
+    return total

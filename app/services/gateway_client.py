@@ -981,7 +981,7 @@ class GatewayClient:
         if product_id:
             params["productId"] = product_id
 
-        items = await self._fetch_all_pages("/production/batch-inputs", "items", params)
+        items = await self._fetch_all_pages("/production/batch-inputs", "items", params, page_size=100)
 
         log_data_flow(
             source="gateway_api",
@@ -1009,7 +1009,7 @@ class GatewayClient:
         if category:
             params["category"] = category
 
-        items = await self._fetch_all_pages("/production/downtime-events", "items", params)
+        items = await self._fetch_all_pages("/production/downtime-events", "items", params, page_size=100)
 
         log_data_flow(
             source="gateway_api",
@@ -1037,7 +1037,7 @@ class GatewayClient:
         if status:
             params["status"] = status
 
-        items = await self._fetch_all_pages("/production/promo-campaigns", "items", params)
+        items = await self._fetch_all_pages("/production/promo-campaigns", "items", params, page_size=100)
 
         log_data_flow(
             source="gateway_api",

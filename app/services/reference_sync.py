@@ -11,7 +11,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Customer, Warehouse, UnitOfMeasure, SensorParameter, Product, QualitySpec
+from app.models import Customer, Warehouse, UnitOfMeasure, SensorParameter, Product, QualitySpec, ProductionLine
 
 logger = structlog.get_logger()
 
@@ -235,3 +235,46 @@ async def upsert_quality_spec(db: AsyncSession, spec_data: dict) -> Optional[UUI
         db.add(spec)
 
     return spec.id
+
+
+
+async def upsert_production_line(db: AsyncSession, line_data: dict) -> Optional[UUID]:
+    """Upsert a production line from Gateway data. Returns line_id."""
+    line_id_raw = line_data.get("id")
+    try:
+        line_id = UUID(line_id_raw) if isinstance(line_id_raw, str) else line_id_raw
+    except (ValueError, AttributeError, TypeError):
+        logger.warning("invalid_production_line_id_skipped", raw=line_id_raw)
+        return None
+
+    code = line_data.get("code")
+    name = line_data.get("name", "")
+    division = line_data.get("division")
+    is_active = line_data.get("isActive", True)
+
+    if code:
+        existing = await db.execute(select(ProductionLine).where(ProductionLine.code == code))
+        line = existing.scalar_one_or_none()
+    else:
+        line = None
+
+    if not line and line_id:
+        existing = await db.execute(select(ProductionLine).where(ProductionLine.id == line_id))
+        line = existing.scalar_one_or_none()
+
+    if line:
+        line.code = code or line.code
+        line.name = name or line.name
+        line.division = division or line.division
+        line.is_active = is_active
+    else:
+        line = ProductionLine(
+            id=line_id,
+            code=code or f"line_{line_id}",
+            name=name or "",
+            division=division,
+            is_active=is_active,
+        )
+        db.add(line)
+
+    return line.id

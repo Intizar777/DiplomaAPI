@@ -272,7 +272,7 @@ class OrderItem(BaseModel):
     externalOrderId: str
     productId: UUID
     targetQuantity: float
-    actualQuantity: float
+    actualQuantity: Optional[float] = None
     status: str
     productionLineId: UUID
     plannedStart: datetime
@@ -616,4 +616,304 @@ class WarehouseItem(BaseModel):
 class WarehousesResponse(BaseModel):
     """Response from GET /production/warehouses"""
     warehouses: List[WarehouseItem]
+    total: int
+
+
+# ============================================================================
+# Additional Models (Batch Inputs, Downtime, Quality Specs, etc.)
+# ============================================================================
+
+class BatchInputItem(BaseModel):
+    """Single batch input from /production/batch-inputs"""
+    id: UUID
+    orderId: UUID
+    productId: UUID
+    quantity: float
+    inputDate: datetime
+    createdAt: datetime
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": "700e8226-d464-4739-845a-52a53271a3f6",
+                "orderId": "6dddc9fc-8231-4c3f-a172-bdcf8bcb5fea",
+                "productId": "180f0ebe-d23f-40f5-a20e-c171bf4cf5af",
+                "quantity": 2561.03,
+                "inputDate": "2026-05-04T21:13:20.033Z",
+                "createdAt": "2026-05-12T05:28:09.754Z"
+            }
+        }
+
+
+class BatchInputsResponse(BaseModel):
+    """Response from GET /production/batch-inputs"""
+    items: List[BatchInputItem]
+    total: int
+
+
+class DowntimeEventItem(BaseModel):
+    """Single downtime event from /production/downtime-events"""
+    id: UUID
+    productionLineId: UUID
+    reason: str
+    category: str
+    startedAt: datetime
+    endedAt: Optional[datetime] = None
+    durationMinutes: int
+    createdAt: datetime
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": "a63ce886-6a54-4da9-bcf9-786358322389",
+                "productionLineId": "1aebc8ae-4374-f95a-8ec9-b80f1375d3c6",
+                "reason": "Нехватка упаковочного материала",
+                "category": "MATERIAL_SHORTAGE",
+                "startedAt": "2026-05-04T23:02:42.284Z",
+                "endedAt": "2026-05-05T02:19:42.284Z",
+                "durationMinutes": 197,
+                "createdAt": "2026-05-12T05:28:09.790Z"
+            }
+        }
+
+
+class DowntimeEventsResponse(BaseModel):
+    """Response from GET /production/downtime-events"""
+    items: List[DowntimeEventItem]
+    total: int
+
+
+class OtifResponse(BaseModel):
+    """Response from GET /production/kpi/otif"""
+    otifRate: float
+    onTimeOrders: int
+    inFullQuantityOrders: int
+    otifOrders: int
+    totalOrders: int
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "otifRate": 0.12844036697247707,
+                "onTimeOrders": 55,
+                "inFullQuantityOrders": 26,
+                "otifOrders": 14,
+                "totalOrders": 109
+            }
+        }
+
+
+class QualitySpecItem(BaseModel):
+    """Single quality spec from /production/quality-specs"""
+    id: UUID
+    productId: UUID
+    parameterName: str
+    lowerLimit: float
+    upperLimit: float
+    isActive: bool
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": "8358638a-e0b8-4629-9dfb-da9621c35816",
+                "productId": "0559a3fa-f01e-42b3-9fe5-c13a4ab8aaed",
+                "parameterName": "Влажность",
+                "lowerLimit": 0,
+                "upperLimit": 0.1,
+                "isActive": True
+            }
+        }
+
+
+class QualitySpecsResponse(BaseModel):
+    """Response from GET /production/quality-specs"""
+    qualitySpecs: List[QualitySpecItem]
+    total: int
+
+
+class SensorParameterItem(BaseModel):
+    """Single sensor parameter from /production/sensor-parameters"""
+    id: UUID
+    name: str
+    unit: str
+    createdAt: datetime
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": "4c1ac2c5-2279-4588-ab90-475b2d820849",
+                "name": "Влажность",
+                "unit": "%ОВ",
+                "createdAt": "2026-05-08T15:02:39.750Z"
+            }
+        }
+
+
+class SensorParametersResponse(BaseModel):
+    """Response from GET /production/sensor-parameters"""
+    sensorParameters: List[SensorParameterItem]
+    total: int
+
+
+class ShiftTemplateItem(BaseModel):
+    """Single shift template from /personnel/shift-templates"""
+    id: UUID
+    name: str
+    shiftType: str
+    startTime: str
+    endTime: str
+    workDaysPattern: str
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": "718a5af1-391d-47fd-adc2-db18ad55ab5f",
+                "name": "Административный график 5/2",
+                "shiftType": "day_shift",
+                "startTime": "08:00",
+                "endTime": "17:00",
+                "workDaysPattern": "1111100"
+            }
+        }
+
+
+class ShiftTemplatesResponse(BaseModel):
+    """Response from GET /personnel/shift-templates"""
+    templates: List[ShiftTemplateItem]
+    total: int
+
+
+class PromoCampaignItem(BaseModel):
+    """Single promo campaign from /production/promo-campaigns"""
+    id: UUID
+    name: str
+    productId: UUID
+    channel: str
+    startDate: datetime
+    endDate: datetime
+    budget: float
+    createdAt: datetime
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "name": "Акция «Лето»",
+                "productId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "channel": "retail",
+                "startDate": "2026-06-01T00:00:00.000Z",
+                "endDate": "2026-06-30T00:00:00.000Z",
+                "budget": 100000,
+                "createdAt": "2026-05-08T15:06:00.413Z"
+            }
+        }
+
+
+class PromoCampaignsResponse(BaseModel):
+    """Response from GET /production/promo-campaigns"""
+    items: List[PromoCampaignItem]
+    total: int
+
+
+class PostalAreaItem(BaseModel):
+    """Single postal area from /personnel/postal-areas"""
+    id: UUID
+    postalCode: str
+    city: str
+    region: str
+    createdAt: datetime
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "postalCode": "141000",
+                "city": "Домодедово",
+                "region": "Московская область",
+                "createdAt": "2026-05-08T15:06:00.413Z"
+            }
+        }
+
+
+class PostalAreasResponse(BaseModel):
+    """Response from GET /personnel/postal-areas"""
+    postalAreas: List[PostalAreaItem]
+    total: int
+
+
+class ProductionLineViewItem(BaseModel):
+    """Single production line view from /personnel/production-line-views"""
+    id: UUID
+    productionLineId: UUID
+    name: str
+    code: str
+    description: str
+    isActive: bool
+    lastSyncedAt: Optional[datetime] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "productionLineId": "a0a65c5f-bb95-e4a8-e1be-3b6dff660b2d",
+                "name": "Линия молока",
+                "code": "LINE-01",
+                "description": "Основная линия производства молока",
+                "isActive": True,
+                "lastSyncedAt": "2026-05-08T15:06:00.413Z"
+            }
+        }
+
+
+class ProductionLineViewsResponse(BaseModel):
+    """Response from GET /personnel/production-line-views"""
+    productionLineViews: List[ProductionLineViewItem]
+    total: int
+
+
+class CurrentUserResponse(BaseModel):
+    """Response from GET /auth/me"""
+    id: UUID
+    email: str
+    role: str
+    isActive: bool
+    fullName: Optional[str] = None
+    employeeId: Optional[UUID] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "email": "admin@efko.local",
+                "role": "admin",
+                "isActive": True,
+                "fullName": "Администратор",
+                "employeeId": None
+            }
+        }
+
+
+class KpiBreakdownItem(BaseModel):
+    """Single item in KPI breakdown"""
+    groupKey: str
+    value: float
+    target: Optional[float] = None
+    status: Optional[str] = None
+    deviation: Optional[float] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "groupKey": "LINE-01",
+                "value": 1000.5,
+                "target": 1200.0,
+                "status": "below_target",
+                "deviation": -16.6
+            }
+        }
+
+
+class KpiBreakdownResponse(BaseModel):
+    """Response from GET /production/kpi/breakdown"""
+    items: List[KpiBreakdownItem]
     total: int

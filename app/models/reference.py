@@ -72,7 +72,7 @@ class SensorParameter(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "sensor_parameters"
 
     name = Column(String(100), nullable=False)  # на русском: Температура, Давление и т.д.
-    code = Column(String(20), nullable=False, unique=True, index=True)
+    code = Column(String(50), nullable=False, unique=True, index=True)
     unit = Column(String(20), nullable=False)  # °C, кПа, л/ч, %
     description = Column(String(255), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True, index=True)
