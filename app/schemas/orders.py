@@ -40,12 +40,13 @@ class OrderListItem(BaseModel):
     unit_of_measure: Optional[str]
     status: str
     production_line: Optional[str]
+    product_line_name: Optional[str] = None
     planned_start: Optional[datetime]
     planned_end: Optional[datetime]
     actual_start: Optional[datetime]
     actual_end: Optional[datetime]
     snapshot_date: date
-    
+
     class Config:
         from_attributes = True
 

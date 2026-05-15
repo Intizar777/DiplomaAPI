@@ -114,7 +114,11 @@ class OrderService:
         
         result = await self.db.execute(query)
         records = result.scalars().all()
-        
+
+        # Load production line names for enrichment
+        line_result = await self.db.execute(select(ProductionLine.id, ProductionLine.name))
+        line_names: Dict[str, str] = {str(row[0]): row[1] for row in line_result.all()}
+
         orders = [
             {
                 "order_id": str(record.order_id),
@@ -126,6 +130,7 @@ class OrderService:
                 "unit_of_measure": record.unit_of_measure,
                 "status": record.status,
                 "production_line": record.production_line,
+                "product_line_name": line_names.get(record.production_line) if record.production_line else None,
                 "planned_start": record.planned_start,
                 "planned_end": record.planned_end,
                 "actual_start": record.actual_start,
@@ -381,7 +386,7 @@ class OrderService:
                 actual_quantity=order_item.actualQuantity,
                 unit_of_measure=None,
                 status=order_item.status.lower() if order_item.status else None,
-                production_line=order_item.productionLineId,
+                production_line=str(order_item.productionLineId) if order_item.productionLineId else None,
                 planned_start=parse_dt(order_item.plannedStart),
                 planned_end=parse_dt(order_item.plannedEnd),
                 actual_start=parse_dt(order_item.actualStart),
