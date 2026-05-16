@@ -1830,14 +1830,18 @@ class DashboardExportService:
             ws2.append([line_name, planned, in_prog, completed, cancelled, total, exec_pct])
             self._color_row(ws2, ws2.max_row, color, len(headers2))
 
-        by_status = getattr(orders, "by_status", {}) or {}
-        total_all = sum(by_status.get(s, 0) for s in ["planned", "in_progress", "completed", "cancelled"])
+        by_status = getattr(orders, "by_status", None)
+        planned_t = getattr(by_status, "planned", 0) if by_status else 0
+        in_prog_t = getattr(by_status, "in_progress", 0) if by_status else 0
+        completed_t = getattr(by_status, "completed", 0) if by_status else 0
+        cancelled_t = getattr(by_status, "cancelled", 0) if by_status else 0
+        total_all = planned_t + in_prog_t + completed_t + cancelled_t
         self._add_summary(ws2, [
             "ИТОГО",
-            by_status.get("planned", 0),
-            by_status.get("in_progress", 0),
-            by_status.get("completed", 0),
-            by_status.get("cancelled", 0),
+            planned_t,
+            in_prog_t,
+            completed_t,
+            cancelled_t,
             total_all,
             "",
         ])
