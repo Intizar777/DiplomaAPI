@@ -16,6 +16,7 @@ from app.routers.qe_dashboard import router as qe_dashboard_router
 from app.routers.finance_dashboard import router as finance_dashboard_router
 from app.routers.production_analytics import router as production_analytics_router
 from app.routers.oee import router as oee_router
+from app.routers.export import router as export_router
 
 __all__ = [
     "sales_router",
@@ -33,4 +34,5 @@ __all__ = [
     "finance_dashboard_router",
     "production_analytics_router",
     "oee_router",
+    "export_router",
 ]

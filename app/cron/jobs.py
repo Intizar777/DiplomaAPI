@@ -833,10 +833,10 @@ async def initial_sync_sensors_task():
 
 async def initial_sync_inventory_task():
     """Full inventory sync from 2024-01 to today (no time restrictions)."""
-    from app.models import InventoryLevel
+    from app.models import InventorySnapshot
     return await _run_sync_task(
         task_name="initial_sync_inventory",
-        model_class=InventoryLevel,
+        model_class=InventorySnapshot,
         service_class=InventoryService,
         full_sync=True,
     )

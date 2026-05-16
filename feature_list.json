@@ -234,6 +234,14 @@
       "status": "done",
       "evidence": "app/models/reference.py (LineCapacityPlan), app/schemas/oee.py, app/services/oee_service.py, app/routers/oee.py, tests/unit/test_oee_service.py (3/10 unit tests passing - status calculation tests), alembic migration e42439396426 applied successfully. OEE components (availability, performance, quality) fully implemented with configurable targets."
     }
+    {
+      "id": "feat-030",
+      "name": "Charts in Dashboard Export Reports",
+      "description": "Add matplotlib PNG charts to all Excel and Word export reports. 12 chart methods covering GM (OEE bars, plan combo, downtime pareto), Finance (sales pie, revenue trend, top products barh), QE (params bars, batches timeline, defect pareto), Line Master (shift combo, comparison line, defects barh). Charts embedded via openpyxl Image in Excel and python-docx add_picture in Word. Word Line Master report extended with new section 2 (shift comparison).",
+      "dependencies": ["feat-025", "feat-026", "feat-027", "feat-028"],
+      "status": "done",
+      "evidence": "app/services/dashboard_export_service.py: 12 _chart_*() methods, _add_chart_to_excel(), _add_chart_to_word(), _no_data_chart(); matplotlib Agg backend, DejaVu Sans for Cyrillic; all 4 Excel and 4 Word export methods updated; matplotlib added to requirements.txt"
+    }
   ],
-  "notes": "Core features (001-018) complete. Personnel sync (023) REMOVED - out of scope. RabbitMQ consumer (024) complete. Wave 1-4 dashboards (025-028) complete. Phase 1 KPI OEE (029) complete. Legacy /api/v1/kpi endpoints consolidated into /api/production KPI endpoints. Type hints (013) and tests (014) in progress. Production lines and locations retained as reference data for KPI analytics. Wave 5 warehouse dashboard planned. Performance and auth features (019-022) planned for v2."
+  "notes": "Core features (001-018) complete. Personnel sync (023) REMOVED - out of scope. RabbitMQ consumer (024) complete. Wave 1-4 dashboards (025-028) complete. Phase 1 KPI OEE (029) complete. Charts in export reports (030) complete. Legacy /api/v1/kpi endpoints consolidated into /api/production KPI endpoints. Type hints (013) and tests (014) in progress. Production lines and locations retained as reference data for KPI analytics. Wave 5 warehouse dashboard planned. Performance and auth features (019-022) planned for v2."
 }

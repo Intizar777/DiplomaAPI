@@ -35,6 +35,7 @@ from app.routers import (
     finance_dashboard_router,
     production_analytics_router,
     oee_router,
+    export_router,
 )
 
 # Configure structured logging on module load
@@ -301,6 +302,7 @@ app.include_router(qe_dashboard_router)
 app.include_router(finance_dashboard_router)
 app.include_router(production_analytics_router)
 app.include_router(oee_router)
+app.include_router(export_router)
 
 
 @app.get("/api/v1/docs", include_in_schema=False)

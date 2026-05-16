@@ -38,5 +38,7 @@ faker
 python-dateutil
 psutil
 
-# Reports (Excel generation)
+# Reports (Excel + Word generation)
 openpyxl
+python-docx
+matplotlib
