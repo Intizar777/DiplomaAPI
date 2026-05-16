@@ -100,6 +100,32 @@ async def export_qe(
     return _response(data, fmt, f"report_qe_{date.today()}")
 
 
+@router.get("/production-overview", summary="Экспорт сводного отчёта по производству (Excel/Word)")
+async def export_production_overview(
+    fmt: Literal["xlsx", "docx"] = Query(default="xlsx", alias="format", description="Формат файла: xlsx или docx"),
+    date_from: date = Query(
+        default_factory=lambda: date.today() - timedelta(days=30),
+        description="Начало периода (YYYY-MM-DD).",
+    ),
+    date_to: date = Query(
+        default_factory=date.today,
+        description="Конец периода (YYYY-MM-DD).",
+    ),
+    production_line_id: Optional[str] = Query(default=None, description="Фильтр по производственной линии."),
+    service: DashboardExportService = Depends(get_service),
+) -> StreamingResponse:
+    """
+    Скачать сводный аналитический отчёт по производству.
+
+    Агрегирует данные из 9 разделов: KPI, OTIF, заказы по линиям, выпуск по сменам,
+    качество (сводка и партии), продажи по регионам, сенсоры, запасы.
+
+    Excel содержит 5 листов. Word содержит 5 секций с выводами и рекомендациями.
+    """
+    data = await service.export_production_overview(fmt, date_from, date_to, production_line_id)
+    return _response(data, fmt, f"report_production_overview_{date.today()}")
+
+
 @router.get("/line-master", summary="Экспорт отчёта Line Master (Excel/Word)")
 async def export_line_master(
     fmt: Literal["xlsx", "docx"] = Query(default="xlsx", alias="format", description="Формат файла: xlsx или docx"),

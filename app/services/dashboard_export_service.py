@@ -1513,3 +1513,717 @@ class DashboardExportService:
             )
 
         return self._word_to_bytes(doc)
+
+    # ── Production Overview Export ───────────────────────────────────────────
+
+    async def export_production_overview(
+        self,
+        fmt: str,
+        date_from: date,
+        date_to: date,
+        production_line_id: Optional[str] = None,
+    ) -> bytes:
+        from app.services.production_analytics_service import ProductionAnalyticsService
+        from app.services.order_service import OrderService
+        from app.services.output_service import OutputService
+        from app.services.quality_service import QualityService
+        from app.services.sales_service import SalesService
+        from app.services.sensor_service import SensorService
+        from app.services.inventory_service import InventoryService
+
+        pa_svc = ProductionAnalyticsService(self.db)
+        kpi = await pa_svc.get_kpi(date_from, date_to, production_line_id, compare_with_previous=True)
+        otif = await pa_svc.get_otif(date_from, date_to, production_line_id)
+
+        order_svc = OrderService(self.db)
+        orders = await order_svc.get_status_summary(date_from, date_to, production_line_id)
+
+        output_svc = OutputService(self.db)
+        shifts = await output_svc.get_output_by_shift(date_from, date_to)
+
+        q_svc = QualityService(self.db)
+        q_summary = await q_svc.get_quality_summary(date_from, date_to)
+        q_lots = await q_svc.get_quality_lots(date_from, date_to)
+
+        sales_svc = SalesService(self.db)
+        regions = await sales_svc.get_sales_by_regions(date_from, date_to)
+
+        sensor_svc = SensorService(self.db)
+        sensors = await sensor_svc.get_sensor_stats(production_line_id)
+
+        inv_svc = InventoryService(self.db)
+        inventory = await inv_svc.get_current_inventory()
+
+        logger.info("export_production_overview", fmt=fmt, date_from=date_from, date_to=date_to)
+        if fmt == "docx":
+            return self._word_production_overview(
+                kpi, otif, orders, shifts, q_summary, q_lots, regions, sensors, inventory, date_from, date_to
+            )
+        return self._excel_production_overview(
+            kpi, otif, orders, shifts, q_summary, q_lots, regions, sensors, inventory, date_from, date_to
+        )
+
+    # ── Charts: Production Overview ──────────────────────────────────────────
+
+    def _chart_po_kpi_bars(self, kpi: dict, otif: dict) -> bytes:
+        total_orders = int(kpi.get("total_orders", 0))
+        completed_orders = int(kpi.get("completed_orders", 0))
+        fulfillment_pct = (completed_orders / total_orders * 100) if total_orders else 0.0
+        metrics = [
+            ("OEE", float(kpi.get("oee_estimate", 0)) * 100, 85.0),
+            ("Выполнение плана", fulfillment_pct, 90.0),
+            ("OTIF", float(otif.get("otif_rate", 0)) * 100, 95.0),
+        ]
+        labels = [m[0] for m in metrics]
+        values = [m[1] for m in metrics]
+        targets = [m[2] for m in metrics]
+
+        fig, ax = plt.subplots(figsize=(10, 5))
+        y = list(range(len(labels)))
+        bars = ax.barh(y, values, color="#366092", edgecolor="white", linewidth=0.5, zorder=2, label="Факт")
+        ax.scatter(targets, y, color="#FF4444", zorder=4, s=80, marker="|", linewidths=3, label="Цель")
+        ax.set_yticks(y)
+        ax.set_yticklabels(labels, fontsize=11)
+        ax.set_xlabel("%")
+        ax.set_xlim(0, 115)
+        ax.set_title("Ключевые производственные показатели", fontsize=13, fontweight="bold", pad=15)
+        ax.legend(fontsize=10)
+        ax.grid(axis="x", alpha=0.3, zorder=1)
+        for bar, val in zip(bars, values):
+            ax.text(bar.get_width() + 1, bar.get_y() + bar.get_height() / 2,
+                    f"{val:.1f}%", va="center", fontsize=10)
+        fig.tight_layout()
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=100, bbox_inches="tight", facecolor="white")
+        plt.close(fig)
+        buf.seek(0)
+        return buf.getvalue()
+
+    def _chart_po_orders_stacked(self, orders: Any) -> bytes:
+        by_line = getattr(orders, "by_production_line", {}) or {}
+        if not by_line:
+            return self._no_data_chart("Статус заказов по линиям")
+
+        lines = list(by_line.keys())
+        statuses = ["planned", "in_progress", "completed", "cancelled"]
+        labels_ru = {"planned": "Плановые", "in_progress": "В работе",
+                     "completed": "Завершённые", "cancelled": "Отменённые"}
+        colors_map = {"planned": "#4472C4", "in_progress": "#FFC000",
+                      "completed": "#92D050", "cancelled": "#FF4444"}
+        x = list(range(len(lines)))
+        bottoms = [0.0] * len(lines)
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        for status in statuses:
+            vals = [float((by_line[ln] or {}).get(status, 0) if isinstance(by_line[ln], dict)
+                          else getattr(by_line[ln], status, 0)) for ln in lines]
+            ax.bar(x, vals, bottom=bottoms, label=labels_ru[status],
+                   color=colors_map[status], edgecolor="white", linewidth=0.5, zorder=2)
+            bottoms = [bottoms[i] + vals[i] for i in range(len(lines))]
+
+        ax.set_xticks(x)
+        ax.set_xticklabels(lines, rotation=30, ha="right", fontsize=9)
+        ax.set_ylabel("Заказов")
+        ax.set_title("Статус заказов по производственным линиям", fontsize=13, fontweight="bold", pad=15)
+        ax.legend(fontsize=9)
+        ax.grid(axis="y", alpha=0.3, zorder=1)
+        fig.tight_layout()
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=100, bbox_inches="tight", facecolor="white")
+        plt.close(fig)
+        buf.seek(0)
+        return buf.getvalue()
+
+    def _chart_po_shift_combo(self, shifts: dict) -> bytes:
+        items = shifts.get("items", [])
+        if not items:
+            return self._no_data_chart("Выпуск продукции по сменам")
+
+        from collections import defaultdict
+        by_date: dict = defaultdict(float)
+        by_shift: dict = defaultdict(lambda: defaultdict(float))
+        for item in items:
+            d = str(item["date"])
+            s = item["shift"]
+            q = float(item.get("total_quantity", 0))
+            by_date[d] += q
+            by_shift[s][d] += q
+
+        dates = sorted(by_date.keys())
+        shift_names = sorted(by_shift.keys())
+        x = list(range(len(dates)))
+        shift_colors = ["#4472C4", "#FFC000", "#92D050", "#FF4444"]
+
+        fig, ax1 = plt.subplots(figsize=(10, 6))
+        ax2 = ax1.twinx()
+        w = 0.6 / max(len(shift_names), 1)
+        for i, shift in enumerate(shift_names):
+            vals = [by_shift[shift].get(d, 0.0) for d in dates]
+            offset = (i - len(shift_names) / 2 + 0.5) * w
+            ax1.bar([xi + offset for xi in x], vals, width=w,
+                    label=shift, color=shift_colors[i % len(shift_colors)],
+                    edgecolor="white", linewidth=0.3, zorder=2, alpha=0.85)
+
+        totals = [by_date[d] for d in dates]
+        ax2.plot(x, totals, color="#FF4444", linewidth=2, marker="o", markersize=5,
+                 label="Итого", zorder=3)
+        ax1.set_xticks(x)
+        ax1.set_xticklabels(dates, rotation=45, ha="right", fontsize=8)
+        ax1.set_ylabel("Объём (ед.)")
+        ax2.set_ylabel("Итого по дню", color="#FF4444")
+        ax1.set_title("Выпуск продукции по сменам", fontsize=13, fontweight="bold", pad=15)
+        lines1, labs1 = ax1.get_legend_handles_labels()
+        lines2, labs2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines1 + lines2, labs1 + labs2, fontsize=9)
+        ax1.grid(axis="y", alpha=0.3, zorder=1)
+        fig.tight_layout()
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=100, bbox_inches="tight", facecolor="white")
+        plt.close(fig)
+        buf.seek(0)
+        return buf.getvalue()
+
+    def _chart_po_quality_params(self, q_summary: Any) -> bytes:
+        by_param = getattr(q_summary, "by_parameter", {}) or {}
+        if not by_param:
+            return self._no_data_chart("Качество по параметрам")
+
+        params = list(by_param.keys())
+        values = [float(by_param[p].get("in_spec_percent", 0) if isinstance(by_param[p], dict)
+                        else getattr(by_param[p], "in_spec_percent", 0)) for p in params]
+        colors = [f"#{STATUS_COLOR[self._assess_defect(Decimal(str((100 - v) / 100)))[2]]}" for v in values]
+
+        fig, ax = plt.subplots(figsize=(10, 5))
+        bars = ax.bar(params, values, color=colors, edgecolor="white", linewidth=0.5, zorder=2)
+        ax.axhline(y=95, color="#366092", linestyle="--", linewidth=2, label="Цель 95%", zorder=3)
+        ax.set_ylabel("% в норме")
+        ax.set_ylim(0, 110)
+        ax.set_title("Параметры качества — доля в норме", fontsize=13, fontweight="bold", pad=15)
+        ax.legend(fontsize=10)
+        ax.grid(axis="y", alpha=0.3, zorder=1)
+        for bar, val in zip(bars, values):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1,
+                    f"{val:.1f}%", ha="center", va="bottom", fontsize=9)
+        fig.tight_layout()
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=100, bbox_inches="tight", facecolor="white")
+        plt.close(fig)
+        buf.seek(0)
+        return buf.getvalue()
+
+    def _chart_po_sales_pie(self, regions: Any) -> bytes:
+        region_list = getattr(regions, "regions", []) or []
+        if not region_list:
+            return self._no_data_chart("Продажи по регионам")
+
+        labels = [r.get("region", "—") if isinstance(r, dict) else getattr(r, "region", "—")
+                  for r in region_list]
+        values = [float(r.get("total_amount", 0) if isinstance(r, dict) else getattr(r, "total_amount", 0))
+                  for r in region_list]
+
+        fig, ax = plt.subplots(figsize=(9, 6))
+        _, _, autotexts_po = ax.pie(  # type: ignore[misc]
+            values, labels=labels, autopct="%1.1f%%",
+            startangle=90, pctdistance=0.8,
+            wedgeprops={"edgecolor": "white", "linewidth": 1},
+        )
+        for at in autotexts_po:
+            at.set_fontsize(9)
+        ax.set_title("Продажи по регионам", fontsize=13, fontweight="bold", pad=15)
+        fig.tight_layout()
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=100, bbox_inches="tight", facecolor="white")
+        plt.close(fig)
+        buf.seek(0)
+        return buf.getvalue()
+
+    # ── Excel: Production Overview ────────────────────────────────────────────
+
+    def _excel_production_overview(
+        self,
+        kpi: dict,
+        otif: dict,
+        orders: Any,
+        shifts: dict,
+        q_summary: Any,
+        q_lots: Any,
+        regions: Any,
+        sensors: dict,
+        inventory: dict,
+        date_from: date,
+        date_to: date,
+    ) -> bytes:
+        import openpyxl
+        wb = openpyxl.Workbook()
+
+        # ── Sheet 1: KPI и OTIF ──────────────────────────────────────────────
+        ws1 = wb.active
+        ws1.title = "KPI и OTIF"
+        headers1 = ["Метрика", "Значение", "Цель", "Статус", "Изм. к пред. периоду"]
+        self._style_header(ws1, headers1)
+
+        total_orders = int(kpi.get("total_orders", 0))
+        completed_orders = int(kpi.get("completed_orders", 0))
+        fulfillment_pct = (completed_orders / total_orders * 100) if total_orders else 0.0
+        oee_pct = float(kpi.get("oee_estimate", 0)) * 100
+        defect_pct = float(kpi.get("defect_rate", 0)) * 100
+        change = kpi.get("change_percent") or {}
+
+        kpi_rows: list[tuple] = [
+            ("Общий выпуск (ед.)", float(kpi.get("total_output", 0)), "—",
+             self._assess_fulfillment(Decimal(str(fulfillment_pct)))[0],
+             f"{change.get('total_output', 0):+.1f}%" if change else "—"),
+            ("OEE (%)", round(oee_pct, 1), 85.0,
+             self._assess_oee(Decimal(str(oee_pct)))[0],
+             f"{change.get('oee_estimate', 0):+.1f}%" if change else "—"),
+            ("Доля дефектов (%)", round(defect_pct, 2), "≤ 1.5",
+             self._assess_defect(kpi.get("defect_rate", Decimal("0")))[0], "—"),
+            ("Выполнение плана (%)", round(fulfillment_pct, 1), 90.0,
+             self._assess_fulfillment(Decimal(str(fulfillment_pct)))[0], "—"),
+        ]
+        for row_vals in kpi_rows:
+            label = row_vals[0]
+            if "OEE" in label:
+                _, color, _ = self._assess_oee(Decimal(str(row_vals[1])))
+            elif "дефект" in label.lower():
+                _, color, _ = self._assess_defect(kpi.get("defect_rate", Decimal("0")))
+            else:
+                _, color, _ = self._assess_fulfillment(Decimal(str(
+                    row_vals[1] if isinstance(row_vals[1], (int, float)) else 0
+                )))
+            ws1.append(list(row_vals))
+            self._color_row(ws1, ws1.max_row, color, len(headers1))
+
+        otif_pct = float(otif.get("otif_rate", 0)) * 100
+        otif_total = int(otif.get("total_orders", 0))
+        on_time_pct = (float(otif.get("on_time_orders", 0)) / otif_total * 100) if otif_total else 0.0
+        otif_rows: list[tuple] = [
+            ("OTIF Rate (%)", round(otif_pct, 1), 95.0,
+             self._assess_fulfillment(Decimal(str(otif_pct)))[0], "—"),
+            ("В срок (%)", round(on_time_pct, 1), 95.0,
+             self._assess_fulfillment(Decimal(str(on_time_pct)))[0], "—"),
+            ("В полном объёме (заказов)", otif.get("in_full_quantity_orders", 0), "—", "—", "—"),
+            ("OTIF-заказов / всего",
+             f"{otif.get('otif_orders', 0)} / {otif.get('total_orders', 0)}", "—", "—", "—"),
+        ]
+        for row_vals in otif_rows:
+            ws1.append(list(row_vals))
+
+        self._add_title(ws1, f"KPI и OTIF | {date_from} — {date_to}", len(headers1))
+        self._autofit(ws1)
+        self._add_chart_to_excel(ws1, self._chart_po_kpi_bars(kpi, otif), "G2")
+
+        # ── Sheet 2: Заказы по линиям ────────────────────────────────────────
+        ws2 = wb.create_sheet("Заказы по линиям")
+        headers2 = ["Линия", "Плановые", "В работе", "Завершённые", "Отменённые", "Итого", "Выполнение %"]
+        self._style_header(ws2, headers2)
+
+        by_line = getattr(orders, "by_production_line", {}) or {}
+        for line_name, counts in by_line.items():
+            planned = counts.get("planned", 0) if isinstance(counts, dict) else getattr(counts, "planned", 0)
+            in_prog = counts.get("in_progress", 0) if isinstance(counts, dict) else getattr(counts, "in_progress", 0)
+            completed = counts.get("completed", 0) if isinstance(counts, dict) else getattr(counts, "completed", 0)
+            cancelled = counts.get("cancelled", 0) if isinstance(counts, dict) else getattr(counts, "cancelled", 0)
+            total = planned + in_prog + completed + cancelled
+            exec_pct = round(completed / total * 100, 1) if total else 0.0
+            _, color, _ = self._assess_fulfillment(Decimal(str(exec_pct)))
+            ws2.append([line_name, planned, in_prog, completed, cancelled, total, exec_pct])
+            self._color_row(ws2, ws2.max_row, color, len(headers2))
+
+        by_status = getattr(orders, "by_status", {}) or {}
+        total_all = sum(by_status.get(s, 0) for s in ["planned", "in_progress", "completed", "cancelled"])
+        self._add_summary(ws2, [
+            "ИТОГО",
+            by_status.get("planned", 0),
+            by_status.get("in_progress", 0),
+            by_status.get("completed", 0),
+            by_status.get("cancelled", 0),
+            total_all,
+            "",
+        ])
+        self._add_title(ws2, f"Статус заказов по линиям | {date_from} — {date_to}", len(headers2))
+        self._autofit(ws2)
+        self._add_chart_to_excel(ws2, self._chart_po_orders_stacked(orders), "I2")
+
+        # ── Sheet 3: Выпуск по сменам ────────────────────────────────────────
+        ws3 = wb.create_sheet("Выпуск по сменам")
+        headers3 = ["Дата", "Смена", "Объём (ед.)"]
+        self._style_header(ws3, headers3)
+
+        shift_items = shifts.get("items", [])
+        total_qty = 0.0
+        for item in shift_items:
+            qty = float(item.get("total_quantity", 0))
+            total_qty += qty
+            ws3.append([str(item["date"]), item.get("shift", "—"), round(qty, 1)])
+
+        self._add_summary(ws3, ["ИТОГО", "", round(total_qty, 1)])
+        self._add_title(ws3, f"Выпуск по сменам | {date_from} — {date_to}", len(headers3))
+        self._autofit(ws3)
+        self._add_chart_to_excel(ws3, self._chart_po_shift_combo(shifts), "E2")
+
+        # ── Sheet 4: Качество ────────────────────────────────────────────────
+        ws4 = wb.create_sheet("Качество")
+
+        # Summary block
+        headers4a = ["Метрика", "Значение"]
+        self._style_header(ws4, headers4a)
+        avg_q = float(getattr(q_summary, "average_quality", 0))
+        def_r = float(getattr(q_summary, "defect_rate", 0))
+        for row_vals in [
+            ("Средний балл качества (%)", round(avg_q, 1)),
+            ("Доля дефектов (%)", round(def_r, 1)),
+            ("Одобрено (партий)", getattr(q_summary, "approved_count", 0)),
+            ("Отклонено (партий)", getattr(q_summary, "rejected_count", 0)),
+        ]:
+            ws4.append(list(row_vals))
+        ws4.append([])
+
+        # Parameters block
+        self._style_header(ws4, ["Параметр", "% в норме", "Тестов"])
+        by_param = getattr(q_summary, "by_parameter", {}) or {}
+        for param_name, stats in by_param.items():
+            in_spec = float(stats.get("in_spec_percent", 0) if isinstance(stats, dict)
+                            else getattr(stats, "in_spec_percent", 0))
+            tests = int(stats.get("tests_count", 0) if isinstance(stats, dict)
+                        else getattr(stats, "tests_count", 0))
+            _, color, _ = self._assess_defect(Decimal(str((100 - in_spec) / 100)))
+            ws4.append([param_name, round(in_spec, 1), tests])
+            self._color_row(ws4, ws4.max_row, color, 3)
+        ws4.append([])
+
+        # Lots block
+        lots_hdr = ["Лот", "Продукт", "Дата", "Протестировано", "Прошло", "% прохождения", "Решение"]
+        self._style_header(ws4, lots_hdr)
+        decision_color = {"approved": COLOR_GREEN, "rejected": COLOR_RED, "pending": COLOR_YELLOW}
+        for lot in (getattr(q_lots, "lots", []) or []):
+            tested = int(lot.get("parameters_tested", 0) if isinstance(lot, dict)
+                         else getattr(lot, "parameters_tested", 0))
+            passed = int(lot.get("parameters_passed", 0) if isinstance(lot, dict)
+                         else getattr(lot, "parameters_passed", 0))
+            pct = round(passed / tested * 100, 1) if tested else 0.0
+            decision = (lot.get("decision", "pending") if isinstance(lot, dict)
+                        else getattr(lot, "decision", "pending")) or "pending"
+            ws4.append([
+                lot.get("lot_number", "") if isinstance(lot, dict) else getattr(lot, "lot_number", ""),
+                lot.get("product_name", "") if isinstance(lot, dict) else getattr(lot, "product_name", ""),
+                str(lot.get("test_date", "") if isinstance(lot, dict) else getattr(lot, "test_date", "")),
+                tested, passed, pct, decision,
+            ])
+            self._color_row(ws4, ws4.max_row, decision_color.get(decision, COLOR_YELLOW), len(lots_hdr))
+
+        self._add_title(ws4, f"Контроль качества | {date_from} — {date_to}", len(lots_hdr))
+        self._autofit(ws4)
+        self._add_chart_to_excel(ws4, self._chart_po_quality_params(q_summary), "I2")
+
+        # ── Sheet 5: Продажи, Сенсоры, Запасы ───────────────────────────────
+        ws5 = wb.create_sheet("Продажи, Сенсоры, Запасы")
+
+        # Sales
+        self._style_header(ws5, ["Регион", "Выручка (руб.)", "Объём", "Сделок", "Доля %"])
+        region_list = getattr(regions, "regions", []) or []
+        for r in region_list:
+            ws5.append([
+                r.get("region", "—") if isinstance(r, dict) else getattr(r, "region", "—"),
+                float(r.get("total_amount", 0) if isinstance(r, dict) else getattr(r, "total_amount", 0)),
+                float(r.get("total_quantity", 0) if isinstance(r, dict) else getattr(r, "total_quantity", 0)),
+                int(r.get("sales_count", 0) if isinstance(r, dict) else getattr(r, "sales_count", 0)),
+                float(r.get("percentage", 0) if isinstance(r, dict) else getattr(r, "percentage", 0)),
+            ])
+        ws5.append([])
+
+        # Sensors
+        sensor_hdr = ["Параметр", "Линия", "Среднее", "Мин", "Макс", "Ед.", "Тревог", "Статус"]
+        self._style_header(ws5, sensor_hdr)
+        for s in (sensors.get("items", []) or []):
+            alert_count = int(s.get("alert_count", 0) or 0)
+            reading_count = int(s.get("reading_count", 0) or 1)
+            alert_ratio = alert_count / reading_count
+            s_label, s_color, _ = self._assess_defect(Decimal(str(round(alert_ratio, 4))))
+            ws5.append([
+                s.get("parameter_name", "—"),
+                s.get("production_line_id", "—"),
+                round(float(s.get("avg_value") or 0), 2),
+                round(float(s.get("min_value") or 0), 2),
+                round(float(s.get("max_value") or 0), 2),
+                s.get("unit", "—"),
+                alert_count,
+                s_label,
+            ])
+            self._color_row(ws5, ws5.max_row, s_color, len(sensor_hdr))
+        ws5.append([])
+
+        # Inventory
+        self._style_header(ws5, ["Продукт", "Склад", "Лот", "Кол-во", "Ед. изм."])
+        snap_date = inventory.get("snapshot_date", "—")
+        for item in (inventory.get("items", []) or []):
+            ws5.append([
+                item.get("product_name", "—"),
+                item.get("warehouse_code", "—"),
+                item.get("lot_number", "—"),
+                round(float(item.get("quantity", 0)), 2),
+                item.get("unit_of_measure", "—"),
+            ])
+
+        self._add_title(ws5, f"Продажи, Сенсоры, Запасы | срез: {snap_date}", len(sensor_hdr))
+        self._autofit(ws5)
+        self._add_chart_to_excel(ws5, self._chart_po_sales_pie(regions), "G2")
+
+        return self._wb_to_bytes(wb)
+
+    # ── Word: Production Overview ─────────────────────────────────────────────
+
+    def _word_production_overview(
+        self,
+        kpi: dict,
+        otif: dict,
+        orders: Any,
+        shifts: dict,
+        q_summary: Any,
+        q_lots: Any,
+        regions: Any,
+        sensors: dict,
+        inventory: dict,
+        date_from: date,
+        date_to: date,
+    ) -> bytes:
+        from docx import Document
+
+        doc = Document()
+        self._word_header(doc, "Сводный отчёт по производству", date_from, date_to)
+
+        # ── Section 1: KPI и OTIF ────────────────────────────────────────────
+        total_orders = int(kpi.get("total_orders", 0))
+        completed_orders = int(kpi.get("completed_orders", 0))
+        fulfillment_pct = (completed_orders / total_orders * 100) if total_orders else 0.0
+        oee_pct = float(kpi.get("oee_estimate", 0)) * 100
+        defect_pct = float(kpi.get("defect_rate", 0)) * 100
+        otif_pct = float(otif.get("otif_rate", 0)) * 100
+        change = kpi.get("change_percent") or {}
+
+        kpi_bullets = [
+            f"• Общий выпуск: {float(kpi.get('total_output', 0)):.0f} ед."
+            + (f" ({change.get('total_output', 0):+.1f}% к пред. периоду)" if change else ""),
+            f"• OEE: {oee_pct:.1f}% — {self._assess_oee(Decimal(str(oee_pct)))[0]}"
+            + (f" ({change.get('oee_estimate', 0):+.1f}%)" if change else ""),
+            f"• Доля дефектов: {defect_pct:.2f}% — {self._assess_defect(kpi.get('defect_rate', Decimal('0')))[0]}",
+            f"• Выполнение плана: {fulfillment_pct:.1f}% ({completed_orders}/{total_orders} заказов)",
+            f"• OTIF: {otif_pct:.1f}% (в срок: {otif.get('on_time_orders', 0)}, "
+            f"в полном объёме: {otif.get('in_full_quantity_orders', 0)} из {otif.get('total_orders', 0)})",
+        ]
+        worst_kpi = self._worst([
+            self._assess_oee(Decimal(str(oee_pct)))[2],
+            self._assess_defect(kpi.get("defect_rate", Decimal("0")))[2],
+            self._assess_fulfillment(Decimal(str(fulfillment_pct)))[2],
+        ])
+        if worst_kpi == NORMAL:
+            kpi_conclusion = (
+                f"Производство работает эффективно: OEE {oee_pct:.1f}%, "
+                f"доля дефектов {defect_pct:.2f}%, выполнение плана {fulfillment_pct:.1f}%. "
+                "Все показатели соответствуют целевым значениям."
+            )
+            kpi_rec = "Рекомендуется поддерживать текущий уровень операционной эффективности."
+        elif worst_kpi == WARNING:
+            kpi_conclusion = (
+                f"Выявлены умеренные отклонения: OEE {oee_pct:.1f}%, "
+                f"выполнение плана {fulfillment_pct:.1f}%. "
+                "Показатели требуют внимания для предотвращения дальнейшего ухудшения."
+            )
+            kpi_rec = (
+                "Рекомендуется провести анализ узких мест по линиям, "
+                "проверить загрузку оборудования и сбалансировать смены."
+            )
+        else:
+            kpi_conclusion = (
+                f"Зафиксированы критические отклонения: OEE {oee_pct:.1f}%, "
+                f"доля дефектов {defect_pct:.2f}%, выполнение плана {fulfillment_pct:.1f}%. "
+                "Ситуация требует немедленного реагирования."
+            )
+            kpi_rec = (
+                "Необходимо срочно выявить причины снижения эффективности, "
+                "инициировать технический аудит и пересмотреть производственный план."
+            )
+        self._word_section(doc, "1. KPI И OTIF", kpi_bullets, kpi_conclusion, kpi_rec,
+                           chart_bytes=self._chart_po_kpi_bars(kpi, otif))
+
+        # ── Section 2: Статус заказов ────────────────────────────────────────
+        by_line = getattr(orders, "by_production_line", {}) or {}
+        order_bullets: list[str] = []
+        order_levels: list[int] = []
+        for line_name, counts in by_line.items():
+            compl = counts.get("completed", 0) if isinstance(counts, dict) else getattr(counts, "completed", 0)
+            total = sum(
+                (counts.get(s, 0) if isinstance(counts, dict) else getattr(counts, s, 0))
+                for s in ["planned", "in_progress", "completed", "cancelled"]
+            )
+            pct = (compl / total * 100) if total else 0.0
+            _, _, level = self._assess_fulfillment(Decimal(str(pct)))
+            order_levels.append(level)
+            order_bullets.append(
+                f"• {line_name}: {compl}/{total} заказов выполнено ({pct:.1f}%) — "
+                f"{self._assess_fulfillment(Decimal(str(pct)))[0]}"
+            )
+        if not order_bullets:
+            order_bullets = ["• Данные по заказам в разрезе линий отсутствуют."]
+        worst_orders = self._worst(order_levels) if order_levels else NORMAL
+        if worst_orders == NORMAL:
+            ord_conclusion = "Все производственные линии выполняют план в соответствии с установленными нормами."
+            ord_rec = "Рекомендуется сохранять текущий ритм производства и контролировать очередь заказов."
+        elif worst_orders == WARNING:
+            ord_conclusion = "Ряд производственных линий испытывает трудности с выполнением плановых показателей."
+            ord_rec = "Рекомендуется перераспределить загрузку и усилить контроль за ходом выполнения заказов."
+        else:
+            ord_conclusion = "Критическое отставание по выполнению заказов на одной или нескольких линиях."
+            ord_rec = (
+                "Необходимо срочное вмешательство: анализ причин задержек, "
+                "приоритизация критических заказов, при необходимости — сверхурочная работа."
+            )
+        self._word_section(doc, "2. СТАТУС ЗАКАЗОВ ПО ПРОИЗВОДСТВЕННЫМ ЛИНИЯМ",
+                           order_bullets, ord_conclusion, ord_rec,
+                           chart_bytes=self._chart_po_orders_stacked(orders))
+
+        # ── Section 3: Выпуск по сменам и Качество ──────────────────────────
+        shift_items = shifts.get("items", [])
+        total_output_qty = sum(float(i.get("total_quantity", 0)) for i in shift_items)
+        shift_names = sorted({i.get("shift", "—") for i in shift_items})
+        shift_totals = {
+            s: sum(float(i.get("total_quantity", 0)) for i in shift_items if i.get("shift") == s)
+            for s in shift_names
+        }
+        shift_bullets: list[str] = [f"• Общий выпуск за период: {total_output_qty:.0f} ед."]
+        for s, qty in shift_totals.items():
+            pct = (qty / total_output_qty * 100) if total_output_qty else 0
+            shift_bullets.append(f"• {s}: {qty:.0f} ед. ({pct:.1f}%)")
+
+        avg_q = float(getattr(q_summary, "average_quality", 0))
+        def_r = float(getattr(q_summary, "defect_rate", 0))
+        approved = int(getattr(q_summary, "approved_count", 0))
+        rejected = int(getattr(q_summary, "rejected_count", 0))
+        shift_bullets += [
+            f"• Средний балл качества: {avg_q:.1f}%",
+            f"• Доля дефектов: {def_r:.1f}%",
+            f"• Одобрено / отклонено партий: {approved} / {rejected}",
+        ]
+        worst_q = self._assess_defect(getattr(q_summary, "defect_rate", Decimal("0")))[2]
+        if worst_q == NORMAL:
+            q_conclusion = (
+                f"Качество продукции соответствует стандартам: "
+                f"средний балл {avg_q:.1f}%, доля дефектов {def_r:.1f}%."
+            )
+            q_rec = "Рекомендуется сохранять текущий контроль качества и регулярно проводить аудит параметров."
+        elif worst_q == WARNING:
+            q_conclusion = f"Доля дефектов {def_r:.1f}% превышает норму. Требуется анализ по параметрам."
+            q_rec = "Рекомендуется усилить входной контроль сырья и проверить соблюдение технологических регламентов."
+        else:
+            q_conclusion = (
+                f"Критический уровень дефектов {def_r:.1f}%. "
+                f"Одобрено только {approved} из {approved + rejected} партий."
+            )
+            q_rec = (
+                "Необходимо немедленно приостановить отгрузку сомнительных партий, "
+                "провести расследование причин и скорректировать технологический процесс."
+            )
+        self._word_section(doc, "3. ВЫПУСК ПО СМЕНАМ И КАЧЕСТВО ПРОДУКЦИИ",
+                           shift_bullets, q_conclusion, q_rec,
+                           chart_bytes=self._chart_po_quality_params(q_summary))
+
+        # ── Section 4: Продажи по регионам ──────────────────────────────────
+        region_list = getattr(regions, "regions", []) or []
+        total_rev = sum(
+            float(r.get("total_amount", 0) if isinstance(r, dict) else getattr(r, "total_amount", 0))
+            for r in region_list
+        )
+        sales_bullets: list[str] = [f"• Общая выручка за период: {total_rev:,.0f} руб."]
+        for r in region_list[:6]:
+            reg = r.get("region", "—") if isinstance(r, dict) else getattr(r, "region", "—")
+            amt = float(r.get("total_amount", 0) if isinstance(r, dict) else getattr(r, "total_amount", 0))
+            pct = float(r.get("percentage", 0) if isinstance(r, dict) else getattr(r, "percentage", 0))
+            sales_bullets.append(f"• {reg}: {amt:,.0f} руб. ({pct:.1f}%)")
+        top_region = (
+            (region_list[0].get("region") if isinstance(region_list[0], dict)
+             else getattr(region_list[0], "region", "—"))
+            if region_list else "—"
+        )
+        sales_conclusion = (
+            f"Выручка за период составила {total_rev:,.0f} руб. "
+            f"Ведущий регион — «{top_region}». "
+            "Анализ региональной структуры позволяет оптимизировать логистику и приоритеты поставок."
+        ) if region_list else "Данные по продажам за период отсутствуют."
+        sales_rec = (
+            "Рекомендуется сконцентрировать маркетинговые усилия на регионах с высоким потенциалом роста "
+            "и обеспечить стабильность поставок в ключевые регионы."
+        )
+        self._word_section(doc, "4. ПРОДАЖИ ПО РЕГИОНАМ",
+                           sales_bullets, sales_conclusion, sales_rec,
+                           chart_bytes=self._chart_po_sales_pie(regions))
+
+        # ── Section 5: Сенсоры и Запасы ─────────────────────────────────────
+        sensor_items = sensors.get("items", []) or []
+        total_alerts = sum(int(s.get("alert_count", 0) or 0) for s in sensor_items)
+        total_readings = sum(int(s.get("reading_count", 0) or 0) for s in sensor_items)
+        alert_ratio = (total_alerts / total_readings) if total_readings else 0.0
+        _, _, sensor_level = self._assess_defect(Decimal(str(round(alert_ratio, 4))))
+
+        sensor_bullets: list[str] = [
+            f"• Параметров контролируется: {len(sensor_items)}",
+            f"• Всего показаний: {total_readings}, тревог: {total_alerts} ({alert_ratio * 100:.1f}%)",
+        ]
+        for s in sensor_items[:5]:
+            name = s.get("parameter_name", "—")
+            alerts = int(s.get("alert_count", 0) or 0)
+            readings = int(s.get("reading_count", 0) or 1)
+            ratio = alerts / readings
+            _, _, lv = self._assess_defect(Decimal(str(round(ratio, 4))))
+            sensor_bullets.append(
+                f"• {name}: среднее {float(s.get('avg_value') or 0):.2f} {s.get('unit', '')}, "
+                f"тревог {alerts}/{readings} — {STATUS_LABEL[lv]}"
+            )
+
+        inv_items = inventory.get("items", []) or []
+        snap_date = inventory.get("snapshot_date", "—")
+        sensor_bullets.append(f"• Запасы (срез {snap_date}): {len(inv_items)} позиций на складе")
+
+        if sensor_level == NORMAL:
+            sensor_conclusion = "Производственное оборудование работает в штатном режиме. Уровень тревог в норме."
+            sensor_rec = "Рекомендуется соблюдать регламент технического обслуживания для поддержания стабильности."
+        elif sensor_level == WARNING:
+            sensor_conclusion = (
+                f"Зафиксировано повышенное количество тревог сенсоров: "
+                f"{total_alerts} из {total_readings} показаний."
+            )
+            sensor_rec = "Рекомендуется провести профилактическое обслуживание оборудования и проверить датчики."
+        else:
+            sensor_conclusion = (
+                f"Критический уровень тревог: {total_alerts} из {total_readings} показаний "
+                f"({alert_ratio * 100:.1f}%). Возможны сбои оборудования."
+            )
+            sensor_rec = (
+                "Необходимо срочно задействовать службы технического обслуживания, "
+                "проверить исправность критически важных узлов и при необходимости остановить линию."
+            )
+        self._word_section(doc, "5. СОСТОЯНИЕ ОБОРУДОВАНИЯ И ЗАПАСЫ",
+                           sensor_bullets, sensor_conclusion, sensor_rec)
+
+        # ── Overall conclusion ────────────────────────────────────────────────
+        overall = self._worst([worst_kpi, worst_orders, worst_q, sensor_level])
+        doc.add_heading("ИТОГОВЫЙ ВЫВОД И РЕКОМЕНДАЦИИ", 1)
+        if overall == NORMAL:
+            doc.add_paragraph(
+                "Производство функционирует в штатном режиме по всем ключевым направлениям. "
+                "KPI, качество, выполнение заказов и состояние оборудования соответствуют плановым показателям. "
+                "Рекомендуется продолжать плановую работу и мониторинг показателей."
+            )
+        elif overall == WARNING:
+            doc.add_paragraph(
+                "Выявлен ряд отклонений, требующих внимания руководства. "
+                "Ситуация управляема, однако без корректирующих мер возможно ухудшение показателей. "
+                "Рекомендуется инициировать план корректирующих мероприятий по проблемным направлениям."
+            )
+        else:
+            doc.add_paragraph(
+                "Зафиксированы критические отклонения по одному или нескольким направлениям. "
+                "Требуется незамедлительное вмешательство и эскалация на уровень высшего руководства. "
+                "Необходимо разработать план восстановления и установить контрольные точки."
+            )
+
+        return self._word_to_bytes(doc)
