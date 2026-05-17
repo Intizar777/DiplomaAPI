@@ -41,7 +41,7 @@ class FinanceManagerDashboardService:
         Return revenue breakdown by channel, region, or product.
 
         Reads from AggregatedSales where group_by_type matches the requested dimension.
-        Rows whose period_from falls within [date_from, date_to] are included.
+        Falls back to SaleRecord if aggregated data is unavailable.
         Groups are ranked descending by total_amount.
         """
         query = (
@@ -62,6 +62,39 @@ class FinanceManagerDashboardService:
         result = await self.db.execute(query)
         rows = result.all()
 
+        # Fallback to SaleRecord if no aggregated data
+        if not rows:
+            if group_by == GroupByType.region:
+                group_col = SaleRecord.region
+            elif group_by == GroupByType.channel:
+                group_col = SaleRecord.channel
+            else:  # product
+                group_col = SaleRecord.product_name
+
+            query = (
+                select(
+                    group_col.label("group_key"),
+                    func.sum(SaleRecord.amount).label("total_amount"),
+                    func.sum(SaleRecord.quantity).label("total_quantity"),
+                    func.count(SaleRecord.id).label("sales_count"),
+                )
+                .where(
+                    SaleRecord.sale_date >= date_from,
+                    SaleRecord.sale_date <= date_to,
+                )
+                .group_by(group_col)
+                .order_by(func.sum(SaleRecord.amount).desc())
+            )
+            result = await self.db.execute(query)
+            rows = result.all()
+            logger.info(
+                "sales_breakdown_fallback_to_raw",
+                date_from=str(date_from),
+                date_to=str(date_to),
+                group_by=group_by.value,
+                row_count=len(rows),
+            )
+
         grand_amount = sum((Decimal(str(row.total_amount or 0)) for row in rows), Decimal("0"))
 
         groups: List[SalesGroupItem] = []
@@ -81,7 +114,7 @@ class FinanceManagerDashboardService:
             )
             groups.append(
                 SalesGroupItem(
-                    group_key=row.group_key,
+                    group_key=row.group_key or "Unknown",
                     total_amount=total_amount,
                     total_quantity=total_quantity,
                     sales_count=sales_count,
