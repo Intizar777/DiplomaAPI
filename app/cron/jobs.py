@@ -503,7 +503,21 @@ async def aggregate_sales_trends_task():
                     )
                 )
 
+                # Group by trend_date to create aggregated rows with region=NULL, channel=NULL
+                agg_by_date = {}
                 for row in rows:
+                    key = row.trend_date
+                    if key not in agg_by_date:
+                        agg_by_date[key] = {
+                            "total_amount": Decimal("0"),
+                            "total_quantity": Decimal("0"),
+                            "order_count": 0,
+                        }
+                    agg_by_date[key]["total_amount"] += row.total_amount or Decimal("0")
+                    agg_by_date[key]["total_quantity"] += row.total_quantity or Decimal("0")
+                    agg_by_date[key]["order_count"] += row.order_count or 0
+
+                    # Insert specific region/channel row
                     db.add(SalesTrends(
                         trend_date=row.trend_date,
                         interval_type=interval_type,
@@ -512,6 +526,19 @@ async def aggregate_sales_trends_task():
                         total_amount=row.total_amount or Decimal("0"),
                         total_quantity=row.total_quantity or Decimal("0"),
                         order_count=row.order_count or 0,
+                    ))
+                    total_inserted += 1
+
+                # Insert aggregated rows (region=NULL, channel=NULL) for trend chart
+                for trend_date, agg in agg_by_date.items():
+                    db.add(SalesTrends(
+                        trend_date=trend_date,
+                        interval_type=interval_type,
+                        region=None,
+                        channel=None,
+                        total_amount=agg["total_amount"],
+                        total_quantity=agg["total_quantity"],
+                        order_count=agg["order_count"],
                     ))
                     total_inserted += 1
 
