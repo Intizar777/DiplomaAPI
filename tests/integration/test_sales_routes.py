@@ -18,6 +18,8 @@ async def sample_aggregated_sales(session):
     """Insert aggregated sales data for summary endpoint tests."""
     today = date.today()
     from_date = today - timedelta(days=30)
+    product_id_1 = str(uuid.uuid4())
+    product_id_2 = str(uuid.uuid4())
 
     records = [
         AggregatedSales(
@@ -25,6 +27,7 @@ async def sample_aggregated_sales(session):
             period_to=today,
             group_by_type="region",
             group_key="North",
+            group_id=None,
             total_quantity=Decimal("500"),
             total_amount=Decimal("50000"),
             sales_count=25,
@@ -35,6 +38,7 @@ async def sample_aggregated_sales(session):
             period_to=today,
             group_by_type="region",
             group_key="South",
+            group_id=None,
             total_quantity=Decimal("300"),
             total_amount=Decimal("30000"),
             sales_count=15,
@@ -45,10 +49,33 @@ async def sample_aggregated_sales(session):
             period_to=today,
             group_by_type="channel",
             group_key="online",
+            group_id=None,
             total_quantity=Decimal("200"),
             total_amount=Decimal("20000"),
             sales_count=10,
             avg_order_value=Decimal("2000"),
+        ),
+        AggregatedSales(
+            period_from=from_date,
+            period_to=today,
+            group_by_type="product",
+            group_key="Product Alpha",
+            group_id=product_id_1,
+            total_quantity=Decimal("100"),
+            total_amount=Decimal("15000"),
+            sales_count=5,
+            avg_order_value=Decimal("3000"),
+        ),
+        AggregatedSales(
+            period_from=from_date,
+            period_to=today,
+            group_by_type="product",
+            group_key="Product Beta",
+            group_id=product_id_2,
+            total_quantity=Decimal("80"),
+            total_amount=Decimal("12000"),
+            sales_count=4,
+            avg_order_value=Decimal("3000"),
         ),
     ]
     session.add_all(records)
@@ -204,6 +231,31 @@ async def test_sales_summary_group_by_channel(client, sample_aggregated_sales):
     data = response.json()
     assert data["group_by"] == "channel"
     assert any(item["group_key"] == "online" for item in data["summary"])
+
+
+@pytest.mark.asyncio
+async def test_sales_summary_group_by_product(client, sample_aggregated_sales):
+    """Test summary filtered by product group with group_id."""
+    today = date.today()
+    params = {
+        "date_from": str(today - timedelta(days=30)),
+        "date_to": str(today),
+        "group_by": "product",
+    }
+
+    response = await client.get("/api/v1/sales/summary", params=params)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["group_by"] == "product"
+    assert len(data["summary"]) == 2  # Two products in fixture
+
+    # Verify each product has group_id
+    for item in data["summary"]:
+        assert "group_key" in item
+        assert "group_id" in item
+        assert item["group_id"] is not None  # Products must have group_id
+        assert item["group_key"] in ["Product Alpha", "Product Beta"]
 
 
 @pytest.mark.asyncio

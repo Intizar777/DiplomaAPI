@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 class SalesSummaryItem(BaseModel):
     """Single sales summary record."""
     group_key: str = Field(description="Group identifier (region, channel, product)")
+    group_id: Optional[str] = Field(default=None, description="Group ID (UUID for product, null for region/channel)")
     total_quantity: Decimal = Field(description="Total quantity sold")
     total_amount: Decimal = Field(description="Total amount (revenue)")
     sales_count: int = Field(description="Number of sales transactions")

@@ -22,6 +22,7 @@ class AggregatedSales(Base, UUIDMixin, TimestampMixin):
     # Grouping
     group_by_type = Column(String(20), nullable=False)  # 'region', 'channel', 'product'
     group_key = Column(String(100), nullable=False)       # actual value
+    group_id = Column(String(100), nullable=True)         # UUID for product grouping
     
     # Metrics
     total_quantity = Column(DECIMAL(15, 3), nullable=False, default=0)

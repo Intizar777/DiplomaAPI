@@ -51,6 +51,8 @@ async def test_get_sales_summary_group_by_product(session, sample_sales_data):
     # Verify each summary item has required fields
     for item in result.summary:
         assert hasattr(item, 'group_key')
+        assert hasattr(item, 'group_id')
+        assert item.group_id is not None  # Product breakdown should always have group_id
         assert hasattr(item, 'total_quantity')
         assert hasattr(item, 'total_amount')
         assert hasattr(item, 'sales_count')
@@ -270,6 +272,7 @@ async def test_aggregate_from_raw_returns_list(session, db_session_with_data):
     # Each item should have required fields
     for item in result:
         assert "group_key" in item
+        assert "group_id" in item  # Product aggregation includes group_id
         assert "total_quantity" in item
         assert "total_amount" in item
         assert "sales_count" in item

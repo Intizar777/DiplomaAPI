@@ -46,35 +46,63 @@ class SalesService:
     ) -> List[Dict]:
         """Aggregate sales from raw SaleRecord data."""
         if group_by == "region":
-            group_col = SaleRecord.region
+            query = select(
+                SaleRecord.region.label("group_key"),
+                func.sum(SaleRecord.quantity).label("total_quantity"),
+                func.sum(SaleRecord.amount).label("total_amount"),
+                func.count(SaleRecord.id).label("sales_count")
+            ).where(
+                SaleRecord.sale_date >= from_date,
+                SaleRecord.sale_date <= to_date
+            ).group_by(SaleRecord.region).order_by(desc("total_amount"))
         elif group_by == "channel":
-            group_col = SaleRecord.channel
-        else:
-            group_col = SaleRecord.product_id
-        
-        query = select(
-            group_col.label("group_key"),
-            func.sum(SaleRecord.quantity).label("total_quantity"),
-            func.sum(SaleRecord.amount).label("total_amount"),
-            func.count(SaleRecord.id).label("sales_count")
-        ).where(
-            SaleRecord.sale_date >= from_date,
-            SaleRecord.sale_date <= to_date
-        ).group_by(group_col).order_by(desc("total_amount"))
-        
+            query = select(
+                SaleRecord.channel.label("group_key"),
+                func.sum(SaleRecord.quantity).label("total_quantity"),
+                func.sum(SaleRecord.amount).label("total_amount"),
+                func.count(SaleRecord.id).label("sales_count")
+            ).where(
+                SaleRecord.sale_date >= from_date,
+                SaleRecord.sale_date <= to_date
+            ).group_by(SaleRecord.channel).order_by(desc("total_amount"))
+        else:  # product
+            query = select(
+                SaleRecord.product_name.label("group_key"),
+                SaleRecord.product_id.label("group_id"),
+                func.sum(SaleRecord.quantity).label("total_quantity"),
+                func.sum(SaleRecord.amount).label("total_amount"),
+                func.count(SaleRecord.id).label("sales_count")
+            ).where(
+                SaleRecord.sale_date >= from_date,
+                SaleRecord.sale_date <= to_date
+            ).group_by(SaleRecord.product_name, SaleRecord.product_id).order_by(desc("total_amount"))
+
         result = await self.db.execute(query)
         rows = result.all()
-        
-        return [
-            {
-                "group_key": row.group_key or "unknown",
-                "total_quantity": row.total_quantity or Decimal("0"),
-                "total_amount": row.total_amount or Decimal("0"),
-                "sales_count": row.sales_count or 0,
-                "avg_order_value": None
-            }
-            for row in rows
-        ]
+
+        if group_by == "product":
+            return [
+                {
+                    "group_key": row.group_key or "Unknown",
+                    "group_id": str(row.group_id) if row.group_id else None,
+                    "total_quantity": row.total_quantity or Decimal("0"),
+                    "total_amount": row.total_amount or Decimal("0"),
+                    "sales_count": row.sales_count or 0,
+                    "avg_order_value": None
+                }
+                for row in rows
+            ]
+        else:
+            return [
+                {
+                    "group_key": row.group_key or "unknown",
+                    "total_quantity": row.total_quantity or Decimal("0"),
+                    "total_amount": row.total_amount or Decimal("0"),
+                    "sales_count": row.sales_count or 0,
+                    "avg_order_value": None
+                }
+                for row in rows
+            ]
     
     async def get_sales_summary(
         self,
@@ -96,6 +124,7 @@ class SalesService:
             summary = [
                 {
                     "group_key": record.group_key,
+                    "group_id": record.group_id,
                     "total_quantity": record.total_quantity,
                     "total_amount": record.total_amount,
                     "sales_count": record.sales_count,
@@ -299,6 +328,7 @@ class SalesService:
                 period_to=period_to,
                 group_by_type="region",
                 group_key=item.groupKey,
+                group_id=None,
                 total_quantity=Decimal(str(item.totalQuantity)),
                 total_amount=Decimal(str(item.totalAmount)),
                 sales_count=item.salesCount
@@ -322,6 +352,7 @@ class SalesService:
                 period_to=period_to,
                 group_by_type="channel",
                 group_key=item.groupKey,
+                group_id=None,
                 total_quantity=Decimal(str(item.totalQuantity)),
                 total_amount=Decimal(str(item.totalAmount)),
                 sales_count=item.salesCount
@@ -401,7 +432,56 @@ class SalesService:
                         logger.error("sales_raw_final_batch_error", error=str(e)[:200])
         except Exception as e:
             logger.error("sales_raw_sync_error", error=str(e)[:200])
-        
+
+        # Aggregate product data from raw SaleRecord
+        try:
+            product_agg_query = select(
+                SaleRecord.product_name.label("group_key"),
+                SaleRecord.product_id.label("group_id"),
+                func.sum(SaleRecord.quantity).label("total_quantity"),
+                func.sum(SaleRecord.amount).label("total_amount"),
+                func.count(SaleRecord.id).label("sales_count")
+            ).where(
+                SaleRecord.sale_date >= period_from,
+                SaleRecord.sale_date <= period_to
+            ).group_by(SaleRecord.product_name, SaleRecord.product_id).order_by(desc(SaleRecord.product_name))
+
+            product_result = await self.db.execute(product_agg_query)
+            product_rows = product_result.all()
+
+            for row in product_rows:
+                if not row.group_key or not row.group_id:
+                    continue
+                stmt = insert(AggregatedSales).values(
+                    period_from=period_from,
+                    period_to=period_to,
+                    group_by_type="product",
+                    group_key=row.group_key,
+                    group_id=str(row.group_id),
+                    total_quantity=row.total_quantity or Decimal("0"),
+                    total_amount=row.total_amount or Decimal("0"),
+                    sales_count=row.sales_count or 0
+                ).on_conflict_do_update(
+                    index_elements=['period_from', 'period_to', 'group_by_type', 'group_key'],
+                    set_=dict(
+                        group_id=str(row.group_id),
+                        total_quantity=row.total_quantity or Decimal("0"),
+                        total_amount=row.total_amount or Decimal("0"),
+                        sales_count=row.sales_count or 0
+                    )
+                )
+                await self.db.execute(stmt)
+
+            if product_rows:
+                logger.info(
+                    "sales_product_aggregated",
+                    period_from=str(period_from),
+                    period_to=str(period_to),
+                    product_count=len(product_rows)
+                )
+        except Exception as e:
+            logger.error("sales_product_aggregation_error", error=str(e)[:200])
+
         # Aggregate from raw SaleRecord into AggregatedSales only if gateway summary was empty
         if records_processed > 0 and not summary_response.summary:
             try:

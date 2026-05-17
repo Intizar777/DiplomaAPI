@@ -392,6 +392,7 @@ class SalesResponse(BaseModel):
 class SalesSummaryItem(BaseModel):
     """Single group in sales summary"""
     groupKey: str
+    groupId: Optional[UUID] = None
     totalQuantity: float
     totalAmount: float
     salesCount: int
@@ -400,6 +401,7 @@ class SalesSummaryItem(BaseModel):
         json_schema_extra = {
             "example": {
                 "groupKey": "СФО",
+                "groupId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                 "totalQuantity": 20993378.776,
                 "totalAmount": 7834257524.91,
                 "salesCount": 5157
