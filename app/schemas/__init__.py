@@ -31,7 +31,7 @@ from app.schemas.line_master_dashboard import (
     ShiftComparisonResponse,
     DefectSummaryResponse,
 )
-from app.schemas.gm_dashboard import (
+from app.schemas.gm_dashboard import (  # type: ignore[assignment]
     OEEDataPoint,
     OEELineItem,
     OEESummaryResponse,

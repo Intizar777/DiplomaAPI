@@ -13,6 +13,7 @@ from app.models.inventory import InventorySnapshot
 from app.models.sync_log import SyncLog, SyncError
 from app.models.reference import ProductionLine, UnitOfMeasure, Warehouse, SensorParameter, Sensor, Customer, QualitySpec, LineCapacityPlan, KPIConfig
 from app.models.analytics import BatchInput, DowntimeEvent, PromoCampaign
+from app.models.sensor_anomaly import SensorAnomaly
 
 __all__ = [
     "Base",
@@ -41,4 +42,5 @@ __all__ = [
     "BatchInput",
     "DowntimeEvent",
     "PromoCampaign",
+    "SensorAnomaly",
 ]

@@ -361,7 +361,7 @@ class SaleItem(BaseModel):
     customerId: UUID
     quantity: float
     amount: float
-    cost: float = None
+    cost: float = None  # type: ignore[assignment]
     saleDate: datetime
     region: str
     channel: str

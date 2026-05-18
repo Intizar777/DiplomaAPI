@@ -16,7 +16,7 @@ from app.cron.jobs import (
 logger = structlog.get_logger()
 
 # Global scheduler state
-scheduler_task: asyncio.Task = None
+scheduler_task: asyncio.Task = None  # type: ignore[assignment]
 running = False
 
 

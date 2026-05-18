@@ -4,6 +4,8 @@ Analytics models: BatchInput, DowntimeEvent, PromoCampaign.
 from datetime import date, datetime
 from decimal import Decimal
 
+from typing import Any
+
 from sqlalchemy import Column, Date, DateTime, DECIMAL, Integer, String, Index
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -16,7 +18,7 @@ class BatchInput(Base, UUIDMixin, TimestampMixin):
 
     order_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     product_id = Column(UUID(as_uuid=True), nullable=True, index=True)
-    quantity = Column(DECIMAL(15, 3), nullable=False)
+    quantity: Column[Any] = Column(DECIMAL(15, 3), nullable=False)
     input_date = Column(DateTime(timezone=True), nullable=False, index=True)
     event_id = Column(String(255), nullable=True, unique=True)
 
@@ -52,10 +54,10 @@ class PromoCampaign(Base, UUIDMixin, TimestampMixin):
     description = Column(String(1000), nullable=True)
     channel = Column(String(50), nullable=False, index=True)
     product_id = Column(UUID(as_uuid=True), nullable=True, index=True)
-    discount_percent = Column(DECIMAL(5, 2), nullable=True)
+    discount_percent: Column[Any] = Column(DECIMAL(5, 2), nullable=True)
     start_date = Column(Date, nullable=False, index=True)
     end_date = Column(Date, nullable=True)
-    budget = Column(DECIMAL(15, 2), nullable=True)
+    budget: Column[Any] = Column(DECIMAL(15, 2), nullable=True)
     event_id = Column(String(255), nullable=True, unique=True)
 
     def __repr__(self):

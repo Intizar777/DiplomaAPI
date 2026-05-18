@@ -30,10 +30,10 @@ class ProductionAnalyticsService:
         compare_with_previous: bool = False
     ) -> dict:
         """Get enriched KPI with targets, trends, and optional comparison."""
-        # Fetch aggregated KPI for period
+        # Fetch aggregated KPI for period (check for overlap, not containment)
         kpi_query = select(AggregatedKPI).where(
-            AggregatedKPI.period_from >= from_date,
-            AggregatedKPI.period_to <= to_date,
+            AggregatedKPI.period_from <= to_date,
+            AggregatedKPI.period_to >= from_date,
         )
 
         if production_line_id:
@@ -67,13 +67,13 @@ class ProductionAnalyticsService:
                 "target": Decimal("0.85"),
                 "min": Decimal("0.75"),
                 "max": Decimal("1.0"),
-                "status": self._get_status(oee_estimate, Decimal("0.85"), Decimal("0.75"), Decimal("1.0")),
+                "status": self._get_status(oee_estimate, Decimal("0.85"), Decimal("0.75"), Decimal("1.0")),  # type: ignore[arg-type]
             },
             "defect_rate": {
                 "target": Decimal("0.015"),
                 "min": Decimal("0.0"),
                 "max": Decimal("0.015"),
-                "status": self._get_status(avg_defect_rate, Decimal("0.015"), Decimal("0.0"), Decimal("0.015")),
+                "status": self._get_status(avg_defect_rate, Decimal("0.015"), Decimal("0.0"), Decimal("0.015")),  # type: ignore[arg-type]
             },
             "otif_rate": {
                 "target": Decimal("0.95"),
@@ -112,8 +112,8 @@ class ProductionAnalyticsService:
             prev_to = from_date - timedelta(days=1)
 
             prev_query = select(AggregatedKPI).where(
-                AggregatedKPI.period_from >= prev_from,
-                AggregatedKPI.period_to <= prev_to,
+                AggregatedKPI.period_from <= prev_to,
+                AggregatedKPI.period_to >= prev_from,
             )
             if production_line_id:
                 prev_query = prev_query.where(AggregatedKPI.product_line_id == production_line_id)
@@ -129,7 +129,7 @@ class ProductionAnalyticsService:
 
                 change_percent = {
                     "total_output": float((total_output - prev_output) / prev_output * 100) if prev_output > 0 else 0,
-                    "oee_estimate": float((oee_estimate - prev_oee) / prev_oee * 100) if prev_oee > 0 else 0,
+                    "oee_estimate": float((oee_estimate - prev_oee) / prev_oee * 100) if prev_oee > 0 else 0,  # type: ignore[operator]
                 }
 
         # Line throughput (simplified: total_output / number of days)

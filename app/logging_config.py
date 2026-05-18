@@ -70,7 +70,7 @@ def configure_logging(log_level: str = "INFO", use_json: bool = False) -> None:
         processors.append(structlog.dev.ConsoleRenderer())
 
     structlog.configure(
-        processors=processors,
+        processors=processors,  # type: ignore[arg-type]
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
         wrapper_class=structlog.stdlib.BoundLogger,

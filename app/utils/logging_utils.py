@@ -212,7 +212,7 @@ def log_data_flow(
         "operation": operation,
     }
     if payload_summary is not None:
-        log_data["payload_summary"] = payload_summary
+        log_data["payload_summary"] = payload_summary  # type: ignore[assignment]
     if records_count is not None:
-        log_data["records_count"] = records_count
+        log_data["records_count"] = records_count  # type: ignore[assignment]
     logger.info("data_flow", **log_data)

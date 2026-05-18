@@ -1,0 +1,21 @@
+{
+  "started_at": "2026-05-17T22:47:48",
+  "completed_at": null,
+  "tasks": {
+    "references": {"status": "success", "completed_at": "2026-05-17T22:49:09", "records": 69},
+    "products": {"status": "success", "completed_at": "2026-05-17T22:52:38", "records": 100},
+    "quality_specs": {"status": "success", "completed_at": "2026-05-17T22:57:23", "records": 430},
+    "initial_sync_kpi": {"status": "success", "completed_at": "2026-05-17T22:58:16", "records": 29},
+    "initial_sync_kpi_per_line": {"status": "success", "completed_at": "2026-05-17T23:09:41", "records": 232, "note": "Fixed INSERT to upsert in kpi_service.py"},
+    "initial_sync_sales": {"status": "success", "completed_at": "2026-05-17T23:26:22", "records": 15, "note": "Fixed to month-by-month. AggregatedSales=543, SaleRecord=10050 (Gateway pagination limit for raw sales). Aggregates are correct per month."},
+    "initial_sync_orders": {"status": "success", "completed_at": "2026-05-18T01:15:00", "records": 8000},
+    "initial_sync_quality": {"status": "success", "completed_at": "2026-05-18T01:15:51", "records": 100},
+    "initial_sync_output": {"status": "success", "completed_at": "2026-05-18T01:30:50", "records": 29794},
+    "initial_sync_sensors": {"status": "success", "completed_at": "2026-05-18T01:46:10", "records": 5760, "note": "Partial - some batches failed due to FK violation (sensor_id not in sensors table). Connection closed after many retries. 5760 readings loaded."},
+    "initial_sync_inventory": {"status": "success", "completed_at": "2026-05-18T02:12:53", "records": 0},
+    "initial_sync_batch_inputs": {"status": "pending"},
+    "initial_sync_downtime_events": {"status": "pending"},
+    "initial_sync_promo_campaigns": {"status": "pending"},
+    "aggregate_sales_trends": {"status": "pending"}
+  }
+}

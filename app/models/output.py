@@ -4,6 +4,8 @@ Output (production batch) models.
 from datetime import date
 from decimal import Decimal
 
+from typing import Any
+
 from sqlalchemy import Column, Date, String, DECIMAL, Index
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -23,7 +25,7 @@ class ProductionOutput(Base, UUIDMixin, TimestampMixin):
     production_line_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     production_line_name = Column(String(255), nullable=True)
     lot_number = Column(String(100), nullable=False, index=True)
-    quantity = Column(DECIMAL(15, 3), nullable=True)
+    quantity: Column[Any] = Column(DECIMAL(15, 3), nullable=True)
     quality_status = Column(String(20), nullable=True)
     production_date = Column(Date, nullable=False, index=True)
     shift = Column(String(20), nullable=True, index=True)

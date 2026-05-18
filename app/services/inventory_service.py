@@ -3,10 +3,11 @@ Inventory business logic service.
 """
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import select, func, desc, cast, String, outerjoin
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import InventorySnapshot, Product
@@ -14,6 +15,9 @@ from app.models.reference import Warehouse
 from app.services.gateway_client import GatewayClient
 from app.utils.logging_utils import track_feature_path, log_data_flow
 import structlog
+
+if TYPE_CHECKING:
+    from app.messaging.schemas import InventoryUpdatedPayload
 
 logger = structlog.get_logger()
 
@@ -116,7 +120,7 @@ class InventoryService:
         """Sync inventory from Gateway (snapshot current state)."""
         logger.info("syncing_inventory_from_gateway")
 
-        inventory_response = await self.gateway.get_inventory()
+        inventory_response = await self.gateway.get_inventory()  # type: ignore[union-attr]
         logger.info("inventory_fetched_from_gateway", total_items=len(inventory_response.inventory))
 
         # Get product name + unit_of_measure code map for enrichment
@@ -163,7 +167,7 @@ class InventoryService:
             else:
                 last_updated = None
 
-            snapshot = InventorySnapshot(
+            batch.append(dict(
                 id=inventory_item.id,
                 product_id=product_id,
                 product_name=product_name,
@@ -174,13 +178,17 @@ class InventoryService:
                 quantity=Decimal(str(inventory_item.quantity)),
                 unit_of_measure=product_uom_codes.get(product_id),
                 last_updated=last_updated,
-                snapshot_date=snapshot_date
-            )
-            batch.append(snapshot)
+                snapshot_date=snapshot_date,
+            ))
 
             if len(batch) >= batch_size:
                 try:
-                    for item in batch: await self.db.merge(item)
+                    stmt = insert(InventorySnapshot).values(batch)
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=['id'],
+                        set_={k: stmt.excluded[k] for k in ['product_name', 'warehouse_name', 'quantity', 'last_updated', 'snapshot_date']},
+                    )
+                    await self.db.execute(stmt)
                     await self.db.commit()
                     records_processed += len(batch)
                     logger.info("inventory_sync_batch", records_processed=records_processed)
@@ -191,7 +199,12 @@ class InventoryService:
 
         if batch:
             try:
-                for item in batch: await self.db.merge(item)
+                stmt = insert(InventorySnapshot).values(batch)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=['id'],
+                    set_={k: stmt.excluded[k] for k in ['product_name', 'warehouse_name', 'quantity', 'last_updated', 'snapshot_date']},
+                )
+                await self.db.execute(stmt)
                 await self.db.commit()
                 records_processed += len(batch)
             except Exception as e:
@@ -207,7 +220,7 @@ class InventoryService:
         logger.info("inventory_sync_completed", records_processed=records_processed)
         return records_processed
 
-    async def upsert_from_event(self, payload: "InventoryUpdatedPayload", event_id: str = None) -> None:
+    async def upsert_from_event(self, payload: "InventoryUpdatedPayload", event_id: Optional[str] = None) -> None:
         """Upsert inventory snapshot from event. Idempotent by event_id or (product_id, warehouse_code)."""
         from app.messaging.schemas import InventoryUpdatedPayload
         from sqlalchemy import and_
@@ -234,10 +247,10 @@ class InventoryService:
         snapshot = result.scalar_one_or_none()
 
         if snapshot:
-            snapshot.quantity = Decimal(str(payload.quantity))
-            snapshot.last_updated = datetime.utcnow()
+            snapshot.quantity = Decimal(str(payload.quantity))  # type: ignore[assignment]
+            snapshot.last_updated = datetime.utcnow()  # type: ignore[assignment]
             if event_id:
-                snapshot.event_id = UUID(event_id)
+                snapshot.event_id = UUID(event_id)  # type: ignore[assignment]
             logger.info(
                 "inventory_updated_from_event",
                 product_id=str(payload.product_id),

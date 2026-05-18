@@ -57,7 +57,7 @@ async def upsert_customer(db: AsyncSession, customer_data: dict) -> Optional[UUI
         )
         db.add(customer)
 
-    return customer.id
+    return customer.id  # type: ignore[return-value]
 
 
 async def upsert_warehouse(db: AsyncSession, warehouse_data: dict) -> Optional[UUID]:
@@ -96,7 +96,7 @@ async def upsert_warehouse(db: AsyncSession, warehouse_data: dict) -> Optional[U
         )
         db.add(warehouse)
 
-    return warehouse.id
+    return warehouse.id  # type: ignore[return-value]
 
 
 async def upsert_unit_of_measure(db: AsyncSession, unit_data: dict) -> Optional[UUID]:
@@ -132,7 +132,7 @@ async def upsert_unit_of_measure(db: AsyncSession, unit_data: dict) -> Optional[
         )
         db.add(unit)
 
-    return unit.id
+    return unit.id  # type: ignore[return-value]
 
 
 async def upsert_sensor_parameter(db: AsyncSession, param_data: dict) -> Optional[UUID]:
@@ -177,7 +177,7 @@ async def upsert_sensor_parameter(db: AsyncSession, param_data: dict) -> Optiona
         )
         db.add(param)
 
-    return param.id
+    return param.id  # type: ignore[return-value]
 
 
 async def upsert_quality_spec(db: AsyncSession, spec_data: dict) -> Optional[UUID]:
@@ -234,7 +234,7 @@ async def upsert_quality_spec(db: AsyncSession, spec_data: dict) -> Optional[UUI
         )
         db.add(spec)
 
-    return spec.id
+    return spec.id  # type: ignore[return-value]
 
 
 
@@ -277,4 +277,4 @@ async def upsert_production_line(db: AsyncSession, line_data: dict) -> Optional[
         )
         db.add(line)
 
-    return line.id
+    return line.id  # type: ignore[return-value]

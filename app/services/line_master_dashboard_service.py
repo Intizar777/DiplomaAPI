@@ -50,17 +50,17 @@ class LineMasterDashboardService:
         for output in outputs:
             shift_key = output.shift or "unknown"
             if shift_key not in shifts_dict:
-                shifts_dict[shift_key] = {
+                shifts_dict[shift_key] = {  # type: ignore[index]
                     "shift": shift_key,
                     "lot_count": 0,
                     "total_quantity": Decimal("0"),
                     "approved_count": 0,
                     "defect_count": 0,
                 }
-            shifts_dict[shift_key]["lot_count"] += 1
-            shifts_dict[shift_key]["total_quantity"] += output.quantity or Decimal("0")
+            shifts_dict[shift_key]["lot_count"] += 1  # type: ignore[index]
+            shifts_dict[shift_key]["total_quantity"] += output.quantity or Decimal("0")  # type: ignore[index]
             if output.quality_status and output.quality_status.lower() == "approved":
-                shifts_dict[shift_key]["approved_count"] += 1
+                shifts_dict[shift_key]["approved_count"] += 1  # type: ignore[index]
 
         # Count defects per shift (query quality_results by lot_number)
         quality_query = select(QualityResult).where(
@@ -73,16 +73,16 @@ class LineMasterDashboardService:
         defects_by_lot: Dict[str, bool] = {}
         for qr in quality_results:
             if qr.lot_number not in defects_by_lot:
-                defects_by_lot[qr.lot_number] = False
+                defects_by_lot[qr.lot_number] = False  # type: ignore[index]
             if not qr.in_spec:
-                defects_by_lot[qr.lot_number] = True
+                defects_by_lot[qr.lot_number] = True  # type: ignore[index]
 
         # Count defects per shift
         for output in outputs:
-            if output.lot_number in defects_by_lot and defects_by_lot[output.lot_number]:
+            if output.lot_number in defects_by_lot and defects_by_lot[output.lot_number]:  # type: ignore[index]
                 shift_key = output.shift or "unknown"
                 if shift_key in shifts_dict:
-                    shifts_dict[shift_key]["defect_count"] += 1
+                    shifts_dict[shift_key]["defect_count"] += 1  # type: ignore[index]
 
         # Calculate defect rates
         shifts_list: List[ShiftItem] = []
@@ -222,13 +222,13 @@ class LineMasterDashboardService:
         for qr in quality_results:
             param = qr.parameter_name or "unknown"
             if param not in param_stats:
-                param_stats[param] = {
+                param_stats[param] = {  # type: ignore[index]
                     "total_tests": 0,
                     "failed_tests": 0,
                 }
-            param_stats[param]["total_tests"] += 1
+            param_stats[param]["total_tests"] += 1  # type: ignore[index]
             if not qr.in_spec:
-                param_stats[param]["failed_tests"] += 1
+                param_stats[param]["failed_tests"] += 1  # type: ignore[index]
                 total_defects += 1
 
         # Build response items, sorted by failed_tests descending

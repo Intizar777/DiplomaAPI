@@ -3,6 +3,8 @@ Quality control models.
 """
 from datetime import date
 
+from typing import Any
+
 from sqlalchemy import Column, Date, String, DECIMAL, Boolean, Index, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -23,7 +25,7 @@ class QualityResult(Base, UUIDMixin, TimestampMixin):
 
     # Test parameters (denormalized for backward compatibility, spec normalized to FK)
     parameter_name = Column(String(50), nullable=False)
-    result_value = Column(DECIMAL(10, 4), nullable=True)
+    result_value: Column[Any] = Column(DECIMAL(10, 4), nullable=True)
     quality_spec_id = Column(UUID(as_uuid=True), ForeignKey("quality_specs.id", ondelete="SET NULL"), nullable=True, index=True)
 
     # Decision

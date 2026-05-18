@@ -3,10 +3,14 @@ Sensor business logic service.
 """
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, TYPE_CHECKING
 from uuid import UUID
 
+if TYPE_CHECKING:
+    from app.messaging.schemas import SensorReadingRecordedPayload, SensorAnomalyPayload
+
 from sqlalchemy import select, func, desc, and_, Integer, outerjoin
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import SensorReading, Sensor, SensorParameter
@@ -233,9 +237,9 @@ class SensorService:
 
         if sensor:
             sensor.device_id = device_id or sensor.device_id
-            sensor.production_line_id = prod_line_id or sensor.production_line_id
-            sensor.line_name = line_name or sensor.line_name
-            sensor.sensor_parameter_id = param_id or sensor.sensor_parameter_id
+            sensor.production_line_id = prod_line_id or sensor.production_line_id  # type: ignore[assignment]
+            sensor.line_name = line_name or sensor.line_name  # type: ignore[assignment]
+            sensor.sensor_parameter_id = param_id or sensor.sensor_parameter_id  # type: ignore[assignment]
             sensor.parameter_name = param_name or sensor.parameter_name
             sensor.parameter_unit = param_unit or sensor.parameter_unit
             sensor.is_active = sensor_data.get("isActive", sensor.is_active)
@@ -252,7 +256,7 @@ class SensorService:
             )
             self.db.add(sensor)
 
-        return sensor.id
+        return sensor.id  # type: ignore[return-value]
 
     @track_feature_path(feature_name="sensors.sync_from_gateway", log_result=True)
     async def sync_from_gateway(
@@ -269,7 +273,7 @@ class SensorService:
         """
         logger.info("syncing_sensors_from_gateway", from_date=from_date, to_date=to_date)
 
-        readings_response = await self.gateway.get_sensor_readings(from_date=from_date, to_date=to_date)
+        readings_response = await self.gateway.get_sensor_readings(from_date=from_date, to_date=to_date)  # type: ignore[union-attr]
         logger.info("sensors_fetched_from_gateway", total_readings=len(readings_response.readings))
 
         records_processed = 0
@@ -333,20 +337,23 @@ class SensorService:
             else:
                 recorded_at = datetime.utcnow()
 
-            reading = SensorReading(
+            batch.append(dict(
                 id=reading_item.id,
                 sensor_id=sensor_id,
                 value=Decimal(str(reading_item.value)) if reading_item.value is not None else None,
                 quality=reading_item.quality.lower() if reading_item.quality else None,
                 recorded_at=recorded_at,
-                snapshot_date=snapshot_date
-            )
-            batch.append(reading)
+                snapshot_date=snapshot_date,
+            ))
 
             if len(batch) >= batch_size:
                 try:
-                    for item in batch:
-                        await self.db.merge(item)
+                    stmt = insert(SensorReading).values(batch)
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=['id'],
+                        set_={k: stmt.excluded[k] for k in ['value', 'quality', 'recorded_at', 'snapshot_date']},
+                    )
+                    await self.db.execute(stmt)
                     await self.db.commit()
                     records_processed += len(batch)
                     logger.info("sensors_sync_batch", records_processed=records_processed)
@@ -357,8 +364,12 @@ class SensorService:
 
         if batch:
             try:
-                for item in batch:
-                    await self.db.merge(item)
+                stmt = insert(SensorReading).values(batch)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=['id'],
+                    set_={k: stmt.excluded[k] for k in ['value', 'quality', 'recorded_at', 'snapshot_date']},
+                )
+                await self.db.execute(stmt)
                 await self.db.commit()
                 records_processed += len(batch)
             except Exception as e:
@@ -378,3 +389,90 @@ class SensorService:
             parameters_synced=parameters_synced,
         )
         return records_processed
+
+    async def upsert_sensor_reading_from_event(self, payload: "SensorReadingRecordedPayload", event_id: Optional[str] = None) -> None:
+        """Upsert sensor reading from event. Idempotent by reading id."""
+        from app.messaging.schemas import SensorReadingRecordedPayload
+        from decimal import Decimal as D
+
+        # Check if reading already exists
+        existing = await self.db.execute(
+            select(SensorReading).where(SensorReading.id == payload.id)
+        )
+        if existing.scalar_one_or_none():
+            return
+
+        # Ensure sensor exists (upsert by sensor_id)
+        sensor_result = await self.db.execute(
+            select(Sensor).where(Sensor.id == payload.sensor_id)
+        )
+        if not sensor_result.scalar_one_or_none():
+            # Find or create sensor parameter
+            param_result = await self.db.execute(
+                select(SensorParameter).where(SensorParameter.name == payload.parameter_name)
+            )
+            param = param_result.scalar_one_or_none()
+            if not param:
+                param = SensorParameter(
+                    name=payload.parameter_name,
+                    code=payload.parameter_name.lower().replace(" ", "_"),
+                    unit=payload.unit,
+                )
+                self.db.add(param)
+                await self.db.flush()
+
+            sensor = Sensor(
+                id=payload.sensor_id,
+                device_id=payload.device_id,
+                production_line_id=payload.production_line_id,
+                sensor_parameter_id=param.id,
+                parameter_name=payload.parameter_name,
+                parameter_unit=payload.unit,
+                is_active=True,
+            )
+            self.db.add(sensor)
+            await self.db.flush()
+
+        reading = SensorReading(
+            id=payload.id,
+            sensor_id=payload.sensor_id,
+            value=D(str(payload.value)),
+            quality=payload.quality.lower(),
+            recorded_at=payload.recorded_at,
+            snapshot_date=payload.recorded_at,
+        )
+        self.db.add(reading)
+        await self.db.commit()
+
+    async def upsert_anomaly_from_event(self, payload: "SensorAnomalyPayload", event_id: Optional[str] = None) -> None:
+        """Upsert sensor anomaly from event. Idempotent by event_id."""
+        from app.messaging.schemas import SensorAnomalyPayload
+        from app.models.sensor_anomaly import SensorAnomaly
+        from decimal import Decimal as D
+
+        effective_event_id = event_id or str(payload.reading_id)
+
+        existing = await self.db.execute(
+            select(SensorAnomaly).where(SensorAnomaly.event_id == effective_event_id)
+        )
+        if existing.scalar_one_or_none():
+            return
+
+        anomaly = SensorAnomaly(
+            reading_id=payload.reading_id,
+            device_id=payload.device_id,
+            production_line_id=payload.production_line_id,
+            parameter_name=payload.parameter_name,
+            value=D(str(payload.value)),
+            unit=payload.unit,
+            quality=payload.quality.lower(),
+            anomaly_type=payload.anomaly_type,
+            severity=payload.severity,
+            reason=payload.reason,
+            lower_limit=D(str(payload.lower_limit)) if payload.lower_limit is not None else None,
+            upper_limit=D(str(payload.upper_limit)) if payload.upper_limit is not None else None,
+            detected_at=payload.detected_at,
+            event_id=effective_event_id,
+        )
+        self.db.add(anomaly)
+        await self.db.commit()

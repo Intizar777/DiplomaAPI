@@ -100,12 +100,12 @@ async def lifespan(app: FastAPI):
                 "WHERE status = 'running'"
             ))
             await db.commit()
-            if result.rowcount:
+            if result.rowcount:  # type: ignore[attr-defined]
                 logger.info(
                     "lifecycle_startup_checkpoint",
                     phase="startup",
                     checkpoint="stale_sync_logs_cleared",
-                    count=result.rowcount,
+                    count=result.rowcount,  # type: ignore[attr-defined]
                 )
     except Exception as e:
         logger.warning("lifecycle_stale_sync_logs_cleanup_failed", error=str(e))

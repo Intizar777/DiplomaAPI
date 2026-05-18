@@ -3,6 +3,8 @@ KPI aggregation models.
 """
 from datetime import date
 
+from typing import Any
+
 from sqlalchemy import Column, Date, DECIMAL, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -25,11 +27,11 @@ class AggregatedKPI(Base, UUIDMixin, TimestampMixin):
     production_line_name = Column(String(255), nullable=True)
     
     # Metrics
-    total_output = Column(DECIMAL(15, 3), nullable=False, default=0)
-    defect_rate = Column(DECIMAL(5, 2), nullable=False, default=0)
+    total_output: Column[Any] = Column(DECIMAL(15, 3), nullable=False, default=0)
+    defect_rate: Column[Any] = Column(DECIMAL(5, 2), nullable=False, default=0)
     completed_orders = Column(Integer, nullable=False, default=0)
     total_orders = Column(Integer, nullable=False, default=0)
-    oee_estimate = Column(DECIMAL(5, 2), nullable=True)
+    oee_estimate: Column[Any] = Column(DECIMAL(5, 2), nullable=True)
     avg_order_completion_time = Column(String(50), nullable=True)  # Stored as interval string
     
     # Constraints

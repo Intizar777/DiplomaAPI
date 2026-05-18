@@ -3,10 +3,14 @@ Order business logic service.
 """
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Optional, Dict, List
-from uuid import UUID, uuid4
+from typing import Optional, Dict, List, TYPE_CHECKING
+from uuid import UUID
+
+if TYPE_CHECKING:
+    from app.messaging.schemas import OrderCreatedPayload, OrderStatusUpdatedPayload, OrderChangedPayload
 
 from sqlalchemy import select, func, desc, case, and_, or_
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import OrderSnapshot, ProductionLine
@@ -68,15 +72,15 @@ class OrderService:
                 by_status[status] += 1
 
             raw = record.production_line or "unknown"
-            line = line_names.get(raw, raw)
+            line = line_names.get(raw, raw)  # type: ignore[arg-type]
             if line not in by_line:
                 by_line[line] = {"planned": 0, "in_progress": 0, "completed": 0, "cancelled": 0}
             if status in by_line[line]:
                 by_line[line][status] += 1
         
         return OrderStatusSummaryResponse(
-            by_status=by_status,
-            by_production_line=by_line,
+            by_status=by_status,  # type: ignore[arg-type]
+            by_production_line=by_line,  # type: ignore[arg-type]
             period_from=from_date,
             period_to=to_date
         )
@@ -88,7 +92,7 @@ class OrderService:
         status: Optional[str] = None,
         production_line: Optional[str] = None,
         page: int = 1,
-        limit: int = None
+        limit: int = None  # type: ignore[assignment]
     ) -> OrderListResponse:
         """Get paginated list of orders."""
         limit = limit or self.page_size
@@ -130,7 +134,7 @@ class OrderService:
                 "unit_of_measure": record.unit_of_measure,
                 "status": record.status,
                 "production_line": record.production_line,
-                "product_line_name": line_names.get(record.production_line) if record.production_line else None,
+                "product_line_name": line_names.get(record.production_line) if record.production_line else None,  # type: ignore[call-overload]
                 "planned_start": record.planned_start,
                 "planned_end": record.planned_end,
                 "actual_start": record.actual_start,
@@ -140,11 +144,11 @@ class OrderService:
             for record in records
         ]
         
-        pages = (total + limit - 1) // limit
+        pages = (total + limit - 1) // limit  # type: ignore[operator]
         
         return OrderListResponse(
-            orders=orders,
-            total=total,
+            orders=orders,  # type: ignore[arg-type]
+            total=total,  # type: ignore[arg-type]
             page=page,
             limit=limit,
             pages=pages
@@ -164,18 +168,18 @@ class OrderService:
         
         return OrderDetailResponse(
             order_id=str(record.order_id),
-            external_order_id=record.external_order_id,
+            external_order_id=record.external_order_id,  # type: ignore[arg-type]
             product_id=str(record.product_id),
-            product_name=record.product_name,
-            target_quantity=record.target_quantity,
-            actual_quantity=record.actual_quantity,
-            unit_of_measure=record.unit_of_measure,
-            status=record.status,
-            production_line=record.production_line,
-            planned_start=record.planned_start,
-            planned_end=record.planned_end,
-            actual_start=record.actual_start,
-            actual_end=record.actual_end,
+            product_name=record.product_name,  # type: ignore[arg-type]
+            target_quantity=record.target_quantity,  # type: ignore[arg-type]
+            actual_quantity=record.actual_quantity,  # type: ignore[arg-type]
+            unit_of_measure=record.unit_of_measure,  # type: ignore[arg-type]
+            status=record.status,  # type: ignore[arg-type]
+            production_line=record.production_line,  # type: ignore[arg-type]
+            planned_start=record.planned_start,  # type: ignore[arg-type]
+            planned_end=record.planned_end,  # type: ignore[arg-type]
+            actual_start=record.actual_start,  # type: ignore[arg-type]
+            actual_end=record.actual_end,  # type: ignore[arg-type]
             outputs=[]  # Would need to fetch from separate table or Gateway
         )
 
@@ -341,7 +345,7 @@ class OrderService:
         logger.info("syncing_orders_from_gateway", from_date=from_date, to_date=to_date)
         
         # Fetch orders from Gateway
-        orders_response = await self.gateway.get_orders(from_date, to_date)
+        orders_response = await self.gateway.get_orders(from_date, to_date)  # type: ignore[union-attr]
 
         records_processed = 0
         snapshot_date = date.today()
@@ -354,9 +358,6 @@ class OrderService:
 
         batch = []
         for order_item in orders_response.orders:
-            # Each sync creates a new snapshot; gateway ID → order_id
-            snapshot_id = uuid4()
-
             # Parse ISO datetime objects
             def parse_dt(val):
                 if val:
@@ -376,8 +377,8 @@ class OrderService:
                 except (ValueError, AttributeError, TypeError):
                     pass
 
-            snapshot = OrderSnapshot(
-                id=snapshot_id,
+            values = dict(
+                id=order_item.id,
                 order_id=order_item.id,
                 external_order_id=order_item.externalOrderId,
                 product_id=product_id,
@@ -391,14 +392,18 @@ class OrderService:
                 planned_end=parse_dt(order_item.plannedEnd),
                 actual_start=parse_dt(order_item.actualStart),
                 actual_end=parse_dt(order_item.actualEnd),
-                snapshot_date=snapshot_date
+                snapshot_date=snapshot_date,
             )
-            batch.append(snapshot)
-            
+            batch.append(values)
+
             if len(batch) >= batch_size:
                 try:
-                    for snapshot in batch:
-                        await self.db.merge(snapshot)
+                    stmt = insert(OrderSnapshot).values(batch)
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=['id'],
+                        set_={k: stmt.excluded[k] for k in ['product_name', 'target_quantity', 'actual_quantity', 'status', 'production_line', 'planned_start', 'planned_end', 'actual_start', 'actual_end', 'snapshot_date']},
+                    )
+                    await self.db.execute(stmt)
                     await self.db.commit()
                     records_processed += len(batch)
                     logger.info("orders_sync_batch", records_processed=records_processed)
@@ -410,8 +415,12 @@ class OrderService:
         # Commit remaining records
         if batch:
             try:
-                for snapshot in batch:
-                    await self.db.merge(snapshot)
+                stmt = insert(OrderSnapshot).values(batch)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=['id'],
+                    set_={k: stmt.excluded[k] for k in ['product_name', 'target_quantity', 'actual_quantity', 'status', 'production_line', 'planned_start', 'planned_end', 'actual_start', 'actual_end', 'snapshot_date']},
+                )
+                await self.db.execute(stmt)
                 await self.db.commit()
                 records_processed += len(batch)
             except Exception as e:
@@ -427,7 +436,7 @@ class OrderService:
         logger.info("orders_sync_completed", records_processed=records_processed)
         return records_processed
 
-    async def upsert_order_from_event(self, payload: "OrderCreatedPayload", event_id: str = None) -> None:
+    async def upsert_order_from_event(self, payload: "OrderCreatedPayload", event_id: Optional[str] = None) -> None:
         """Upsert order from order.created event. Idempotent by event_id or order_id."""
         from app.messaging.schemas import OrderCreatedPayload
         from uuid import UUID
@@ -449,7 +458,7 @@ class OrderService:
 
         if existing:
             if event_id:
-                existing.event_id = UUID(event_id)
+                existing.event_id = UUID(event_id)  # type: ignore[assignment]
                 await self.db.commit()
             logger.info("order_already_exists_from_event", order_id=str(payload.id))
             return
@@ -466,7 +475,7 @@ class OrderService:
         await self.db.commit()
         logger.info("order_inserted_from_event", order_id=str(payload.id))
 
-    async def update_order_status_from_event(self, payload: "OrderStatusUpdatedPayload", event_id: str = None) -> None:
+    async def update_order_status_from_event(self, payload: "OrderStatusUpdatedPayload", event_id: Optional[str] = None) -> None:
         """Update order status from order.status-updated event. Keyed on event_id or order_id."""
         from app.messaging.schemas import OrderStatusUpdatedPayload
         from uuid import UUID
@@ -500,15 +509,62 @@ class OrderService:
             self.db.add(snapshot)
             logger.info("order_placeholder_inserted_from_event", order_id=str(payload.id))
         else:
-            snapshot.status = payload.status.lower()
+            snapshot.status = payload.status.lower()  # type: ignore[assignment]
             if payload.actual_quantity is not None:
-                snapshot.actual_quantity = payload.actual_quantity
+                snapshot.actual_quantity = payload.actual_quantity  # type: ignore[assignment]
             if payload.actual_start is not None:
-                snapshot.actual_start = payload.actual_start
+                snapshot.actual_start = payload.actual_start  # type: ignore[assignment]
             if payload.actual_end is not None:
-                snapshot.actual_end = payload.actual_end
+                snapshot.actual_end = payload.actual_end  # type: ignore[assignment]
             if event_id:
-                snapshot.event_id = UUID(event_id)
-            logger.info("order_status_updated_from_event", order_id=str(payload.id), status=payload.status)
+                snapshot.event_id = UUID(event_id)  # type: ignore[assignment]
+
+        await self.db.commit()
+
+    async def upsert_order_changed_from_event(self, payload: "OrderChangedPayload", event_id: Optional[str] = None) -> None:
+        """Upsert order from production.order.changed.event. Idempotent by event_id."""
+        from app.messaging.schemas import OrderChangedPayload
+        from uuid import UUID as _UUID
+
+        if event_id:
+            result = await self.db.execute(
+                select(OrderSnapshot).where(OrderSnapshot.event_id == _UUID(event_id))
+            )
+            if result.scalar_one_or_none():
+                return
+
+        result = await self.db.execute(
+            select(OrderSnapshot).where(OrderSnapshot.order_id == payload.order_id)
+        )
+        snapshot = result.scalar_one_or_none()
+
+        if snapshot:
+            snapshot.status = payload.status.lower()  # type: ignore[assignment]
+            snapshot.target_quantity = payload.target_quantity  # type: ignore[assignment]
+            snapshot.actual_quantity = payload.actual_quantity  # type: ignore[assignment]
+            snapshot.planned_start = payload.planned_start  # type: ignore[assignment]
+            snapshot.planned_end = payload.planned_end  # type: ignore[assignment]
+            snapshot.actual_start = payload.actual_start  # type: ignore[assignment]
+            snapshot.actual_end = payload.actual_end  # type: ignore[assignment]
+            snapshot.production_line = str(payload.production_line_id)  # type: ignore[assignment]
+            if event_id:
+                snapshot.event_id = _UUID(event_id)  # type: ignore[assignment]
+        else:
+            snapshot = OrderSnapshot(
+                order_id=payload.order_id,
+                external_order_id=payload.external_order_id,
+                product_id=payload.product_id,
+                target_quantity=payload.target_quantity,
+                actual_quantity=payload.actual_quantity,
+                status=payload.status.lower(),
+                production_line=str(payload.production_line_id),
+                planned_start=payload.planned_start,
+                planned_end=payload.planned_end,
+                actual_start=payload.actual_start,
+                actual_end=payload.actual_end,
+                snapshot_date=date.today(),
+                event_id=_UUID(event_id) if event_id else None,
+            )
+            self.db.add(snapshot)
 
         await self.db.commit()

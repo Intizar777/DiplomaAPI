@@ -2,8 +2,11 @@
 Batch input business logic service.
 """
 from datetime import date, datetime
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from uuid import UUID
+
+if TYPE_CHECKING:
+    from app.messaging.schemas import BatchInputRecordedPayload
 from dateutil import parser as dateutil_parser
 
 from sqlalchemy import select, func
@@ -60,7 +63,7 @@ class BatchInputService:
                 ).on_conflict_do_nothing(index_elements=["event_id"])
 
                 result = await self.db.execute(stmt)
-                if result.rowcount > 0:
+                if result.rowcount > 0:  # type: ignore[attr-defined]
                     inserted += 1
 
             except Exception as e:
@@ -174,3 +177,25 @@ class BatchInputService:
             "yield_percent": yield_percent,
             "target": target_yield,
         }
+
+    async def upsert_from_event(self, payload: "BatchInputRecordedPayload", event_id: Optional[str] = None) -> None:
+        """Upsert batch input from event. Idempotent by event_id."""
+        from app.messaging.schemas import BatchInputRecordedPayload
+
+        effective_event_id = event_id or str(payload.id)
+
+        result = await self.db.execute(
+            select(BatchInput).where(BatchInput.event_id == effective_event_id)
+        )
+        if result.scalar_one_or_none():
+            return
+
+        batch_input = BatchInput(
+            order_id=payload.order_id,
+            product_id=payload.product_id,
+            quantity=payload.quantity,
+            input_date=payload.input_date,
+            event_id=effective_event_id,
+        )
+        self.db.add(batch_input)
+        await self.db.commit()

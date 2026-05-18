@@ -2,7 +2,7 @@
 Product business logic service.
 """
 from datetime import date
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import select
@@ -12,6 +12,9 @@ from app.models import Product
 from app.services.gateway_client import GatewayClient
 from app.utils.logging_utils import track_feature_path, log_data_flow
 import structlog
+
+if TYPE_CHECKING:
+    from app.messaging.schemas import ProductEventPayload
 
 logger = structlog.get_logger()
 
@@ -37,7 +40,7 @@ class ProductService:
             query = query.where(Product.brand == brand)
         
         result = await self.db.execute(query)
-        return result.scalars().all()
+        return result.scalars().all()  # type: ignore[return-value]
     
     async def get_product(self, product_id: str) -> Optional[Product]:
         """Get a single product by ID."""
@@ -70,7 +73,7 @@ class ProductService:
         """Sync products from Gateway (full upsert)."""
         logger.info("syncing_products_from_gateway")
 
-        products_response = await self.gateway.get_products()
+        products_response = await self.gateway.get_products()  # type: ignore[union-attr]
         logger.info("products_fetched_from_gateway", total_products=len(products_response.products))
 
         records_processed = 0
@@ -101,14 +104,14 @@ class ProductService:
                 product = existing.scalar_one_or_none()
 
             if product:
-                product.code = code or product.code
-                product.name = product_item.name or product.name
-                product.category = product_item.category or product.category
-                product.brand = product_item.brand or product.brand
-                product.unit_of_measure_id = unit_of_measure_id
-                product.shelf_life_days = product_item.shelfLifeDays or product.shelf_life_days
-                product.requires_quality_check = product_item.requiresQualityCheck if product_item.requiresQualityCheck is not None else product.requires_quality_check
-                product.source_system_id = str(product_item.id)
+                product.code = code or product.code  # type: ignore[assignment]
+                product.name = product_item.name or product.name  # type: ignore[assignment]
+                product.category = product_item.category or product.category  # type: ignore[assignment]
+                product.brand = product_item.brand or product.brand  # type: ignore[assignment]
+                product.unit_of_measure_id = unit_of_measure_id  # type: ignore[assignment]
+                product.shelf_life_days = product_item.shelfLifeDays or product.shelf_life_days  # type: ignore[assignment]
+                product.requires_quality_check = product_item.requiresQualityCheck if product_item.requiresQualityCheck is not None else product.requires_quality_check  # type: ignore[assignment]
+                product.source_system_id = str(product_item.id)  # type: ignore[assignment]
             else:
                 product = Product(
                     id=product_id,  # Preserve original UUID from Gateway
@@ -139,7 +142,7 @@ class ProductService:
         logger.info("products_sync_completed", records_processed=records_processed)
         return records_processed
 
-    async def upsert_from_event(self, payload: "ProductEventPayload", event_id: str = None) -> None:
+    async def upsert_from_event(self, payload: "ProductEventPayload", event_id: Optional[str] = None) -> None:
         """Upsert product from RabbitMQ event. Idempotent by event_id or code/id."""
         from app.messaging.schemas import ProductEventPayload
         from uuid import UUID
@@ -171,11 +174,11 @@ class ProductService:
 
         if product:
             # Update existing product
-            product.code = payload.code or product.code
-            product.name = payload.name
-            product.category = payload.category or product.category
+            product.code = payload.code or product.code  # type: ignore[assignment]
+            product.name = payload.name  # type: ignore[assignment]
+            product.category = payload.category or product.category  # type: ignore[assignment]
             if event_id:
-                product.event_id = UUID(event_id)
+                product.event_id = UUID(event_id)  # type: ignore[assignment]
             logger.info("product_updated_from_event", product_id=str(payload.id), code=payload.code)
         else:
             # Insert new product

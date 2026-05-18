@@ -1,6 +1,8 @@
 """
 Handler for output events (recorded).
 """
+from typing import Optional
+
 import structlog
 
 from app.database import AsyncSessionLocal
@@ -12,7 +14,7 @@ logger = structlog.get_logger()
 
 
 @register("production.output.recorded.event")
-async def handle_output_recorded(payload: dict, event_id: str = None) -> None:
+async def handle_output_recorded(payload: dict, event_id: Optional[str] = None) -> None:
     """Process output recorded event."""
     data = OutputRecordedPayload.model_validate(payload)
     async with AsyncSessionLocal() as db:

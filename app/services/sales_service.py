@@ -3,7 +3,7 @@ Sales business logic service.
 """
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import List, Optional, Literal, Dict
+from typing import List, Optional, Literal, Dict, TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import select, func, desc
@@ -20,6 +20,9 @@ from app.services.gateway_client import GatewayClient
 from app.services.reference_sync import get_product_name_map
 from app.utils.logging_utils import track_feature_path, log_data_flow
 import structlog
+
+if TYPE_CHECKING:
+    from app.messaging.schemas import SaleRecordedPayload
 
 logger = structlog.get_logger()
 
@@ -66,7 +69,7 @@ class SalesService:
                 SaleRecord.sale_date <= to_date
             ).group_by(SaleRecord.channel).order_by(desc("total_amount"))
         else:  # product
-            query = select(
+            query = select(  # type: ignore[assignment]
                 SaleRecord.product_name.label("group_key"),
                 SaleRecord.product_id.label("group_id"),
                 func.sum(SaleRecord.quantity).label("total_quantity"),
@@ -140,9 +143,9 @@ class SalesService:
         total_quantity = sum(item["total_quantity"] for item in summary)
         
         return SalesSummaryResponse(
-            summary=summary,
-            total_amount=total_amount,
-            total_quantity=total_quantity,
+            summary=summary,  # type: ignore[arg-type]
+            total_amount=total_amount,  # type: ignore[arg-type]
+            total_quantity=total_quantity,  # type: ignore[arg-type]
             period_from=from_date,
             period_to=to_date,
             group_by=group_by
@@ -182,7 +185,7 @@ class SalesService:
         ]
         
         return SalesTrendsResponse(
-            trends=trends,
+            trends=trends,  # type: ignore[arg-type]
             interval=interval,
             period_from=from_date,
             period_to=to_date,
@@ -249,7 +252,7 @@ class SalesService:
             ]
         
         return TopProductsResponse(
-            products=products,
+            products=products,  # type: ignore[arg-type]
             period_from=from_date,
             period_to=to_date,
             limit=limit
@@ -299,7 +302,7 @@ class SalesService:
         
         
         return SalesRegionsResponse(
-            regions=regions,
+            regions=regions,  # type: ignore[arg-type]
             period_from=from_date,
             period_to=to_date
         )
@@ -317,7 +320,7 @@ class SalesService:
         period_to = to_date or date.today()
 
         # Fetch sales summary from Gateway by region
-        summary_response = await self.gateway.get_sales_summary(from_date, to_date, "region")
+        summary_response = await self.gateway.get_sales_summary(from_date, to_date, "region")  # type: ignore[union-attr]
 
         records_processed = 0
         from sqlalchemy.dialects.postgresql import insert
@@ -344,7 +347,7 @@ class SalesService:
             records_processed += 1
 
         # Also fetch by channel
-        summary_channel_response = await self.gateway.get_sales_summary(from_date, to_date, "channel")
+        summary_channel_response = await self.gateway.get_sales_summary(from_date, to_date, "channel")  # type: ignore[union-attr]
 
         for item in summary_channel_response.summary:
             stmt = insert(AggregatedSales).values(
@@ -369,7 +372,7 @@ class SalesService:
         
         # Also sync raw sales data for product-level analytics
         try:
-            sales_response = await self.gateway.get_sales(from_date, to_date)
+            sales_response = await self.gateway.get_sales(from_date, to_date)  # type: ignore[union-attr]
 
             if sales_response.sales:
                 # Get product name map for enrichment
@@ -393,7 +396,7 @@ class SalesService:
                     else:
                         parsed_sale_date = sale_date_raw.date() if hasattr(sale_date_raw, 'date') else sale_date_raw
 
-                    sale_record = SaleRecord(
+                    batch.append(dict(
                         id=sale_item.id,
                         external_id=sale_item.externalId,
                         product_id=product_id,
@@ -406,14 +409,17 @@ class SalesService:
                         sale_date=parsed_sale_date,
                         region=sale_item.region,
                         channel=sale_item.channel.lower() if sale_item.channel else None,
-                        snapshot_date=snapshot_date
-                    )
-                    batch.append(sale_record)
+                        snapshot_date=snapshot_date,
+                    ))
 
                     if len(batch) >= batch_size:
                         try:
-                            for record in batch:
-                                await self.db.merge(record)
+                            stmt = insert(SaleRecord).values(batch)
+                            stmt = stmt.on_conflict_do_update(
+                                index_elements=['id'],
+                                set_={k: stmt.excluded[k] for k in ['product_name', 'quantity', 'amount', 'cost', 'region', 'channel', 'snapshot_date']},
+                            )
+                            await self.db.execute(stmt)
                             await self.db.commit()
                             records_processed += len(batch)
                         except Exception as e:
@@ -423,8 +429,12 @@ class SalesService:
 
                 if batch:
                     try:
-                        for record in batch:
-                            await self.db.merge(record)
+                        stmt = insert(SaleRecord).values(batch)
+                        stmt = stmt.on_conflict_do_update(
+                            index_elements=['id'],
+                            set_={k: stmt.excluded[k] for k in ['product_name', 'quantity', 'amount', 'cost', 'region', 'channel', 'snapshot_date']},
+                        )
+                        await self.db.execute(stmt)
                         await self.db.commit()
                         records_processed += len(batch)
                     except Exception as e:
@@ -537,7 +547,7 @@ class SalesService:
         logger.info("sales_sync_completed", records_processed=records_processed)
         return records_processed
 
-    async def upsert_sale_from_event(self, payload: "SaleRecordedPayload", event_id: str = None) -> None:
+    async def upsert_sale_from_event(self, payload: "SaleRecordedPayload", event_id: Optional[str] = None) -> None:
         """Upsert sale record from sale.recorded event. Idempotent by event_id or external_id/id."""
         from app.messaging.schemas import SaleRecordedPayload
 
@@ -568,15 +578,15 @@ class SalesService:
             customer_id = await self._sync_customer(payload.customer)
 
         if record:
-            record.amount = Decimal(str(payload.amount))
+            record.amount = Decimal(str(payload.amount))  # type: ignore[assignment]
             if payload.cost:
-                record.cost = Decimal(str(payload.cost))
+                record.cost = Decimal(str(payload.cost))  # type: ignore[assignment]
             if payload.channel:
-                record.channel = payload.channel.lower()
+                record.channel = payload.channel.lower()  # type: ignore[assignment]
             if customer_id:
-                record.customer_id = customer_id
+                record.customer_id = customer_id  # type: ignore[assignment]
             if event_id:
-                record.event_id = UUID(event_id)
+                record.event_id = UUID(event_id)  # type: ignore[assignment]
             logger.info("sale_updated_from_event", external_id=payload.external_id)
         else:
             record = SaleRecord(

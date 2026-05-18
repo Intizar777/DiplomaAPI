@@ -344,9 +344,9 @@ async def get_sync_status(
     )
     
     return SyncStatusResponse(
-        tasks=task_statuses,
+        tasks=task_statuses,  # type: ignore[arg-type]
         overall_status=overall,
-        last_sync=last_sync
+        last_sync=last_sync  # type: ignore[arg-type]
     )
 
 

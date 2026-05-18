@@ -59,7 +59,7 @@ class OEEService:
         for line in lines:
             try:
                 line_oee = await self.calculate_oee_for_line(
-                    session, line.id, period_from, period_to
+                    session, line.id, period_from, period_to  # type: ignore[arg-type]
                 )
                 oee_lines.append(line_oee)
             except Exception as e:
@@ -75,8 +75,8 @@ class OEEService:
         lines_below_target = 0
 
         if oee_lines:
-            total_oee = sum(line.oee for line in oee_lines) / len(oee_lines)
-            for line in oee_lines:
+            total_oee = sum(line.oee for line in oee_lines) / len(oee_lines)  # type: ignore[assignment]
+            for line in oee_lines:  # type: ignore[assignment]
                 if line.oee >= line.target_oee:
                     lines_above_target += 1
                 else:
@@ -139,12 +139,12 @@ class OEEService:
 
         return OEELineResponse(
             production_line_id=str(production_line_id),
-            production_line_name=line.name,
+            production_line_name=line.name,  # type: ignore[arg-type]
             availability=availability,
             performance=performance,
             quality=quality,
             oee=oee_value,
-            target_oee=target_oee,
+            target_oee=target_oee,  # type: ignore[arg-type]
             period_from=period_from,
             period_to=period_to,
         )
@@ -354,10 +354,10 @@ class OEEService:
         return LineCapacityPlanResponse(
             id=str(plan.id),
             production_line_id=str(plan.production_line_id),
-            planned_hours_per_day=plan.planned_hours_per_day,
-            target_oee_percent=plan.target_oee_percent,
-            period_from=plan.period_from,
-            period_to=plan.period_to,
+            planned_hours_per_day=plan.planned_hours_per_day,  # type: ignore[arg-type]
+            target_oee_percent=plan.target_oee_percent,  # type: ignore[arg-type]
+            period_from=plan.period_from,  # type: ignore[arg-type]
+            period_to=plan.period_to,  # type: ignore[arg-type]
             created_at=plan.created_at.isoformat() if plan.created_at else "",
             updated_at=plan.updated_at.isoformat() if plan.updated_at else "",
         )

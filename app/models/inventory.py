@@ -4,6 +4,8 @@ Inventory snapshot models.
 from datetime import date, datetime
 from decimal import Decimal
 
+from typing import Any
+
 from sqlalchemy import Column, Date, DateTime, String, DECIMAL, Index, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -24,7 +26,7 @@ class InventorySnapshot(Base, UUIDMixin, TimestampMixin):
     warehouse_name = Column(String(150), nullable=True)
     warehouse_code = Column(String(20), nullable=True, index=True)
     lot_number = Column(String(100), nullable=True)
-    quantity = Column(DECIMAL(15, 3), nullable=True)
+    quantity: Column[Any] = Column(DECIMAL(15, 3), nullable=True)
     unit_of_measure = Column(String(20), nullable=True)
     last_updated = Column(DateTime(timezone=True), nullable=True)
     snapshot_date = Column(Date, nullable=False, index=True)

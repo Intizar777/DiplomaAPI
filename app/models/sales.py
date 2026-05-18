@@ -3,6 +3,8 @@ Sales aggregation models.
 """
 from datetime import date
 
+from typing import Any
+
 from sqlalchemy import Column, Date, DECIMAL, Integer, String, UniqueConstraint, Index, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -25,10 +27,10 @@ class AggregatedSales(Base, UUIDMixin, TimestampMixin):
     group_id = Column(String(100), nullable=True)         # UUID for product grouping
     
     # Metrics
-    total_quantity = Column(DECIMAL(15, 3), nullable=False, default=0)
-    total_amount = Column(DECIMAL(15, 2), nullable=False, default=0)
+    total_quantity: Column[Any] = Column(DECIMAL(15, 3), nullable=False, default=0)
+    total_amount: Column[Any] = Column(DECIMAL(15, 2), nullable=False, default=0)
     sales_count = Column(Integer, nullable=False, default=0)
-    avg_order_value = Column(DECIMAL(15, 2), nullable=True)
+    avg_order_value: Column[Any] = Column(DECIMAL(15, 2), nullable=True)
     
     # Constraints
     __table_args__ = (
@@ -57,8 +59,8 @@ class SalesTrends(Base, UUIDMixin, TimestampMixin):
     channel = Column(String(50), nullable=True)
     
     # Metrics
-    total_amount = Column(DECIMAL(15, 2), nullable=False, default=0)
-    total_quantity = Column(DECIMAL(15, 3), nullable=False, default=0)
+    total_amount: Column[Any] = Column(DECIMAL(15, 2), nullable=False, default=0)
+    total_quantity: Column[Any] = Column(DECIMAL(15, 3), nullable=False, default=0)
     order_count = Column(Integer, nullable=False, default=0)
     
     # Constraints
@@ -85,9 +87,9 @@ class SaleRecord(Base, UUIDMixin, TimestampMixin):
     product_name = Column(String(255), nullable=True)
     customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)
     customer_name = Column(String(255), nullable=True)
-    quantity = Column(DECIMAL(15, 3), nullable=True)
-    amount = Column(DECIMAL(15, 2), nullable=True)
-    cost = Column(DECIMAL(15, 2), nullable=True)
+    quantity: Column[Any] = Column(DECIMAL(15, 3), nullable=True)
+    amount: Column[Any] = Column(DECIMAL(15, 2), nullable=True)
+    cost: Column[Any] = Column(DECIMAL(15, 2), nullable=True)
     sale_date = Column(Date, nullable=False, index=True)
     region = Column(String(100), nullable=True, index=True)
     channel = Column(String(50), nullable=True, index=True)

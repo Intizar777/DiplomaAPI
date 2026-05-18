@@ -3,10 +3,11 @@ Quality business logic service.
 """
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import select, func, desc, case
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import QualityResult, QualitySpec
@@ -24,6 +25,9 @@ from app.services.gateway_client import GatewayClient
 from app.services.reference_sync import get_product_name_map
 from app.utils.logging_utils import track_feature_path, log_data_flow
 import structlog
+
+if TYPE_CHECKING:
+    from app.messaging.schemas import QualityResultRecordedPayload
 
 logger = structlog.get_logger()
 
@@ -58,8 +62,8 @@ class QualityService:
         spec = existing.scalar_one_or_none()
 
         if spec:
-            spec.lower_limit = Decimal(str(spec_data.get("lowerLimit", spec.lower_limit)))
-            spec.upper_limit = Decimal(str(spec_data.get("upperLimit", spec.upper_limit)))
+            spec.lower_limit = Decimal(str(spec_data.get("lowerLimit", spec.lower_limit)))  # type: ignore[assignment]
+            spec.upper_limit = Decimal(str(spec_data.get("upperLimit", spec.upper_limit)))  # type: ignore[assignment]
             spec.is_active = spec_data.get("isActive", spec.is_active)
         else:
             spec = QualitySpec(
@@ -72,7 +76,7 @@ class QualityService:
             )
             self.db.add(spec)
 
-        return spec.id
+        return spec.id  # type: ignore[return-value]
 
     async def get_quality_summary(
         self,
@@ -112,10 +116,10 @@ class QualityService:
         for record in records:
             param = record.parameter_name
             if param not in by_param:
-                by_param[param] = {"total": 0, "in_spec": 0}
-            by_param[param]["total"] += 1
+                by_param[param] = {"total": 0, "in_spec": 0}  # type: ignore[index]
+            by_param[param]["total"] += 1  # type: ignore[index]
             if record.in_spec:
-                by_param[param]["in_spec"] += 1
+                by_param[param]["in_spec"] += 1  # type: ignore[index]
         
         by_parameter = {
             param: {
@@ -131,7 +135,7 @@ class QualityService:
             rejected_count=rejected,
             pending_count=pending,
             defect_rate=defect_rate,
-            by_parameter=by_parameter,
+            by_parameter=by_parameter,  # type: ignore[arg-type]
             period_from=from_date,
             period_to=to_date
         )
@@ -155,10 +159,10 @@ class QualityService:
         for record in records:
             d = record.test_date
             if d not in by_date:
-                by_date[d] = {"total": 0, "rejected": 0}
-            by_date[d]["total"] += 1
+                by_date[d] = {"total": 0, "rejected": 0}  # type: ignore[index]
+            by_date[d]["total"] += 1  # type: ignore[index]
             if record.decision == "rejected":
-                by_date[d]["rejected"] += 1
+                by_date[d]["rejected"] += 1  # type: ignore[index]
         
         trends = [
             {
@@ -171,7 +175,7 @@ class QualityService:
         ]
         
         return DefectTrendsResponse(
-            trends=trends,
+            trends=trends,  # type: ignore[arg-type]
             period_from=from_date,
             period_to=to_date
         )
@@ -201,14 +205,14 @@ class QualityService:
         for record in records:
             lot = record.lot_number
             if lot not in by_lot:
-                by_lot[lot] = {
+                by_lot[lot] = {  # type: ignore[index]
                     "product_id": str(record.product_id),
                     "product_name": record.product_name,
                     "decision": record.decision,
                     "test_date": record.test_date,
                     "parameters": []
                 }
-            by_lot[lot]["parameters"].append({
+            by_lot[lot]["parameters"].append({  # type: ignore[index]
                 "name": record.parameter_name,
                 "in_spec": record.in_spec
             })
@@ -233,7 +237,7 @@ class QualityService:
         pending_count = sum(1 for l in lots if l["decision"] == "pending")
         
         return QualityLotsResponse(
-            lots=lots,
+            lots=lots,  # type: ignore[arg-type]
             total=len(lots),
             approved_count=approved_count,
             rejected_count=rejected_count,
@@ -494,7 +498,7 @@ class QualityService:
         logger.info("syncing_quality_from_gateway", from_date=from_date, to_date=to_date)
         
         # Fetch quality results from Gateway (no from/to support — fetch all, filter locally)
-        quality_response = await self.gateway.get_quality()
+        quality_response = await self.gateway.get_quality()  # type: ignore[union-attr]
 
         records_processed = 0
         batch_size = 50
@@ -564,7 +568,7 @@ class QualityService:
             quality_spec_id = None
             parameter_name = quality_item.parameterName or ""
 
-            quality_result = QualityResult(
+            batch.append(dict(
                 id=quality_item.id,
                 lot_number=quality_item.lotNumber,
                 product_id=product_id,
@@ -574,13 +578,17 @@ class QualityService:
                 quality_spec_id=quality_spec_id,
                 in_spec=True,
                 decision=quality_item.qualityStatus.lower() if quality_item.qualityStatus else "pending",
-                test_date=test_date_parsed
-            )
-            batch.append(quality_result)
+                test_date=test_date_parsed,
+            ))
             
             if len(batch) >= batch_size:
                 try:
-                    for item in batch: await self.db.merge(item)
+                    stmt = insert(QualityResult).values(batch)
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=['id'],
+                        set_={k: stmt.excluded[k] for k in ['product_name', 'result_value', 'in_spec', 'decision', 'test_date']},
+                    )
+                    await self.db.execute(stmt)
                     await self.db.commit()
                     records_processed += len(batch)
                 except Exception as e:
@@ -591,7 +599,12 @@ class QualityService:
         # Commit remaining records
         if batch:
             try:
-                for item in batch: await self.db.merge(item)
+                stmt = insert(QualityResult).values(batch)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=['id'],
+                    set_={k: stmt.excluded[k] for k in ['product_name', 'result_value', 'in_spec', 'decision', 'test_date']},
+                )
+                await self.db.execute(stmt)
                 await self.db.commit()
                 records_processed += len(batch)
             except Exception as e:
@@ -607,7 +620,7 @@ class QualityService:
         logger.info("quality_sync_completed", records_processed=records_processed)
         return records_processed
 
-    async def upsert_from_event(self, payload: "QualityResultRecordedPayload", event_id: str = None) -> None:
+    async def upsert_from_event(self, payload: "QualityResultRecordedPayload", event_id: Optional[str] = None) -> None:
         """Upsert quality result from event. Idempotent by event_id or lot_number.
 
         Note: parameter_name and test_date are NOT NULL in DB but absent from event.
@@ -641,12 +654,12 @@ class QualityService:
                 logger.warning("invalid_product_id_for_spec_event", raw=payload.product_id)
 
         if quality:
-            quality.in_spec = payload.in_spec
-            quality.decision = payload.quality_status.lower()
+            quality.in_spec = payload.in_spec  # type: ignore[assignment]
+            quality.decision = payload.quality_status.lower()  # type: ignore[assignment]
             if quality_spec_id:
-                quality.quality_spec_id = quality_spec_id
+                quality.quality_spec_id = quality_spec_id  # type: ignore[assignment]
             if event_id:
-                quality.event_id = UUID(event_id)
+                quality.event_id = UUID(event_id)  # type: ignore[assignment]
             logger.info(
                 "quality_result_updated_from_event",
                 lot_number=payload.lot_number,

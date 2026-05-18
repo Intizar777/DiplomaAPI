@@ -48,7 +48,7 @@ async def _process_message(message: AbstractIncomingMessage) -> None:
                 routing_key=message.routing_key,
             )
 
-            await dispatcher.dispatch(message.routing_key, envelope.payload, event_id=str(envelope.event_id))
+            await dispatcher.dispatch(message.routing_key or "", envelope.payload, event_id=str(envelope.event_id))
 
             processing_time = time.time() - start_time
             logger.info(
@@ -80,12 +80,15 @@ async def _consume_loop() -> None:
     routing_keys = [
         "production.product.created.event",
         "production.product.updated.event",
-        "production.order.created.event",
-        "production.order.status-updated.event",
+        "production.order.changed.event",
+        "production.batch-input.recorded.event",
         "production.output.recorded.event",
         "production.sale.recorded.event",
         "production.inventory.updated.event",
         "production.quality-result.recorded.event",
+        "production.downtime-event.recorded.event",
+        "production.sensor-reading.recorded.event",
+        "production.sensor.anomaly.event",
     ]
 
     logger.info(

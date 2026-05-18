@@ -1,6 +1,8 @@
 """
 Reference data models (normalized dictionaries from Gateway).
 """
+from typing import Any
+
 from sqlalchemy import Column, String, Integer, DECIMAL, Boolean, Index, Date, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -52,7 +54,7 @@ class Warehouse(Base, UUIDMixin, TimestampMixin):
 
     name = Column(String(150), nullable=False)
     code = Column(String(20), nullable=False, unique=True, index=True)
-    capacity = Column(DECIMAL(15, 2), nullable=True)
+    capacity: Column[Any] = Column(DECIMAL(15, 2), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True, index=True)
 
     __table_args__ = (
@@ -144,8 +146,8 @@ class QualitySpec(Base, UUIDMixin, TimestampMixin):
 
     product_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     parameter_name = Column(String(100), nullable=False)
-    lower_limit = Column(DECIMAL(15, 6), nullable=False)
-    upper_limit = Column(DECIMAL(15, 6), nullable=False)
+    lower_limit: Column[Any] = Column(DECIMAL(15, 6), nullable=False)
+    upper_limit: Column[Any] = Column(DECIMAL(15, 6), nullable=False)
     is_active = Column(Boolean, nullable=False, default=True, index=True)
 
     __table_args__ = (
@@ -167,7 +169,7 @@ class LineCapacityPlan(Base, UUIDMixin, TimestampMixin):
 
     production_line_id = Column(UUID(as_uuid=True), ForeignKey("production_lines.id", ondelete="CASCADE"), nullable=False, index=True)
     planned_hours_per_day = Column(Integer, nullable=False)
-    target_oee_percent = Column(DECIMAL(5, 2), nullable=False, default=85)
+    target_oee_percent: Column[Any] = Column(DECIMAL(5, 2), nullable=False, default=85)
     period_from = Column(Date, nullable=False, index=True)
     period_to = Column(Date, nullable=True)
 
@@ -187,7 +189,7 @@ class KPIConfig(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "kpi_configs"
 
     key = Column(String(100), nullable=False, unique=True, index=True)  # e.g. "market_total_volume_tonnes"
-    value = Column(DECIMAL(20, 4), nullable=False)
+    value: Column[Any] = Column(DECIMAL(20, 4), nullable=False)
     description = Column(String(500), nullable=True)
     updated_by = Column(String(255), nullable=True)
 

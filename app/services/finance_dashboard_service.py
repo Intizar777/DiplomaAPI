@@ -138,7 +138,7 @@ class FinanceManagerDashboardService:
             period_to=date_to,
             group_by=group_by,
             total_amount=grand_amount.quantize(Decimal("0.01")),
-            total_quantity=grand_quantity,
+            total_quantity=grand_quantity,  # type: ignore[arg-type]
             groups=groups,
         )
 

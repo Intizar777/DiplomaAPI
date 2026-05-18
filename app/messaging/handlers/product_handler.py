@@ -1,6 +1,8 @@
 """
 Handler for product events (created, updated).
 """
+from typing import Optional
+
 import structlog
 
 from app.database import AsyncSessionLocal
@@ -13,7 +15,7 @@ logger = structlog.get_logger()
 
 @register("production.product.created.event")
 @register("production.product.updated.event")
-async def handle_product_event(payload: dict, event_id: str = None) -> None:
+async def handle_product_event(payload: dict, event_id: Optional[str] = None) -> None:
     """Process product created/updated event."""
     data = ProductEventPayload.model_validate(payload)
     async with AsyncSessionLocal() as db:

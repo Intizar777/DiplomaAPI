@@ -3,6 +3,8 @@ Order snapshot models.
 """
 from datetime import date, datetime
 
+from typing import Any
+
 from sqlalchemy import Column, Date, DateTime, String, Index, DECIMAL
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -24,8 +26,8 @@ class OrderSnapshot(Base, UUIDMixin, TimestampMixin):
     product_name = Column(String(255), nullable=True)
     
     # Quantities
-    target_quantity = Column(DECIMAL(15, 3), nullable=True)
-    actual_quantity = Column(DECIMAL(15, 3), nullable=True)
+    target_quantity: Column[Any] = Column(DECIMAL(15, 3), nullable=True)
+    actual_quantity: Column[Any] = Column(DECIMAL(15, 3), nullable=True)
     unit_of_measure = Column(String(20), nullable=True)
     
     # Status and line

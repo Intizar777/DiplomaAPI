@@ -340,8 +340,44 @@ async def list_production_lines(
 
     return ProductionLinesListResponse(
         production_lines=[ProductionLineResponse(
-            id=str(l.id), name=l.name, code=l.code, division=l.division,
-            is_active=l.is_active, description=l.description
+            id=str(l.id), name=l.name, code=l.code, division=l.division,  # type: ignore[arg-type]
+            is_active=l.is_active, description=l.description  # type: ignore[arg-type]
         ) for l in lines],
-        total=total
+        total=total  # type: ignore[arg-type]
     )
+
+
+@router.get("/kpi/debug/date-range")
+async def get_kpi_date_range(db: AsyncSession = Depends(get_db)):
+    """Debug endpoint: check KPI data date range in database."""
+    from sqlalchemy import text
+
+    result = await db.execute(text("""
+        SELECT
+            MAX(period_to) as max_date,
+            MIN(period_from) as min_date,
+            COUNT(*) as total_records
+        FROM aggregated_kpi
+    """))
+    row = result.one()
+
+    result2 = await db.execute(text("""
+        SELECT
+            COALESCE(product_line_id::text, 'NULL') as line_id,
+            MAX(period_to) as latest_date,
+            COUNT(*) as records_count
+        FROM aggregated_kpi
+        GROUP BY product_line_id
+        ORDER BY MAX(period_to) DESC
+    """))
+    lines = result2.all()
+
+    return {
+        "max_period_to": str(row[0]),
+        "min_period_from": str(row[1]),
+        "total_records": row[2],
+        "by_production_line": [
+            {"product_line_id": line[0], "latest_date": str(line[1]), "records": line[2]}
+            for line in lines
+        ]
+    }

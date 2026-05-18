@@ -2,8 +2,11 @@
 Downtime event business logic service.
 """
 from datetime import date, datetime
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from uuid import UUID
+
+if TYPE_CHECKING:
+    from app.messaging.schemas import DowntimeEventRecordedPayload
 from dateutil import parser as dateutil_parser
 
 from sqlalchemy import select, func
@@ -65,7 +68,7 @@ class DowntimeEventService:
                 ).on_conflict_do_nothing(index_elements=["event_id"])
 
                 result = await self.db.execute(stmt)
-                if result.rowcount > 0:
+                if result.rowcount > 0:  # type: ignore[attr-defined]
                     inserted += 1
 
             except Exception as e:
@@ -219,3 +222,27 @@ class DowntimeEventService:
             "total_events": total_events,
             "total_downtime_minutes": total_minutes,
         }
+
+    async def upsert_from_event(self, payload: "DowntimeEventRecordedPayload", event_id: Optional[str] = None) -> None:
+        """Upsert downtime event from RabbitMQ event. Idempotent by event_id."""
+        from app.messaging.schemas import DowntimeEventRecordedPayload
+
+        effective_event_id = event_id or str(payload.id)
+
+        result = await self.db.execute(
+            select(DowntimeEvent).where(DowntimeEvent.event_id == effective_event_id)
+        )
+        if result.scalar_one_or_none():
+            return
+
+        event = DowntimeEvent(
+            production_line_id=payload.production_line_id,
+            reason=payload.reason,
+            category=payload.category,
+            started_at=payload.started_at,
+            ended_at=payload.ended_at,
+            duration_minutes=payload.duration_minutes,
+            event_id=effective_event_id,
+        )
+        self.db.add(event)
+        await self.db.commit()

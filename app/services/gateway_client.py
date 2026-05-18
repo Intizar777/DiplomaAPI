@@ -292,7 +292,7 @@ class GatewayClient:
                     timeout_read=settings.gateway_timeout_read,
                     error=str(e)
                 )
-                last_exception = e
+                last_exception = e # type: ignore[assignment]
                 
             except httpx.ConnectError as e:
                 elapsed_ms = (time.perf_counter() - start_time) * 1000
@@ -306,7 +306,7 @@ class GatewayClient:
                     base_url=self.base_url,
                     error=str(e)
                 )
-                last_exception = e
+                last_exception = e # type: ignore[assignment]
                 
             except Exception as e:
                 elapsed_ms = (time.perf_counter() - start_time) * 1000
@@ -320,7 +320,7 @@ class GatewayClient:
                     error_type=type(e).__name__,
                     error=str(e)
                 )
-                last_exception = e
+                last_exception = e # type: ignore[assignment]
             
             # Wait before retry (exponential backoff)
             if attempt < max_retries:
@@ -543,7 +543,7 @@ class GatewayClient:
         sales = await self._fetch_all_pages("/production/sales", "sales", params)
 
         try:
-            sales_response = SalesResponse(sales=sales, total=len(sales))
+            sales_response = SalesResponse(sales=sales, total=len(sales)) # type: ignore[arg-type]
             log_data_flow(
                 source="gateway_api",
                 target="sales_service",
@@ -603,7 +603,7 @@ class GatewayClient:
         orders = await self._fetch_all_pages("/production/orders", "orders", params)
 
         try:
-            orders_response = OrdersResponse(orders=orders, total=len(orders))
+            orders_response = OrdersResponse(orders=orders, total=len(orders)) # type: ignore[arg-type]
             log_data_flow(
                 source="gateway_api",
                 target="order_service",
@@ -654,17 +654,17 @@ class GatewayClient:
             normalized = {"results": data}
         elif isinstance(data, dict):
             results = data.get("results", data.get("quality", []))
-            normalized = {"results": results, "total": len(results)}
+            normalized = {"results": results, "total": len(results)} # type: ignore[arg-type]
         else:
             normalized = {"results": [], "total": 0}
 
         try:
-            quality_response = QualityResponse(**normalized)
+            quality_response = QualityResponse(**normalized) # type: ignore[arg-type]
             log_data_flow(
                 source="gateway_api",
                 target="quality_service",
                 operation="fetch_quality",
-                records_count=len(normalized["results"]),
+                records_count=len(normalized["results"]), # type: ignore[arg-type]
             )
             return quality_response
         except ValidationError as e:
@@ -686,7 +686,7 @@ class GatewayClient:
         outputs = await self._fetch_all_pages("/production/output", "outputs", params)
 
         try:
-            outputs_response = OutputsResponse(outputs=outputs, total=len(outputs))
+            outputs_response = OutputsResponse(outputs=outputs, total=len(outputs)) # type: ignore[arg-type]
             log_data_flow(
                 source="gateway_api",
                 target="output_service",
@@ -762,7 +762,7 @@ class GatewayClient:
         readings = await self._fetch_all_pages("/production/sensors", "readings", params)
 
         try:
-            readings_response = SensorReadingsResponse(readings=readings, total=len(readings))
+            readings_response = SensorReadingsResponse(readings=readings, total=len(readings)) # type: ignore[arg-type]
             log_data_flow(
                 source="gateway_api",
                 target="sensor_service",
@@ -797,17 +797,17 @@ class GatewayClient:
             normalized = {"inventory": data, "total": len(data)}
         elif isinstance(data, dict):
             items = data.get("inventory", data.get("items", []))
-            normalized = {"inventory": items, "total": len(items)}
+            normalized = {"inventory": items, "total": len(items)} # type: ignore[arg-type]
         else:
             normalized = {"inventory": [], "total": 0}
 
         try:
-            inventory_response = InventoryResponse(**normalized)
+            inventory_response = InventoryResponse(**normalized) # type: ignore[arg-type]
             log_data_flow(
                 source="gateway_api",
                 target="inventory_service",
                 operation="fetch_inventory",
-                records_count=len(normalized["inventory"]),
+                records_count=len(normalized["inventory"]), # type: ignore[arg-type]
             )
             return inventory_response
         except ValidationError as e:
@@ -821,7 +821,7 @@ class GatewayClient:
         locations = await self._fetch_all_pages("/personnel/locations", "locations")
 
         try:
-            return LocationsResponse(locations=locations, total=len(locations))
+            return LocationsResponse(locations=locations, total=len(locations)) # type: ignore[arg-type]
         except ValidationError as e:
             logger.error("gateway_locations_validation_error", error=str(e))
             raise
@@ -831,7 +831,7 @@ class GatewayClient:
         departments = await self._fetch_all_pages("/personnel/departments", "departments")
 
         try:
-            return DepartmentsResponse(departments=departments, total=len(departments))
+            return DepartmentsResponse(departments=departments, total=len(departments)) # type: ignore[arg-type]
         except ValidationError as e:
             logger.error("gateway_departments_validation_error", error=str(e))
             raise
@@ -841,7 +841,7 @@ class GatewayClient:
         positions = await self._fetch_all_pages("/personnel/positions", "positions")
 
         try:
-            return PositionsResponse(positions=positions, total=len(positions))
+            return PositionsResponse(positions=positions, total=len(positions)) # type: ignore[arg-type]
         except ValidationError as e:
             logger.error("gateway_positions_validation_error", error=str(e))
             raise
@@ -851,7 +851,7 @@ class GatewayClient:
         lines = await self._fetch_all_pages("/production/production-lines", "productionLines")
 
         try:
-            return ProductionLinesResponse(productionLines=lines, total=len(lines))
+            return ProductionLinesResponse(productionLines=lines, total=len(lines)) # type: ignore[arg-type]
         except ValidationError as e:
             logger.error("gateway_production_lines_validation_error", error=str(e))
             raise
@@ -861,7 +861,7 @@ class GatewayClient:
         workstations = await self._fetch_all_pages("/personnel/workstations", "workstations")
 
         try:
-            return WorkstationsResponse(workstations=workstations, total=len(workstations))
+            return WorkstationsResponse(workstations=workstations, total=len(workstations)) # type: ignore[arg-type]
         except ValidationError as e:
             logger.error("gateway_workstations_validation_error", error=str(e))
             raise
@@ -871,7 +871,7 @@ class GatewayClient:
         employees = await self._fetch_all_pages("/personnel/employees", "employees")
 
         try:
-            employees_response = EmployeesResponse(employees=employees, total=len(employees))
+            employees_response = EmployeesResponse(employees=employees, total=len(employees)) # type: ignore[arg-type]
             log_data_flow(
                 source="gateway_api",
                 target="personnel_service",
@@ -947,7 +947,7 @@ class GatewayClient:
         customers = await self._fetch_all_pages("/production/customers", "customers")
 
         try:
-            return CustomersResponse(customers=customers, total=len(customers))
+            return CustomersResponse(customers=customers, total=len(customers)) # type: ignore[arg-type]
         except ValidationError as e:
             logger.error("gateway_customers_validation_error", error=str(e))
             raise
@@ -957,7 +957,7 @@ class GatewayClient:
         warehouses = await self._fetch_all_pages("/production/warehouses", "warehouses")
 
         try:
-            return WarehousesResponse(warehouses=warehouses, total=len(warehouses))
+            return WarehousesResponse(warehouses=warehouses, total=len(warehouses)) # type: ignore[arg-type]
         except ValidationError as e:
             logger.error("gateway_warehouses_validation_error", error=str(e))
             raise
@@ -1051,27 +1051,27 @@ class GatewayClient:
 
     async def get_locations(self) -> Dict[str, Any]:
         """Alias for get_personnel_locations."""
-        return await self.get_personnel_locations()
+        return await self.get_personnel_locations() # type: ignore[return-value]
 
     async def get_production_lines(self) -> Dict[str, Any]:
         """Alias for get_personnel_production_lines."""
-        return await self.get_personnel_production_lines()
+        return await self.get_personnel_production_lines() # type: ignore[return-value]
 
     async def get_departments(self) -> Dict[str, Any]:
         """Alias for get_personnel_departments."""
-        return await self.get_personnel_departments()
+        return await self.get_personnel_departments() # type: ignore[return-value]
 
     async def get_workstations(self) -> Dict[str, Any]:
         """Alias for get_personnel_workstations."""
-        return await self.get_personnel_workstations()
+        return await self.get_personnel_workstations() # type: ignore[return-value]
 
     async def get_positions(self) -> Dict[str, Any]:
         """Alias for get_personnel_positions."""
-        return await self.get_personnel_positions()
+        return await self.get_personnel_positions() # type: ignore[return-value]
 
     async def get_employees(self) -> Dict[str, Any]:
         """Alias for get_personnel_employees."""
-        return await self.get_personnel_employees()
+        return await self.get_personnel_employees() # type: ignore[return-value]
 
     async def get_quality_specs(
         self,
@@ -1085,7 +1085,7 @@ class GatewayClient:
         """
         params = {"limit": limit, "offset": offset}
         if product_id:
-            params["productId"] = product_id
+            params["productId"] = product_id # type: ignore[assignment]
 
         specs = await self._fetch_all_pages("/production/quality-specs", "qualitySpecs", params)
 

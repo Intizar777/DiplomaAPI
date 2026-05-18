@@ -3,7 +3,7 @@ from typing import Optional, List
 
 from pydantic import BaseModel, ConfigDict
 
-from app.schemas.common import PaginationMeta
+from app.schemas.common import PaginationMeta  # type: ignore[attr-defined]
 
 
 class InventoryProductSummary(BaseModel):

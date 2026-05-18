@@ -68,7 +68,7 @@ class PromoCampaignService:
                 ).on_conflict_do_nothing(index_elements=["event_id"])
 
                 result = await self.db.execute(stmt)
-                if result.rowcount > 0:
+                if result.rowcount > 0:  # type: ignore[attr-defined]
                     inserted += 1
 
             except Exception as e:
@@ -197,7 +197,7 @@ class PromoCampaignService:
         campaign_sales_query = select(func.sum(SaleRecord.amount)).where(
             SaleRecord.sale_date >= campaign.start_date,
             SaleRecord.sale_date <= (campaign.end_date or campaign.start_date),
-            (SaleRecord.product_id == campaign.product_id) if campaign.product_id else True,
+            (SaleRecord.product_id == campaign.product_id) if campaign.product_id else True,  # type: ignore[arg-type]
         )
         sales_during = await self.db.scalar(campaign_sales_query) or Decimal("0")
 
@@ -206,7 +206,7 @@ class PromoCampaignService:
         baseline_query = select(func.sum(SaleRecord.amount)).where(
             SaleRecord.sale_date >= baseline_start,
             SaleRecord.sale_date < campaign.start_date,
-            (SaleRecord.product_id == campaign.product_id) if campaign.product_id else True,
+            (SaleRecord.product_id == campaign.product_id) if campaign.product_id else True,  # type: ignore[arg-type]
         )
         baseline_sales = await self.db.scalar(baseline_query) or Decimal("0")
 

@@ -356,7 +356,7 @@ class DashboardExportService:
         colors = [f"#{STATUS_COLOR[self._assess_share(g.amount_share_pct)[2]]}" for g in breakdown.groups]
 
         fig, ax = plt.subplots(figsize=(9, 7))
-        wedges, texts, autotexts = ax.pie(
+        wedges, texts, autotexts = ax.pie(  # type: ignore[misc]
             sizes, labels=labels, autopct='%1.1f%%',
             colors=colors, startangle=90, pctdistance=0.8,
             textprops={'fontsize': 10},

@@ -3,10 +3,11 @@ Output business logic service.
 """
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import select, func, desc
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import ProductionOutput
@@ -14,6 +15,9 @@ from app.services.gateway_client import GatewayClient
 from app.services.reference_sync import get_product_name_map
 from app.utils.logging_utils import track_feature_path, log_data_flow
 import structlog
+
+if TYPE_CHECKING:
+    from app.messaging.schemas import OutputRecordedPayload
 
 logger = structlog.get_logger()
 
@@ -59,10 +63,10 @@ class OutputService:
                     "approved_count": 0,
                 }
             
-            aggregated[key]["total_quantity"] += output.quantity or Decimal("0")
-            aggregated[key]["lot_count"] += 1
+            aggregated[key]["total_quantity"] += output.quantity or Decimal("0")  # type: ignore[assignment, operator]
+            aggregated[key]["lot_count"] += 1  # type: ignore[assignment, operator]
             if output.quality_status and output.quality_status.lower() == "approved":
-                aggregated[key]["approved_count"] += 1
+                aggregated[key]["approved_count"] += 1  # type: ignore[assignment, operator]
         
         return {
             "items": list(aggregated.values()),
@@ -122,7 +126,7 @@ class OutputService:
         """Sync output data from Gateway."""
         logger.info("syncing_output_from_gateway", from_date=from_date, to_date=to_date)
         
-        outputs_response = await self.gateway.get_output(from_date, to_date)
+        outputs_response = await self.gateway.get_output(from_date, to_date)  # type: ignore[union-attr]
         logger.info("output_fetched_from_gateway", total_outputs=len(outputs_response.outputs))
 
         # Get product name map and production line map for enrichment
@@ -153,7 +157,7 @@ class OutputService:
             production_line_id = output_item.productionLineId if hasattr(output_item, 'productionLineId') else None
             production_line_name = line_names.get(str(production_line_id)) if production_line_id else None
 
-            output = ProductionOutput(
+            batch.append(dict(
                 id=output_item.id,
                 order_id=output_item.orderId,
                 product_id=product_id,
@@ -165,13 +169,17 @@ class OutputService:
                 quality_status=output_item.qualityStatus.lower() if output_item.qualityStatus else None,
                 production_date=prod_date,
                 shift=output_item.shift,
-                snapshot_date=snapshot_date
-            )
-            batch.append(output)
+                snapshot_date=snapshot_date,
+            ))
             
             if len(batch) >= batch_size:
                 try:
-                    for item in batch: await self.db.merge(item)
+                    stmt = insert(ProductionOutput).values(batch)
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=['id'],
+                        set_={k: stmt.excluded[k] for k in ['product_name', 'production_line_name', 'quantity', 'quality_status', 'production_date', 'snapshot_date']},
+                    )
+                    await self.db.execute(stmt)
                     await self.db.commit()
                     records_processed += len(batch)
                     logger.info("output_sync_batch", records_processed=records_processed)
@@ -182,7 +190,12 @@ class OutputService:
         
         if batch:
             try:
-                for item in batch: await self.db.merge(item)
+                stmt = insert(ProductionOutput).values(batch)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=['id'],
+                    set_={k: stmt.excluded[k] for k in ['product_name', 'production_line_name', 'quantity', 'quality_status', 'production_date', 'snapshot_date']},
+                )
+                await self.db.execute(stmt)
                 await self.db.commit()
                 records_processed += len(batch)
             except Exception as e:
@@ -198,7 +211,7 @@ class OutputService:
         logger.info("output_sync_completed", records_processed=records_processed)
         return records_processed
 
-    async def upsert_from_event(self, payload: "OutputRecordedPayload", event_id: str = None) -> None:
+    async def upsert_from_event(self, payload: "OutputRecordedPayload", event_id: Optional[str] = None) -> None:
         """Upsert production output from output.recorded event. Idempotent by event_id or lot_number."""
         from app.messaging.schemas import OutputRecordedPayload
 
@@ -218,11 +231,11 @@ class OutputService:
         output = result.scalar_one_or_none()
 
         if output:
-            output.quantity = Decimal(str(payload.quantity))
+            output.quantity = Decimal(str(payload.quantity))  # type: ignore[assignment]
             if payload.order_id:
-                output.order_id = payload.order_id
+                output.order_id = payload.order_id  # type: ignore[assignment]
             if event_id:
-                output.event_id = UUID(event_id)
+                output.event_id = UUID(event_id)  # type: ignore[assignment]
             logger.info("output_updated_from_event", lot_number=payload.lot_number)
         else:
             # Look up production_line_name if production_line_id provided

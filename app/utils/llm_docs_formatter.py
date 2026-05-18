@@ -28,7 +28,7 @@ class OpenAPILLMFormatter:
         self.include_examples = include_examples
         self.include_deprecated = include_deprecated
         self.require_description = require_description
-        self._schemas_cache = {}
+        self._schemas_cache: dict[str, Any] = {}
     
     def _format_schema(self, schema: Dict[str, Any], lines: List[str], indent: str = ""):
         """

@@ -4,6 +4,8 @@ Sensor reading models.
 from datetime import datetime
 from decimal import Decimal
 
+from typing import Any
+
 from sqlalchemy import Column, DateTime, String, DECIMAL, Index, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -18,7 +20,7 @@ class SensorReading(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "sensor_readings"
 
     sensor_id = Column(UUID(as_uuid=True), ForeignKey("sensors.id", ondelete="CASCADE"), nullable=False, index=True)
-    value = Column(DECIMAL(12, 4), nullable=True)
+    value: Column[Any] = Column(DECIMAL(12, 4), nullable=True)
     quality = Column(String(20), nullable=True, index=True)
     recorded_at = Column(DateTime(timezone=True), nullable=False, index=True)
     snapshot_date = Column(DateTime(timezone=True), nullable=False, index=True)

@@ -1,6 +1,8 @@
 """
 Handler for inventory events (updated).
 """
+from typing import Optional
+
 import structlog
 
 from app.database import AsyncSessionLocal
@@ -12,7 +14,7 @@ logger = structlog.get_logger()
 
 
 @register("production.inventory.updated.event")
-async def handle_inventory_updated(payload: dict, event_id: str = None) -> None:
+async def handle_inventory_updated(payload: dict, event_id: Optional[str] = None) -> None:
     """Process inventory updated event."""
     data = InventoryUpdatedPayload.model_validate(payload)
     async with AsyncSessionLocal() as db:
