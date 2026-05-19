@@ -226,7 +226,7 @@ class OutputService:
                 return
 
         result = await self.db.execute(
-            select(ProductionOutput).where(ProductionOutput.lot_number == payload.lot_number)
+            select(ProductionOutput).where(ProductionOutput.lot_number == payload.lot_number).limit(1)
         )
         output = result.scalar_one_or_none()
 

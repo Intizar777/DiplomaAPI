@@ -54,10 +54,12 @@ class QualityService:
 
         # Try to find existing by (product_id, parameter_name) unique constraint
         existing = await self.db.execute(
-            select(QualitySpec).where(
+            select(QualitySpec)
+            .where(
                 QualitySpec.product_id == product_id,
-                QualitySpec.parameter_name == parameter_name
+                QualitySpec.parameter_name == parameter_name,
             )
+            .limit(1)
         )
         spec = existing.scalar_one_or_none()
 
@@ -640,7 +642,7 @@ class QualityService:
                 return
 
         result = await self.db.execute(
-            select(QualityResult).where(QualityResult.lot_number == payload.lot_number)
+            select(QualityResult).where(QualityResult.lot_number == payload.lot_number).limit(1)
         )
         quality = result.scalar_one_or_none()
 

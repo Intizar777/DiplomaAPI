@@ -570,7 +570,7 @@ class SalesService:
                 select(SaleRecord).where(SaleRecord.id == payload.id)
             )
 
-        record = result.scalar_one_or_none()
+        record = result.scalars().first()
 
         # Sync Customer if present
         customer_id = None

@@ -411,7 +411,7 @@ class SensorService:
             param_result = await self.db.execute(
                 select(SensorParameter).where(SensorParameter.name == payload.parameter_name)
             )
-            param = param_result.scalar_one_or_none()
+            param = param_result.scalars().first()
             if not param:
                 param = SensorParameter(
                     name=payload.parameter_name,

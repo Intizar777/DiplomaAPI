@@ -237,12 +237,14 @@ class InventoryService:
                 return
 
         result = await self.db.execute(
-            select(InventorySnapshot).where(
+            select(InventorySnapshot)
+            .where(
                 and_(
                     InventorySnapshot.product_id == payload.product_id,
                     InventorySnapshot.warehouse_code == payload.warehouse_code,
                 )
             )
+            .limit(1)
         )
         snapshot = result.scalar_one_or_none()
 

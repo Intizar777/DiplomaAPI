@@ -534,7 +534,10 @@ class OrderService:
                 return
 
         result = await self.db.execute(
-            select(OrderSnapshot).where(OrderSnapshot.order_id == payload.order_id)
+            select(OrderSnapshot)
+            .where(OrderSnapshot.order_id == payload.order_id)
+            .order_by(OrderSnapshot.id.desc())
+            .limit(1)
         )
         snapshot = result.scalar_one_or_none()
 
