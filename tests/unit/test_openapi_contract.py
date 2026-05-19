@@ -100,31 +100,44 @@ def test_sensors_stats_has_response_model(openapi_spec):
 
 
 def test_all_endpoints_have_response_models(openapi_spec):
-    """All GET endpoints should have 200 response with schema."""
+    """All GET endpoints should have 200 response with schema or be excluded."""
     paths = openapi_spec.get("paths", {})
-    
+
+    # Endpoints that return dynamic dict or StreamingResponse (no static schema)
+    excluded_endpoints = {
+        "/api/v1/sync/running",
+        "/api/production/kpi/debug/date-range",
+        "/api/v1/export/gm",
+        "/api/v1/export/finance",
+        "/api/v1/export/qe",
+        "/api/v1/export/production-overview",
+        "/api/v1/export/line-master",
+    }
+
     endpoints_without_response = []
-    
+
     for path, methods in paths.items():
+        if path in excluded_endpoints:
+            continue
         if "get" in methods:
             get_op = methods["get"]
             responses = get_op.get("responses", {})
-            
+
             if "200" not in responses:
                 endpoints_without_response.append(path)
                 continue
-                
+
             response_200 = responses.get("200", {})
-            
+
             if "$ref" in response_200:
                 continue
-                
+
             content = response_200.get("content", {})
             if "application/json" in content:
                 schema = content["application/json"].get("schema", {})
                 if "$ref" not in schema:
                     endpoints_without_response.append(path)
-    
+
     assert not endpoints_without_response, (
         f"Endpoints without response_model: {endpoints_without_response}"
     )

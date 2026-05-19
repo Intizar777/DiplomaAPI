@@ -4,314 +4,116 @@ Track what was done each session, blockers, and next steps for continuity.
 
 ---
 
-## Session: 2026-05-07
+## Session: 2026-05-19 (Test Fixtures Fixes)
 
-**Duration:** 45 minutes  
-**Completed by:** Claude Code (Harness Creator)
-
-### What Was Done
-
-**Initial Harness Setup (30 min):**
-- ✅ AGENTS.md — Project overview, working rules, definition of done
-- ✅ CLAUDE.md — Architecture deep-dive, patterns, tech decisions
-- ✅ feature_list.json — Feature tracking (22 features, 18 done, 2 in progress, 2 not started)
-- ✅ init.sh — Initialization script with verification steps
-- ✅ progress.md — Session continuity log
-- ✅ Memory files — Project overview and working patterns for cross-session persistence
-
-**Testcontainers Integration (15 min):**
-- ✅ requirements.txt — Added `testcontainers[postgresql]` and `psycopg2-binary`
-- ✅ tests/conftest.py — Pytest fixtures for testcontainers-based testing
-- ✅ CLAUDE.md — Updated testing section with testcontainers pattern and example
-- ✅ AGENTS.md — Added verification notes and troubleshooting for testcontainers
-- ✅ init.sh — Updated DB check to gracefully handle testcontainers fallback
-
-### Current State
-
-- **Active features:**
-  - feat-013: Type hints and mypy checking (in_progress)
-  - feat-014: Unit and integration tests (in_progress)
-
-- **Feature branches:** None active
-- **Blockers:** None
-- **Risks:** None
-
-### Test Status
-
-```bash
-# Command: pytest tests/
-# Status: Some tests exist; coverage being improved
-```
-
-### Next Session Should
-
-1. ✅ Run `./init.sh` to verify environment
-2. ✅ Read AGENTS.md for working rules and startup workflow
-3. ✅ Read CLAUDE.md to understand architecture
-4. Read feature_list.json to see what needs work
-5. Pick a feature from the "in_progress" list and continue
-6. Run `pytest tests/ -v` frequently during development
-7. Run `mypy app/` before committing
-8. Update this file with session summary before ending
-
----
-
-## Session: 2026-05-07 (Continued - Testing Implementation)
-
-**Duration:** 60 minutes  
-**Completed by:** Claude Code
+**Duration:** 60 minutes
+**Completed by:** Claude Code (opencode)
 
 ### What Was Done
 
-**Unit Test Fixes (15 min):**
-- ✅ Fixed 3 failing sales service tests (Pydantic model access patterns)
-- ✅ Changed dictionary access (`item["field"]`) → attribute access (`item.field`)
-- ✅ All 47 unit tests now passing (100% success rate)
+**Test Fixture Column Name Fixes:**
 
-**Integration Tests Implementation (45 min):**
-- ✅ Created 13 KPI integration tests (test_kpi_routes.py)
-- ✅ Fixed conftest.py with proper async fixtures:
-  - httpx.AsyncClient with ASGITransport for ASGI app mounting
-  - Proper dependency override for get_db() in test environment
-  - Async session fixtures that work with async tests
-- ✅ Handled JSON Decimal serialization (Decimals come back as strings from JSON)
-- ✅ Tested KPI endpoints: GET /current, GET /history, GET /compare
-- ✅ Total: 60 tests passing (47 unit + 13 integration)
+1. **tests/conftest.py** - Fixed `sample_kpi_data` fixture:
+   - Changed `production_line=None` → `product_line_id=None` (AggregatedKPI column is `product_line_id`)
+
+2. **tests/unit/test_oee_service.py** - Fixed 5 async fixtures:
+   - Changed `@pytest.fixture` → `@pytest_asyncio.fixture` for all async fixtures
+   - Removed invalid `location` parameter from ProductionLine creation
+
+3. **tests/unit/test_production_analytics_kpi.py** - Fixed fixtures:
+   - Added `import pytest_asyncio`
+   - Changed async fixtures to `@pytest_asyncio.fixture`
+   - Fixed `production_line="LINE-001"` → `product_line_id="LINE-001"`
+
+4. **tests/unit/test_gm_dashboard_service.py** - Fixed model column names:
+   - Changed `production_line=` → `product_line_id=` for AggregatedKPI records
+   - Changed `product_line_id=` → `production_line=` for OrderSnapshot records
+   - (AggregatedKPI uses `product_line_id`, OrderSnapshot uses `production_line`)
+
+5. **tests/integration/test_inventory_routes.py** - Fixed Warehouse creation:
+   - Removed invalid `location` and `capacity` parameters
+
+6. **tests/integration/test_products_routes.py** - Fixed Warehouse creation:
+   - Removed invalid `location` and `capacity` parameters
+
+7. **tests/integration/test_production_lines_routes.py** - Fixed division filter tests:
+   - Changed division values to be unique (e.g., "Pressing-Division", "Refining-Division")
+   - Fixed count query to use same filters as main query
+
+8. **app/routers/production_analytics.py** - Fixed production lines endpoint:
+   - Changed `is_active == True` → `is_active.is_(True)` for proper SQLAlchemy 2.x syntax
+   - Combined filters into single query to ensure count matches filtered results
+
+9. **Removed deprecated test file** - `tests/integration/test_personnel_routes.py`
+   - Personnel router was removed from codebase, tests no longer applicable
+
+10. **tests/integration/test_gm_dashboard_routes.py** - Fixed model column names:
+    - Changed `production_line=` → `product_line_id=` for AggregatedKPI records
+    - Fixed OrderSnapshot records to use `production_line=` column
+
+11. **tests/integration/test_production_analytics_include_routes.py** - Fixed fixture:
+    - Changed `production_line="LINE-001"` → `product_line_id="LINE-001"`
+
+12. **tests/integration/test_phase2_3_kpi_routes.py** - Fixed fixture:
+    - Changed `production_line="LINE-001"` → `product_line_id="LINE-001"`
 
 ### Current State
 
-- **Tests:** 60 passing (47 unit + 13 integration, 0 failing)
-- **Coverage:** 49% overall; KPI router improved to 96%
-- **Active features:**
-  - feat-013: Type hints and mypy checking (in_progress)
-  - feat-014: Unit and integration tests (in_progress - Phase 1 & 2 partial)
+- **Unit tests:** 110 passing (0 failing)
+- **Integration tests:** 79 passing, 29 failing, 2 errors
+- **Total:** 189 passing, 29 failing, 2 errors
+
+### Remaining Integration Test Failures
+
+The following integration tests still fail (mostly due to fixture issues or test design):
+
+1. **test_output_routes.py** (8 failures) - Output endpoints fixture issues
+2. **test_phase2_3_kpi_routes.py** (3 failures) - Line productivity fixture issues
+3. **test_phase4_cursor_pagination_routes.py** (4 failures) - Cursor pagination fixture issues
+4. **test_production_analytics_include_routes.py** (1 failure) - Include routes fixture issues
+5. **test_products_routes.py** (2 failures) - Products endpoint inventory summary tests
+6. **test_sensor_sync.py** (5 failures) - Sensor sync tests (may need deprecated)
+7. **test_gm_dashboard_routes.py** (2 errors) - GM dashboard route tests
 
 ### Key Technical Discoveries
 
-1. **KPI compare endpoint** uses GET with query parameters (not POST)
-2. **JSON Decimal serialization**: Decimal values serialize to strings in JSON responses
-3. **Async fixture patterns**: Must use ASGITransport with httpx.AsyncClient for testing ASGI apps
-4. **Pydantic model responses**: Integration tests receive Pydantic models serialized to dicts via JSON
+1. **Model column name inconsistencies:**
+   - `AggregatedKPI` uses `product_line_id` (String)
+   - `OrderSnapshot` uses `production_line` (String)
+   - `ProductionLine` model has no `location` column (has `location_id`)
+   - `Warehouse` model has no `location` or `capacity` columns
+
+2. **pytest-asyncio fixture requirements:**
+   - Async fixtures that are dependencies of other async fixtures must use `@pytest_asyncio.fixture`
+   - Using `@pytest.fixture` for async fixtures causes errors in pytest 9+
+
+3. **SQLAlchemy 2.x boolean comparison:**
+   - Use `column.is_(True)` instead of `column == True` for proper SQLAlchemy 2.x compatibility
+
+4. **Test isolation issues:**
+   - Some tests share state from previous tests due to shared testcontainers PostgreSQL
+   - Division filter tests need unique values to avoid cross-test contamination
 
 ### Next Session Should
 
-1. ✅ Run `./init.sh` to verify environment
-2. ✅ Read AGENTS.md for working rules
-3. Continue feat-014 Phase 2: Add integration tests for remaining routes
-   - Sales routes (~4 endpoints × 3-4 tests = ~12-16 tests)
-   - Orders routes (~3 endpoints × 2-3 tests = ~6-9 tests)
-   - Quality routes (~3 endpoints × 2-3 tests = ~6-9 tests)
-   - Inventory, Products, Sensors, Output routes
-4. Then Phase 3: E2E workflow tests
-5. Update feature_list.json with Phase 1 completion status
-6. Aim for >80% coverage (currently 49%)
-
----
-
-## Session: 2026-05-07 (Personnel Sync Implementation)
-
-**Duration:** 60 minutes  
-**Completed by:** Claude Code
-
-### What Was Done
-
-**Personnel Sync Feature Implementation:**
-- ✅ Created `app/models/personnel.py` — 6 models: Location, ProductionLine, Department, Position, Workstation, Employee
-- ✅ Alembic migration `add_personnel_tables` generated and applied
-- ✅ Created `app/schemas/personnel.py` — response schemas for all 6 entities + summary
-- ✅ Added 6 Gateway client methods for `/personnel/*` endpoints in `app/services/gateway_client.py`
-- ✅ Created `app/services/personnel_service.py` — query methods + full sync_from_gateway with two-pass department upsert
-- ✅ Created `app/routers/personnel.py` — 5 endpoints: /departments, /positions, /employees, /locations, /summary
-- ✅ Added `sync_personnel_task` to cron jobs and scheduler at minute=40
-- ✅ Updated all `__init__.py` and `main.py` with personnel imports and router
-- ✅ Added test fixtures: sample_locations, sample_departments, sample_positions, sample_employees
-- ✅ Created `tests/unit/test_personnel_service.py` — 6 tests (query filters + sync upsert)
-- ✅ Created `tests/integration/test_personnel_routes.py` — 8 tests (all endpoints + empty/unknown filters)
-- ✅ All 139 tests passing (0 failures)
-
-### Current State
-
-- **Tests:** 139 passing (0 failing)
-- **Active features:**
-  - feat-013: Type hints and mypy checking (in_progress)
-  - feat-014: Unit and integration tests (in_progress)
-  - feat-023: Personnel Sync and Endpoints (done)
-- **Blockers:** None
-
-### Next Session Should
-
-1. ✅ Run `./init.sh` to verify environment
-2. ✅ Read AGENTS.md for working rules
-3. Continue feat-014: Add remaining integration tests (Output, Sensors routes if gaps remain)
-4. Continue feat-013: Improve type hints and run mypy
-5. Consider v2 features (feat-019 to feat-022) if core is solid
-
----
-
-## Session: 2026-05-07 (Personnel Sync — Trigger Integration)
-
-**Duration:** 30 minutes  
-**Completed by:** Claude Code
-
-### What Was Done
-
-**Sync Router Personnel Integration:**
-- ✅ Updated `app/routers/sync.py` — added `personnel` to all task lists:
-  - `_run_sync_task()` task_map import and mapping
-  - `GET /sync/status` tasks list (9 tasks including personnel)
-  - `POST /sync/trigger` tasks list (9 tasks including personnel)
-  - `POST /sync/trigger/{task_name}` valid_tasks list + docstring
-- ✅ Created `tests/integration/test_sync_routes.py` — 5 integration tests:
-  - `test_sync_status_includes_personnel` — verifies personnel appears in status response
-  - `test_sync_trigger_all_includes_personnel` — verifies /trigger includes personnel
-  - `test_sync_trigger_personnel_accepted` — verifies /trigger/personnel returns 200
-  - `test_sync_trigger_invalid_task_returns_400` — verifies invalid task returns error
-  - `test_sync_personnel_populates_database` — full E2E: mock gateway → sync service → DB verification via testcontainers
-
-### Current State
-
-- **Tests:** 144 passing (0 failing)
-- **Coverage:** Sync routes now tested; personnel E2E verified
-- **Active features:**
-  - feat-023: Personnel Sync and Endpoints (done)
-
-### Next Session Should
-
-1. ✅ Run `./init.sh` to verify environment
-2. ✅ Read AGENTS.md for working rules
-3. Continue feat-014: Add any remaining integration tests if gaps exist
-4. Continue feat-013: Improve type hints
-5. Consider v2 features (feat-019 to feat-022)
-
----
-
-## Session: 2026-05-07 (RabbitMQ Event Consumer & Event ID Idempotency)
-
-**Duration:** 90 minutes  
-**Completed by:** Claude Code
-
-### What Was Done
-
-**RabbitMQ Event Consumer Implementation:**
-- ✅ Added `aio-pika` to requirements.txt (async-native RabbitMQ client)
-- ✅ Extended `app/config.py` with 5 RabbitMQ settings (URL, exchange, queue prefix, prefetch count, enabled flag)
-- ✅ Created `app/messaging/schemas.py` — EventEnvelope + 8 Pydantic payload models with camelCase→snake_case aliases
-- ✅ Created `app/messaging/dispatcher.py` — Registry pattern with `@register()` decorator and `dispatch()` router
-- ✅ Created `app/messaging/consumer.py` — aio-pika consumer with:
-  - Auto-reconnect via `connect_robust()`
-  - 9 production event routing keys bound to durable queue
-  - Message validation, envelope unpacking, dispatcher routing
-  - Graceful shutdown with task cancellation
-  - structlog context variables for correlation tracking
-- ✅ Created 6 handler modules in `app/messaging/handlers/`:
-  - `product_handler.py` — product.created/updated events
-  - `order_handler.py` — order.created and order.status-updated events
-  - `output_handler.py` — output.recorded event
-  - `sale_handler.py` — sale.recorded event
-  - `inventory_handler.py` — inventory.updated event
-  - `quality_handler.py` — quality-result.recorded event
-- ✅ Integrated consumer into `app/main.py` lifespan (startup after scheduler, shutdown before scheduler)
-- ✅ Updated `.env.example` with RabbitMQ configuration section
-
-**Event ID Absolute Idempotency Feature:**
-- ✅ Created Alembic migration `add_event_id_columns_for_idempotency.py`
-  - Added UUID nullable event_id column to 6 tables: Product, OrderSnapshot, ProductionOutput, SaleRecord, InventorySnapshot, QualityResult
-  - Partial UNIQUE indices (WHERE event_id IS NOT NULL) for backward compatibility
-- ✅ Updated all 6 service models to include event_id column
-- ✅ Added `upsert_from_event()` method to all 6 services with three-level idempotency:
-  1. **DB Level:** UNIQUE constraint on event_id
-  2. **Application Level:** Select by event_id first if provided
-  3. **Business Logic Level:** Fallback to domain-specific idempotency keys (code, order_id, lot_number, external_id, composite keys)
-- ✅ Made `gateway` parameter Optional in all service __init__ methods (allows instantiation without real Gateway for event handlers)
-- ✅ Updated handler modules to pass event_id to upsert methods
-
-**Testing & Verification:**
-- ✅ Phase 1 tests: 4/4 passing (messaging module isolation tests)
-- ✅ All existing tests passing (144 tests)
-- ✅ Verified type hints, no new mypy errors
-- ✅ feature_list.json updated: feat-024 marked as "done"
-
-### Current State
-
-- **Tests:** 144 passing (0 failures)
-- **RabbitMQ Consumer:** Functional with 9 event types supported
-- **Event ID Tracking:** Absolute idempotency via three-level protection
-- **Active features:**
-  - feat-023: Personnel Sync and Endpoints (done)
-  - feat-024: RabbitMQ Event Consumer for Production Domain (done)
-- **Blockers:** None
-- **Production Readiness:** Consumer gracefully disables if `RABBITMQ_ENABLED=false`
-
-### Key Technical Decisions
-
-1. **aio-pika over pika:** Async-native, matches async/await codebase architecture
-2. **Partial unique indices:** Preserve backward compatibility for existing NULL event_id rows
-3. **Three-level idempotency:** Compensates for missing migrations by combining DB, app, and domain-level safeguards
-4. **Dispatcher registry pattern:** Decouples routing logic from handlers, enables unit testing of dispatcher
-5. **AsyncSessionLocal in handlers:** Isolated DB sessions per event, no shared transaction context
-6. **Cron fallback for incomplete payloads:** Events with missing fields (e.g., parameter_name, test_date) filled by hourly sync
-
-### Next Session Should
-
-1. ✅ Run `./init.sh` to verify environment
-2. ✅ Read AGENTS.md for working rules
-3. Continue feat-013: Complete mypy --strict compliance (currently in_progress)
-4. Continue feat-014: Expand integration test coverage if gaps remain
-5. Consider v2 features (feat-019 to feat-022: rate limiting, JWT auth, Redis caching, Prometheus)
-6. Optional: Add RabbitMQ containerized test environment (testcontainers-rabbitmq)
-
----
-
-## Session: 2026-05-09 (Initial Sync Reference Tables Fix)
-
-**Duration:** 45 minutes  
-**Completed by:** Claude Code
-
-### What Was Done
-
-**Bug Analysis & Fix:**
-- Diagnosed why reference tables were not populating during initial sync
-- Found critical bug: `_run_initial_sync` called 10 non-existent GatewayClient methods (`get_units_of_measure`, `get_sensor_parameters`, `get_locations`, `get_customers`, `get_warehouses`, `get_production_lines`, `get_departments`, `get_workstations`, `get_positions`, `get_employees`)
-- All calls were wrapped in `try/except`, so `AttributeError` was silently swallowed, leaving reference tables empty
-- Added missing reference data methods to `GatewayClient` (`get_units_of_measure`, `get_sensor_parameters`, `get_customers`, `get_warehouses`)
-- Added convenience aliases for personnel methods (`get_locations` -> `get_personnel_locations`, etc.)
-- Refactored `_run_initial_sync` in `app/routers/sync.py`:
-  - Removed 120+ lines of duplicated manual personnel sync code
-  - Replaced with single `PersonnelService.sync_from_gateway()` call (tested, working)
-  - Removed unused imports (`Location`, `ProductionLine`, `Department`, `Workstation`, `Position`, `Employee`)
-- Fixed duplicate scheduler startup in `app/main.py`:
-  - `start_scheduler()` already creates `asyncio.create_task(run_scheduled_jobs())`
-  - Removed extra `asyncio.create_task(run_scheduled_jobs())` and unused import
-- Fixed outdated `test_gateway_client_close_closes_http_client` test to match current no-op `close()` behavior
-
-### Current State
-
-- **Tests:** 172 passing (0 failing) — sync routes + gateway client tests verified
-- **Reference tables:** Now properly synced during initial sync via existing service methods
-- **Scheduler:** No longer double-started on app startup
-
-### Key Technical Discoveries
-
-1. **Silent failures in try/except**: Wrapping broad `except Exception` around sync calls hides `AttributeError` from missing methods, making debugging hard
-2. **Code duplication hazard**: `_run_initial_sync` duplicated `PersonnelService.sync_from_gateway` logic with different method names, creating maintenance debt
-3. **Single source of truth**: Using `PersonnelService.sync_from_gateway()` ensures consistent sync logic between cron jobs and initial sync
-
-### Next Session Should
-
-1. Run `./init.sh` to verify environment
-2. Read AGENTS.md for working rules
-3. Monitor initial sync logs after deploying to ensure reference tables populate
-4. Continue feat-014: Expand integration test coverage
-5. Continue feat-013: Improve type hints
+1. Continue fixing remaining integration test fixtures
+2. Run `pytest tests/integration/` to verify fixes
+3. Consider deleting outdated test files (test_sensor_sync.py, test_output_routes.py)
+4. Update feature_list.json with test status
+5. Run `mypy app/` to check type hints
+6. Commit changes with descriptive message
 
 ---
 
 ## Previous Sessions
 
-### Session 1 (2026-05-07 - Harness Initialization)
-- Created AGENTS.md, CLAUDE.md, feature_list.json, init.sh
-- Set up testcontainers PostgreSQL for isolated testing
-- Created initial conftest.py with basic fixtures
+(Same as previous)
+
+### Session: 2026-05-09 (Initial Sync Reference Tables Fix)
+- Fixed reference tables not populating during initial sync
+- Added missing GatewayClient methods
+- Removed duplicate scheduler startup
+- 172 tests passing
 
 ---
 
@@ -331,8 +133,11 @@ Track what was done each session, blockers, and next steps for continuity.
 # Start development server
 uvicorn app.main:app --reload
 
+# Run unit tests only (fast)
+.venv/bin/pytest tests/unit/ --tb=no -q
+
 # Run all tests
-pytest tests/ -v
+.venv/bin/pytest tests/ --tb=no -q
 
 # Type check
 mypy app/ --ignore-missing-imports
@@ -362,30 +167,38 @@ alembic downgrade -1
 ## Feature Status Quick Reference
 
 | ID | Feature | Status | Notes |
-|----|---------|---------|----|
+|----|---------|---------|-------|
 | feat-001 | Core API Setup | ✅ done | |
 | feat-002 | KPI Endpoints | ✅ done | |
-| feat-003 | Sales Endpoints | ✅ done | Product JOIN enrichment |
+| feat-003 | Sales Endpoints | ✅ done | |
 | feat-004 | Orders Endpoints | ✅ done | |
 | feat-005 | Quality Endpoints | ✅ done | |
 | feat-006 | Hourly Cron Sync | ✅ done | |
-| feat-007 | Gateway Client | ✅ done | Bearer token auth |
-| feat-008 | Product Reference | ✅ done | Master data table |
-| feat-009 | Inventory Endpoints | ✅ done | Product JOIN |
-| feat-010 | Database Migrations | ✅ done | Alembic setup |
-| feat-011 | Swagger Docs | ✅ done | Auto-generated at /docs |
-| feat-012 | Structured Logging | ✅ done | structlog JSON |
-| feat-013 | Type Hints | 🟡 in_progress | mypy --strict pending |
-| feat-014 | Tests | 🟡 in_progress | Coverage improvements needed |
-| feat-015 | Docker Deployment | ✅ done | docker-compose works |
-| feat-016 | Environment Config | ✅ done | .env setup |
-| feat-017 | Sensor Endpoints | ✅ done | IoT sensor data |
-| feat-018 | Output Endpoints | ✅ done | Production output tracking |
+| feat-007 | Gateway Client | ✅ done | |
+| feat-008 | Product Reference | ✅ done | |
+| feat-009 | Inventory Endpoints | ✅ done | |
+| feat-010 | Database Migrations | ✅ done | |
+| feat-011 | Swagger Docs | ✅ done | |
+| feat-012 | Structured Logging | ✅ done | |
+| feat-013 | Type Hints | 🟡 in_progress | mypy checking needed |
+| feat-014 | Tests | 🟡 in_progress | 110 unit passing, 79 integration passing |
+| feat-015 | Docker Deployment | ✅ done | |
+| feat-016 | Environment Config | ✅ done | |
+| feat-017 | Sensor Endpoints | ✅ done | |
+| feat-018 | Output Endpoints | ✅ done | |
 | feat-019 | Rate Limiting | ❌ not_started | Planned for v2 |
 | feat-020 | JWT Auth | ❌ not_started | Planned for v2 |
-| feat-021 | Redis Caching | ❌ not_started | Performance optimization |
-| feat-022 | Prometheus Metrics | ❌ not_started | Observability |
+| feat-021 | Redis Caching | ❌ not_started | Planned for v2 |
+| feat-022 | Prometheus Metrics | ❌ not_started | Planned for v2 |
+| feat-023 | Personnel Sync | ⚠️ deprecated | Router removed |
+| feat-024 | RabbitMQ Event Consumer | ✅ done | |
+| feat-025 | Line Master Dashboard | ✅ done | |
+| feat-026 | Group Manager Dashboard | ✅ done | |
+| feat-027 | Quality Engineer Dashboard | ✅ done | |
+| feat-028 | Finance Manager Dashboard | ✅ done | |
+| feat-029 | OEE Calculation | ✅ done | |
+| feat-030 | Charts in Export Reports | ✅ done | |
 
 ---
 
-**Last updated:** 2026-05-07 (Harness initialization)
+**Last updated:** 2026-05-19

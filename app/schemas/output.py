@@ -18,7 +18,7 @@ class OutputSummaryItem(BaseModel):
 
 class OutputListResponse(BaseModel):
     items: List[OutputSummaryItem]
-    meta: PaginationMeta
+    meta: Optional[PaginationMeta] = None
     period_from: date
     period_to: date
     group_by: Optional[str] = None

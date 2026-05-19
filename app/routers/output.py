@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.services import GatewayClient, OutputService
 from app.schemas.common import DateRangeParams
+from app.schemas.output import OutputListResponse
 
 router = APIRouter(prefix="/api/v1/output", tags=["Output"])
 
@@ -21,7 +22,7 @@ async def get_services(db: AsyncSession = Depends(get_db)):
     return service
 
 
-@router.get("/summary")
+@router.get("/summary", response_model=OutputListResponse)
 async def get_output_summary(
     date_range: DateRangeParams = Depends(),
     group_by: str = Query("day", description="Group by: day, shift"),
@@ -36,7 +37,7 @@ async def get_output_summary(
     return await service.get_output_summary(from_date, to_date, group_by)
 
 
-@router.get("/by-shift")
+@router.get("/by-shift", response_model=OutputListResponse)
 async def get_output_by_shift(
     date_range: DateRangeParams = Depends(),
     service: OutputService = Depends(get_services)

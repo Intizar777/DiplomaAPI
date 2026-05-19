@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.services import GatewayClient, ProductService
+from app.schemas.products import ProductsListResponse, ProductDetailResponse
 
 router = APIRouter(prefix="/api/v1/products", tags=["Products"])
 
@@ -19,7 +20,7 @@ async def get_services(db: AsyncSession = Depends(get_db)):
     return service
 
 
-@router.get("")
+@router.get("", response_model=ProductsListResponse)
 async def get_products(
     category: Optional[str] = Query(None, description="Filter by category"),
     brand: Optional[str] = Query(None, description="Filter by brand"),
@@ -28,26 +29,31 @@ async def get_products(
     """
     Get products list with optional filters.
     """
+    from app.schemas.products import ProductListItem
+    from app.schemas.common import PaginationMeta
+
     products = await service.get_products(category, brand)
-    return {
-        "items": [
-            {
-                "id": str(p.id),
-                "code": p.code,
-                "name": p.name,
-                "category": p.category,
-                "brand": p.brand,
-                "unit_of_measure_id": str(p.unit_of_measure_id) if p.unit_of_measure_id else None,
-                "shelf_life_days": p.shelf_life_days,
-                "requires_quality_check": p.requires_quality_check,
-            }
+    return ProductsListResponse(
+        items=[
+            ProductListItem(
+                id=str(p.id),
+                code=str(p.code) if p.code is not None else "",
+                name=str(p.name) if p.name is not None else "",
+                category=str(p.category) if p.category is not None else None,
+                brand=str(p.brand) if p.brand is not None else None,
+                unit_of_measure_id=str(p.unit_of_measure_id) if p.unit_of_measure_id else None,
+                shelf_life_days=int(p.shelf_life_days) if p.shelf_life_days is not None else None,
+                requires_quality_check=bool(p.requires_quality_check) if p.requires_quality_check is not None else False,
+            )
             for p in products
         ],
-        "count": len(products)
-    }
+        meta=PaginationMeta(),
+        sort="name",
+        order="asc"
+    )
 
 
-@router.get("/{product_id}")
+@router.get("/{product_id}", response_model=ProductDetailResponse)
 async def get_product(
     product_id: str,
     service: ProductService = Depends(get_services)
@@ -59,14 +65,14 @@ async def get_product(
     if not product:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Product not found")
-    
-    return {
-        "id": str(product.id),
-        "code": product.code,
-        "name": product.name,
-        "category": product.category,
-        "brand": product.brand,
-        "unit_of_measure": product.unit_of_measure,
-        "shelf_life_days": product.shelf_life_days,
-        "requires_quality_check": product.requires_quality_check,
-    }
+
+    return ProductDetailResponse(
+        id=str(product.id),
+        code=str(product.code) if product.code is not None else "",
+        name=str(product.name) if product.name is not None else "",
+        category=str(product.category) if product.category is not None else None,
+        brand=str(product.brand) if product.brand is not None else None,
+        unit_of_measure=str(product.unit_of_measure) if product.unit_of_measure is not None else None,
+        shelf_life_days=int(product.shelf_life_days) if product.shelf_life_days is not None else None,
+        requires_quality_check=bool(product.requires_quality_check) if product.requires_quality_check is not None else False,
+    )

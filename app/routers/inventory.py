@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.services import GatewayClient, InventoryService
 from app.schemas.common import DateRangeParams
+from app.schemas.inventory import InventoryCurrentResponse, InventoryTrendsResponse
 
 router = APIRouter(prefix="/api/v1/inventory", tags=["Inventory"])
 
@@ -21,7 +22,7 @@ async def get_services(db: AsyncSession = Depends(get_db)):
     return service
 
 
-@router.get("/current")
+@router.get("/current", response_model=InventoryCurrentResponse)
 async def get_current_inventory(
     warehouse_code: Optional[str] = Query(None, description="Filter by warehouse"),
     product_id: Optional[str] = Query(None, description="Filter by product ID"),
@@ -33,7 +34,7 @@ async def get_current_inventory(
     return await service.get_current_inventory(warehouse_code=warehouse_code, product_id=product_id)
 
 
-@router.get("/trends")
+@router.get("/trends", response_model=InventoryTrendsResponse)
 async def get_inventory_trends(
     product_id: str = Query(..., description="Product ID to track"),
     date_range: DateRangeParams = Depends(),
@@ -44,5 +45,5 @@ async def get_inventory_trends(
     """
     from_date = date_range.date_from or (date.today() - timedelta(days=30))
     to_date = date_range.date_to or date.today()
-    
+
     return await service.get_inventory_trends(product_id=product_id, from_date=from_date, to_date=to_date)

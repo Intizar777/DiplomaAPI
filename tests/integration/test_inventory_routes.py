@@ -27,16 +27,12 @@ async def sample_inventory(session):
         id=uuid.uuid4(),
         code="WH-01",
         name="Warehouse 1",
-        location="Location 1",
-        capacity=Decimal("10000"),
         is_active=True,
     )
     wh02 = Warehouse(
         id=uuid.uuid4(),
         code="WH-02",
         name="Warehouse 2",
-        location="Location 2",
-        capacity=Decimal("5000"),
         is_active=True,
     )
     session.add_all([wh01, wh02])
@@ -48,6 +44,7 @@ async def sample_inventory(session):
             product_id=product_a,
             product_name="Widget A",
             warehouse_id=wh01.id,
+            warehouse_code="WH-01",
             lot_number="LOT-A-001",
             quantity=Decimal("500"),
             unit_of_measure="pcs",
@@ -58,6 +55,7 @@ async def sample_inventory(session):
             product_id=product_a,
             product_name="Widget A",
             warehouse_id=wh02.id,
+            warehouse_code="WH-02",
             lot_number="LOT-A-002",
             quantity=Decimal("300"),
             unit_of_measure="pcs",
@@ -68,6 +66,7 @@ async def sample_inventory(session):
             product_id=product_b,
             product_name="Widget B",
             warehouse_id=wh01.id,
+            warehouse_code="WH-01",
             lot_number="LOT-B-001",
             quantity=Decimal("200"),
             unit_of_measure="kg",
@@ -79,6 +78,7 @@ async def sample_inventory(session):
             product_id=product_a,
             product_name="Widget A",
             warehouse_id=wh01.id,
+            warehouse_code="WH-01",
             lot_number="LOT-A-OLD",
             quantity=Decimal("600"),
             unit_of_measure="pcs",

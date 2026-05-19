@@ -5,6 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 import pytest
+import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -23,13 +24,12 @@ def oee_service() -> OEEService:
     return OEEService()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sample_production_line(session: AsyncSession) -> ProductionLine:
     """Create a sample production line."""
     line = ProductionLine(
         name="Line A",
         code="LINE-A",
-        location="Building 1",
         is_active=True,
     )
     session.add(line)
@@ -38,7 +38,7 @@ async def sample_production_line(session: AsyncSession) -> ProductionLine:
     return line
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sample_capacity_plan(
     session: AsyncSession, sample_production_line: ProductionLine
 ) -> LineCapacityPlan:
@@ -58,7 +58,7 @@ async def sample_capacity_plan(
     return plan
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sample_downtime(
     session: AsyncSession, sample_production_line: ProductionLine
 ) -> DowntimeEvent:
@@ -79,7 +79,7 @@ async def sample_downtime(
     return event
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sample_output(
     session: AsyncSession, sample_production_line: ProductionLine
 ) -> ProductionOutput:
@@ -103,7 +103,7 @@ async def sample_output(
     return output
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sample_quality_result(
     session: AsyncSession,
 ) -> QualityResult:

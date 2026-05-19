@@ -39,17 +39,20 @@ class SensorService:
     ) -> Dict:
         """Get sensor readings history for trends."""
         query = select(
-            SensorReading,
+            SensorReading.id,
+            SensorReading.value,
+            SensorReading.quality,
+            SensorReading.recorded_at,
             Sensor.device_id,
             Sensor.production_line_id,
             Sensor.parameter_name,
             Sensor.parameter_unit
         ).join(
             Sensor, SensorReading.sensor_id == Sensor.id
-        ).order_by(desc(SensorReading.recorded_at))
+        )
 
         if production_line_id:
-            query = query.where(Sensor.production_line_id == production_line_id)
+            query = query.where(Sensor.production_line_id == UUID(production_line_id))
         if parameter_name:
             query = query.where(Sensor.parameter_name == parameter_name)
         if from_date:
@@ -57,7 +60,7 @@ class SensorService:
         if to_date:
             query = query.where(SensorReading.recorded_at <= to_date)
 
-        query = query.limit(limit)
+        query = query.order_by(desc(SensorReading.recorded_at)).limit(limit)
         result = await self.db.execute(query)
         rows = result.all()
 
@@ -66,10 +69,10 @@ class SensorService:
                 "device_id": row.device_id,
                 "production_line_id": str(row.production_line_id) if row.production_line_id else None,
                 "parameter_name": row.parameter_name,
-                "value": float(row.SensorReading.value) if row.SensorReading.value else None,
+                "value": float(row.value) if row.value else None,
                 "unit": row.parameter_unit,
-                "quality": row.SensorReading.quality,
-                "recorded_at": row.SensorReading.recorded_at.isoformat() if row.SensorReading.recorded_at else None,
+                "quality": row.quality,
+                "recorded_at": row.recorded_at.isoformat() if row.recorded_at else None,
             }
             for row in rows
         ]
@@ -84,7 +87,10 @@ class SensorService:
     ) -> Dict:
         """Get sensor readings with quality issues (alerts)."""
         query = select(
-            SensorReading,
+            SensorReading.id,
+            SensorReading.value,
+            SensorReading.quality,
+            SensorReading.recorded_at,
             Sensor.device_id,
             Sensor.production_line_id,
             Sensor.parameter_name,
@@ -92,15 +98,15 @@ class SensorService:
         ).join(
             Sensor, SensorReading.sensor_id == Sensor.id
         ).where(
-            SensorReading.quality.in_(["bad", "degraded"])
-        ).order_by(desc(SensorReading.recorded_at))
+            func.lower(SensorReading.quality).in_(["bad", "degraded"])
+        )
 
         if from_date:
             query = query.where(SensorReading.recorded_at >= from_date)
         if to_date:
             query = query.where(SensorReading.recorded_at <= to_date)
 
-        query = query.limit(limit)
+        query = query.order_by(desc(SensorReading.recorded_at)).limit(limit)
         result = await self.db.execute(query)
         rows = result.all()
 
@@ -109,10 +115,10 @@ class SensorService:
                 "device_id": row.device_id,
                 "production_line_id": str(row.production_line_id) if row.production_line_id else None,
                 "parameter_name": row.parameter_name,
-                "value": float(row.SensorReading.value) if row.SensorReading.value else None,
+                "value": float(row.value) if row.value else None,
                 "unit": row.parameter_unit,
-                "quality": row.SensorReading.quality,
-                "recorded_at": row.SensorReading.recorded_at.isoformat() if row.SensorReading.recorded_at else None,
+                "quality": row.quality,
+                "recorded_at": row.recorded_at.isoformat() if row.recorded_at else None,
             }
             for row in rows
         ]
@@ -133,9 +139,9 @@ class SensorService:
             func.max(SensorReading.value).label("max_value"),
             func.count(SensorReading.id).label("reading_count"),
             func.sum(func.cast(SensorReading.quality.in_(["bad", "degraded"]), type_=Integer)).label("alert_count")
-        ).outerjoin(
+        ).join(
             Sensor, SensorReading.sensor_id == Sensor.id
-        ).outerjoin(
+        ).join(
             SensorParameter, Sensor.sensor_parameter_id == SensorParameter.id
         ).group_by(
             Sensor.production_line_id,
@@ -144,7 +150,7 @@ class SensorService:
         )
 
         if production_line_id:
-            query = query.where(Sensor.production_line_id == production_line_id)
+            query = query.where(Sensor.production_line_id == UUID(production_line_id))
 
         result = await self.db.execute(query)
         rows = result.all()

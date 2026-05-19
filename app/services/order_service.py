@@ -293,7 +293,7 @@ class OrderService:
                 line_stats[key]["order_count"] += 1
 
         items = sorted(line_stats.items(), key=lambda x: x[1]["total_delay_hours"], reverse=True)
-        grand_total = sum(s["total_delay_hours"] for _, s in items)
+        grand_total = sum((s["total_delay_hours"] for _, s in items), Decimal("0"))
 
         running = Decimal("0")
         lines: List[DowntimeLineItem] = []

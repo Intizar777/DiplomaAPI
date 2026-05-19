@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.services import GatewayClient, SensorService
 from app.schemas.common import DateRangeParams
+from app.schemas.sensors import SensorReadingsListResponse, SensorStatsResponse
 
 router = APIRouter(prefix="/api/v1/sensors", tags=["Sensors"])
 
@@ -21,7 +22,7 @@ async def get_services(db: AsyncSession = Depends(get_db)):
     return service
 
 
-@router.get("/history")
+@router.get("/history", response_model=SensorReadingsListResponse)
 async def get_sensor_history(
     production_line: Optional[str] = Query(None, description="Filter by production line"),
     parameter_name: Optional[str] = Query(None, description="Filter by parameter"),
@@ -34,7 +35,7 @@ async def get_sensor_history(
     """
     from_date = date_range.date_from or (date.today() - timedelta(days=1))
     to_date = date_range.date_to or date.today()
-    
+
     return await service.get_sensor_history(
         production_line_id=production_line,
         parameter_name=parameter_name,
@@ -44,7 +45,7 @@ async def get_sensor_history(
     )
 
 
-@router.get("/alerts")
+@router.get("/alerts", response_model=SensorReadingsListResponse)
 async def get_sensor_alerts(
     date_range: DateRangeParams = Depends(),
     limit: int = Query(100, ge=1, le=1000, description="Max alerts to return"),
@@ -55,11 +56,11 @@ async def get_sensor_alerts(
     """
     from_date = date_range.date_from or (date.today() - timedelta(days=7))
     to_date = date_range.date_to or date.today()
-    
+
     return await service.get_sensor_alerts(from_date=from_date, to_date=to_date, limit=limit)
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=SensorStatsResponse)
 async def get_sensor_stats(
     production_line: Optional[str] = Query(None, description="Filter by production line"),
     service: SensorService = Depends(get_services)

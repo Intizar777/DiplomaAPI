@@ -13,15 +13,23 @@ T = TypeVar("T")
 class PaginationParams(BaseModel):
     """Common pagination parameters."""
     model_config = {"extra": "ignore"}
-    
+
     page: int = Field(default=1, ge=1, description="Page number (1-indexed)")
     limit: int = Field(default=100, ge=1, le=500, description="Items per page")
+
+
+class PaginationMeta(BaseModel):
+    """Pagination metadata."""
+    total: Optional[int] = None
+    page: Optional[int] = None
+    limit: Optional[int] = None
+    pages: Optional[int] = None
 
 
 class DateRangeParams(BaseModel):
     """Common date range parameters."""
     model_config = {"extra": "ignore", "populate_by_name": True}
-    
+
     date_from: Optional[date] = Field(default=None, alias="from", description="Start date (ISO format)")
     date_to: Optional[date] = Field(default=None, alias="to", description="End date (ISO format)")
 
@@ -50,3 +58,5 @@ class HealthResponse(BaseModel):
     status: str = Field(description="Service status")
     version: str = Field(description="API version")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+    model_config = {"json_schema_extra": {"example": {"status": "healthy", "version": "1.0.0", "timestamp": "2026-05-19T10:30:00"}}}

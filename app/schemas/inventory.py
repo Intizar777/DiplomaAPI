@@ -38,7 +38,7 @@ class InventoryTrendItem(BaseModel):
 
 class InventoryCurrentResponse(BaseModel):
     items: List[InventoryItem]
-    meta: PaginationMeta
+    meta: Optional[PaginationMeta] = None
     snapshot_date: Optional[str]
     sort: str = "warehouse_code"
     order: str = "asc"

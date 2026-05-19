@@ -328,14 +328,17 @@ async def list_production_lines(
     db: AsyncSession = Depends(get_db)
 ):
     """Get production lines (from reference data)."""
-    query = select(ProductionLine).where(ProductionLine.is_active == True)
+    base_query = select(ProductionLine).where(ProductionLine.is_active.is_(True))
+    count_query = select(func.count()).select_from(ProductionLine).where(ProductionLine.is_active.is_(True))
+    
     if division:
-        query = query.where(ProductionLine.division == division)
+        base_query = base_query.where(ProductionLine.division == division)
+        count_query = count_query.where(ProductionLine.division == division)
 
-    result = await db.execute(query.offset(offset).limit(limit))
+    result = await db.execute(base_query.offset(offset).limit(limit))
     lines = result.scalars().all()
 
-    count_result = await db.execute(select(func.count()).select_from(ProductionLine).where(ProductionLine.is_active == True))
+    count_result = await db.execute(count_query)
     total = count_result.scalar()
 
     return ProductionLinesListResponse(
@@ -347,7 +350,7 @@ async def list_production_lines(
     )
 
 
-@router.get("/kpi/debug/date-range")
+@router.get("/kpi/debug/date-range", response_model=dict)
 async def get_kpi_date_range(db: AsyncSession = Depends(get_db)):
     """Debug endpoint: check KPI data date range in database."""
     from sqlalchemy import text

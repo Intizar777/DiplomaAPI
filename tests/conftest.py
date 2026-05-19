@@ -43,13 +43,12 @@ async def test_engine(postgres_container):
 
     engine = create_async_engine(async_url, echo=False)
 
-    # Create all tables from models
     async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
 
     yield engine
 
-    # Clean up: drop all tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
 
@@ -147,7 +146,7 @@ async def sample_kpi_data(session):
         kpi = AggregatedKPI(
             period_from=today - timedelta(days=days_ago + 10),
             period_to=today - timedelta(days=days_ago),
-            production_line=None,
+            product_line_id=None,
             total_output=Decimal(fake.random_int(min=100, max=5000)),
             defect_rate=Decimal(str(round(fake.random.uniform(0.5, 5.0), 2))),
             completed_orders=fake.random_int(min=20, max=100),

@@ -19,7 +19,7 @@ class BatchInput(Base, UUIDMixin, TimestampMixin):
     order_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     product_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     quantity: Column[Any] = Column(DECIMAL(15, 3), nullable=False)
-    input_date = Column(DateTime(timezone=True), nullable=False, index=True)
+    input_date = Column(DateTime(timezone=True), nullable=False)
     event_id = Column(String(255), nullable=True, unique=True)
 
     __table_args__ = (

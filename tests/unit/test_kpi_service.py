@@ -28,7 +28,7 @@ async def sample_kpi_records(session):
         kpi = AggregatedKPI(
             period_from=today - timedelta(days=days_ago + 30),
             period_to=today - timedelta(days=days_ago),
-            production_line=None,
+            product_line_id=None,
             total_output=Decimal(str(1000 + days_ago * 10)),
             defect_rate=Decimal(str(2.5 - days_ago * 0.1)),
             completed_orders=50 - days_ago,
@@ -74,7 +74,7 @@ async def test_get_current_kpi_with_production_line_filter(session, sample_kpi_r
     kpi_with_line = AggregatedKPI(
         period_from=today - timedelta(days=1),
         period_to=today,
-        production_line="Line-A",
+        product_line_id="Line-A",
         total_output=Decimal("500"),
         defect_rate=Decimal("1.5"),
         completed_orders=25,
@@ -87,7 +87,7 @@ async def test_get_current_kpi_with_production_line_filter(session, sample_kpi_r
     service = KPIService(db=session, gateway=None)
     result = await service.get_current_kpi(production_line="Line-A")
 
-    assert result.data.production_line == "Line-A"
+    assert result.data.product_line_id == "Line-A"
 
 
 @pytest.mark.asyncio
@@ -174,7 +174,7 @@ async def test_get_all_kpi_with_production_line_filter(session, sample_kpi_recor
     kpi_line_a = AggregatedKPI(
         period_from=today - timedelta(days=5),
         period_to=today - timedelta(days=4),
-        production_line="Line-A",
+        product_line_id="Line-A",
         total_output=Decimal("600"),
         defect_rate=Decimal("2.0"),
         completed_orders=30,
@@ -189,7 +189,7 @@ async def test_get_all_kpi_with_production_line_filter(session, sample_kpi_recor
 
     # All returned items should be for Line-A
     for item in result.items:
-        assert item.production_line == "Line-A"
+        assert item.product_line_id == "Line-A"
 
 
 @pytest.mark.asyncio
@@ -243,7 +243,7 @@ async def test_compare_kpi_defect_rate_change_calculation(session):
     kpi1 = AggregatedKPI(
         period_from=today - timedelta(days=30),
         period_to=today,
-        production_line=None,
+        product_line_id=None,
         total_output=Decimal("1000"),
         defect_rate=Decimal("3.0"),
         completed_orders=50,
@@ -254,7 +254,7 @@ async def test_compare_kpi_defect_rate_change_calculation(session):
     kpi2 = AggregatedKPI(
         period_from=today - timedelta(days=60),
         period_to=today - timedelta(days=30),
-        production_line=None,
+        product_line_id=None,
         total_output=Decimal("950"),
         defect_rate=Decimal("2.0"),
         completed_orders=45,
@@ -286,7 +286,7 @@ async def test_compare_kpi_order_completion_change_calculation(session):
     kpi1 = AggregatedKPI(
         period_from=today - timedelta(days=30),
         period_to=today,
-        production_line=None,
+        product_line_id=None,
         total_output=Decimal("1000"),
         defect_rate=Decimal("2.5"),
         completed_orders=60,
@@ -298,7 +298,7 @@ async def test_compare_kpi_order_completion_change_calculation(session):
     kpi2 = AggregatedKPI(
         period_from=today - timedelta(days=60),
         period_to=today - timedelta(days=30),
-        production_line=None,
+        product_line_id=None,
         total_output=Decimal("950"),
         defect_rate=Decimal("2.0"),
         completed_orders=50,
@@ -329,7 +329,7 @@ async def test_compare_kpi_with_zero_total_orders(session):
     kpi_zero_orders = AggregatedKPI(
         period_from=today - timedelta(days=30),
         period_to=today,
-        production_line=None,
+        product_line_id=None,
         total_output=Decimal("0"),
         defect_rate=Decimal("0"),
         completed_orders=0,

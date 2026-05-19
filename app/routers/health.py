@@ -4,6 +4,7 @@ Health check API routes.
 from datetime import datetime
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +13,16 @@ from app.config import settings
 from app.schemas.common import HealthResponse
 
 router = APIRouter(tags=["Health"])
+
+
+class RootResponse(BaseModel):
+    """Root endpoint response."""
+    name: str
+    version: str
+    docs: str
+    health: str
+
+    model_config = {"json_schema_extra": {"example": {"name": "Dashboard Analytics API", "version": "1.0.0", "docs": "/docs", "health": "/health"}}}
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -35,7 +46,7 @@ async def health_check(db: AsyncSession = Depends(get_db)):
     )
 
 
-@router.get("/")
+@router.get("/", response_model=RootResponse)
 async def root():
     """Root endpoint with basic info."""
     return {

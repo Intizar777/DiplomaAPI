@@ -42,7 +42,7 @@ async def sample_kpi_records(session):
         AggregatedKPI(
             period_from=recent,
             period_to=today,
-            production_line="Line-A",
+            product_line_id="Line-A",
             total_output=Decimal("1000"),
             defect_rate=Decimal("2.00"),
             completed_orders=8,
@@ -52,7 +52,7 @@ async def sample_kpi_records(session):
         AggregatedKPI(
             period_from=recent - timedelta(days=5),
             period_to=recent,
-            production_line="Line-A",
+            product_line_id="Line-A",
             total_output=Decimal("900"),
             defect_rate=Decimal("3.00"),
             completed_orders=7,
@@ -63,7 +63,7 @@ async def sample_kpi_records(session):
         AggregatedKPI(
             period_from=recent,
             period_to=today,
-            production_line="Line-B",
+            product_line_id="Line-B",
             total_output=Decimal("800"),
             defect_rate=Decimal("5.00"),
             completed_orders=6,
@@ -73,7 +73,7 @@ async def sample_kpi_records(session):
         AggregatedKPI(
             period_from=recent - timedelta(days=5),
             period_to=recent,
-            production_line="Line-B",
+            product_line_id="Line-B",
             total_output=Decimal("750"),
             defect_rate=Decimal("6.00"),
             completed_orders=5,
@@ -84,7 +84,7 @@ async def sample_kpi_records(session):
         AggregatedKPI(
             period_from=recent,
             period_to=today,
-            production_line=None,
+            product_line_id=None,
             total_output=Decimal("1800"),
             defect_rate=Decimal("3.50"),
             completed_orders=14,
@@ -94,7 +94,7 @@ async def sample_kpi_records(session):
         AggregatedKPI(
             period_from=recent - timedelta(days=5),
             period_to=recent,
-            production_line=None,
+            product_line_id=None,
             total_output=Decimal("1650"),
             defect_rate=Decimal("4.50"),
             completed_orders=12,
@@ -105,7 +105,7 @@ async def sample_kpi_records(session):
         AggregatedKPI(
             period_from=old,
             period_to=old + timedelta(days=7),
-            production_line="Line-A",
+            product_line_id="Line-A",
             total_output=Decimal("500"),
             defect_rate=Decimal("10.00"),
             completed_orders=3,

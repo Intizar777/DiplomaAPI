@@ -28,7 +28,7 @@ async def sample_gm_kpi_data(session):
         AggregatedKPI(
             period_from=period_from,
             period_to=today,
-            production_line="Line-A",
+            product_line_id="Line-A",
             total_output=Decimal("1000"),
             defect_rate=Decimal("2.50"),
             completed_orders=8,
@@ -38,7 +38,7 @@ async def sample_gm_kpi_data(session):
         AggregatedKPI(
             period_from=period_from,
             period_to=today,
-            production_line="Line-B",
+            product_line_id="Line-B",
             total_output=Decimal("900"),
             defect_rate=Decimal("4.00"),
             completed_orders=6,

@@ -55,8 +55,8 @@ class SalesTrendsResponse(BaseModel):
 class TopProductItem(BaseModel):
     """Top product item."""
     product_id: str
-    product_name: str
-    total_quantity: Decimal
+    product_name: Optional[str] = None
+    total_quantity: Optional[Decimal] = None
     total_amount: Decimal
     sales_count: int
 

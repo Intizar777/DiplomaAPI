@@ -305,13 +305,13 @@ class ProductionAnalyticsService:
             cost = row.total_cost or Decimal("0")
             margin = revenue - cost
             margin_percent = (margin / revenue * 100) if revenue > 0 else Decimal("0")
-            margin_per_unit = (margin / row.total_quantity) if row.total_quantity > 0 else Decimal("0")
+            margin_per_unit = (margin / row.total_quantity) if row.total_quantity and row.total_quantity > 0 else Decimal("0")
 
             margins.append({
                 "product_id": str(row.product_id),
                 "product_code": str(row.product_id)[:6] if row.product_id else "unknown",
                 "product_name": row.product_name or "unknown",
-                "total_quantity": row.total_quantity,
+                "total_quantity": row.total_quantity or Decimal("0"),
                 "total_revenue": revenue,
                 "total_cost": cost,
                 "total_margin": margin,
@@ -376,7 +376,7 @@ class ProductionAnalyticsService:
             target = Decimal("2.5")  # tonnes/hour target
 
             items.append({
-                "product_line_id": row.product_line_id or "unknown",
+                "production_line": row.product_line_id or "unknown",
                 "productivity": productivity,
                 "total_output": total_output,
                 "days": days,

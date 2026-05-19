@@ -15,9 +15,9 @@ from app.models import ProductionLine
 @pytest_asyncio.fixture
 async def active_lines(session: AsyncSession):
     lines = [
-        ProductionLine(name="Line One", code="L-1", division="Pressing", is_active=True, description="First line"),
-        ProductionLine(name="Line Two", code="L-2", division="Refining", is_active=True, description=None),
-        ProductionLine(name="Line Three", code="L-3", division="Pressing", is_active=False, description=None),
+        ProductionLine(name="Line One", code="L-1", division="Pressing-Division", is_active=True, description="First line"),
+        ProductionLine(name="Line Two", code="L-2", division="Refining-Division", is_active=True, description=None),
+        ProductionLine(name="Line Three", code="L-3", division="Bottling-Division", is_active=False, description=None),
     ]
     session.add_all(lines)
     await session.commit()
@@ -51,7 +51,7 @@ async def test_list_production_lines_excludes_inactive(client: AsyncClient, acti
 
 @pytest.mark.asyncio
 async def test_list_production_lines_division_filter(client: AsyncClient, active_lines):
-    response = await client.get("/api/production/production-lines", params={"division": "Pressing"})
+    response = await client.get("/api/production/production-lines", params={"division": "Pressing-Division"})
     data = response.json()
     assert data["total"] == 1
     assert data["production_lines"][0]["code"] == "L-1"
@@ -60,7 +60,7 @@ async def test_list_production_lines_division_filter(client: AsyncClient, active
 @pytest.mark.asyncio
 async def test_list_production_lines_total_scoped_to_filter(client: AsyncClient, active_lines):
     """total must count only lines matching the division filter, not all active lines."""
-    response = await client.get("/api/production/production-lines", params={"division": "Refining"})
+    response = await client.get("/api/production/production-lines", params={"division": "Refining-Division"})
     data = response.json()
     assert data["total"] == 1
 

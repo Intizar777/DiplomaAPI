@@ -2,6 +2,7 @@
 Unit tests for Phase 2-3 KPI methods in ProductionAnalyticsService.
 """
 import pytest
+import pytest_asyncio
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
@@ -21,19 +22,19 @@ from app.models import (
 from app.services import ProductionAnalyticsService
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def kpi_service(session: AsyncSession) -> ProductionAnalyticsService:
     """Fixture for ProductionAnalyticsService."""
     return ProductionAnalyticsService(session)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sample_aggregated_kpi(session: AsyncSession):
     """Fixture for sample aggregated KPI data."""
     kpi = AggregatedKPI(
         period_from=date(2026, 5, 1),
         period_to=date(2026, 5, 1),
-        production_line="LINE-001",
+        product_line_id="LINE-001",
         total_output=Decimal("100.000"),
         defect_rate=Decimal("0.01"),
         completed_orders=10,
@@ -47,7 +48,7 @@ async def sample_aggregated_kpi(session: AsyncSession):
     return kpi
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sample_quality_results(session: AsyncSession):
     """Fixture for sample quality results."""
     product_id = uuid4()
