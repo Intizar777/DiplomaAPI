@@ -1,7 +1,7 @@
 """
 Sales business logic service.
 """
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from decimal import Decimal
 from typing import List, Optional, Literal, Dict, TYPE_CHECKING
 from uuid import UUID
@@ -572,19 +572,29 @@ class SalesService:
 
         record = result.scalars().first()
 
-        # Sync Customer if present
-        customer_id = None
-        if hasattr(payload, 'customer') and payload.customer:
-            customer_id = await self._sync_customer(payload.customer)
+        # Get product name from reference data
+        product_name = None
+        if payload.product_id:
+            product_names = await get_product_name_map(self.db)
+            product_name = product_names.get(payload.product_id)
+
+        # Parse sale_date
+        sale_date_obj = payload.sale_date.date() if hasattr(payload.sale_date, 'date') else payload.sale_date
 
         if record:
+            record.quantity = Decimal(str(payload.quantity))  # type: ignore[assignment]
             record.amount = Decimal(str(payload.amount))  # type: ignore[assignment]
+            record.region = payload.region  # type: ignore[assignment]
             if payload.cost:
                 record.cost = Decimal(str(payload.cost))  # type: ignore[assignment]
             if payload.channel:
                 record.channel = payload.channel.lower()  # type: ignore[assignment]
-            if customer_id:
-                record.customer_id = customer_id  # type: ignore[assignment]
+            if product_name:
+                record.product_name = product_name  # type: ignore[assignment]
+            if payload.customer_id:
+                record.customer_id = payload.customer_id  # type: ignore[assignment]
+            record.sale_date = sale_date_obj  # type: ignore[assignment]
+            record.snapshot_date = date.today()  # type: ignore[assignment]
             if event_id:
                 record.event_id = UUID(event_id)  # type: ignore[assignment]
             logger.info("sale_updated_from_event", external_id=payload.external_id)
@@ -593,11 +603,14 @@ class SalesService:
                 id=payload.id,
                 external_id=payload.external_id,
                 product_id=payload.product_id,
-                customer_id=customer_id,
+                product_name=product_name,
+                customer_id=payload.customer_id,
+                quantity=Decimal(str(payload.quantity)),
                 amount=Decimal(str(payload.amount)),
                 cost=Decimal(str(payload.cost)) if payload.cost else None,
+                region=payload.region,
                 channel=payload.channel.lower() if payload.channel else None,
-                sale_date=date.today(),
+                sale_date=sale_date_obj,
                 snapshot_date=date.today(),
                 event_id=UUID(event_id) if event_id else None,
             )

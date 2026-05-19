@@ -291,3 +291,104 @@ async def test_get_sales_summary_default_group_by_is_region(session, sample_sale
 
     # Default should be "region"
     assert result.group_by == "region"
+
+
+@pytest.mark.asyncio
+async def test_upsert_sale_from_event_creates_record(session):
+    """Test that upsert_sale_from_event creates a new sale record with all fields."""
+    from datetime import datetime
+    from uuid import uuid4
+    from app.messaging.schemas import SaleRecordedPayload
+    from sqlalchemy import select
+    from app.models import SaleRecord
+
+    service = SalesService(db=session, gateway=None)
+    product_id = uuid4()
+    sale_date = datetime.now()
+
+    payload = SaleRecordedPayload(
+        id=uuid4(),
+        external_id="ext-123",
+        product_id=product_id,
+        customer_id=None,  # No customer ID required
+        quantity=100.5,
+        amount=5000.0,
+        cost=2500.0,
+        region="North",
+        channel="Online",
+        sale_date=sale_date
+    )
+
+    await service.upsert_sale_from_event(payload, event_id=str(uuid4()))
+
+    # Verify record was created
+    result = await session.execute(
+        select(SaleRecord).where(SaleRecord.id == payload.id)
+    )
+    record = result.scalar_one_or_none()
+
+    assert record is not None
+    assert record.product_id == product_id
+    assert record.quantity == Decimal("100.5")
+    assert record.amount == Decimal("5000.0")
+    assert record.cost == Decimal("2500.0")
+    assert record.region == "North"
+    assert record.channel == "online"  # Lowercased
+    assert record.sale_date == sale_date.date()
+
+
+@pytest.mark.asyncio
+async def test_upsert_sale_from_event_updates_existing_record(session):
+    """Test that upsert_sale_from_event updates an existing record idempotently."""
+    from datetime import datetime
+    from uuid import uuid4
+    from app.messaging.schemas import SaleRecordedPayload
+    from sqlalchemy import select
+    from app.models import SaleRecord
+
+    service = SalesService(db=session, gateway=None)
+    sale_id = uuid4()
+    product_id = uuid4()
+
+    # Create initial record
+    payload1 = SaleRecordedPayload(
+        id=sale_id,
+        external_id="ext-123",
+        product_id=product_id,
+        quantity=100.0,
+        amount=5000.0,
+        cost=None,
+        region="North",
+        channel="Online",
+        sale_date=datetime.now()
+    )
+
+    await service.upsert_sale_from_event(payload1)
+
+    # Update with new values
+    payload2 = SaleRecordedPayload(
+        id=sale_id,
+        external_id="ext-123",
+        product_id=product_id,
+        quantity=150.0,
+        amount=7500.0,
+        cost=3500.0,
+        region="South",
+        channel="Retail",
+        sale_date=datetime.now()
+    )
+
+    await service.upsert_sale_from_event(payload2)
+
+    # Verify record was updated
+    result = await session.execute(
+        select(SaleRecord).where(SaleRecord.id == sale_id)
+    )
+    record = result.scalar_one_or_none()
+
+    assert record is not None
+    assert record.quantity == Decimal("150.0")
+    assert record.amount == Decimal("7500.0")
+    assert record.cost == Decimal("3500.0")
+    assert record.region == "South"
+    assert record.channel == "retail"
