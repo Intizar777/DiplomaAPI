@@ -1946,7 +1946,7 @@ class DashboardExportService:
             s_label, s_color, _ = self._assess_defect(Decimal(str(round(alert_ratio, 4))))
             ws5.append([
                 s.get("parameter_name", "—"),
-                s.get("production_line_id", "—"),
+                s.get("line_name") or s.get("production_line_id", "—"),
                 round(float(s.get("avg_value") or 0), 2),
                 round(float(s.get("min_value") or 0), 2),
                 round(float(s.get("max_value") or 0), 2),

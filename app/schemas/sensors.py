@@ -30,6 +30,7 @@ class SensorReadingsListResponse(BaseModel):
 
 class SensorStatsItem(BaseModel):
     production_line_id: Optional[str]
+    line_name: Optional[str]
     parameter_name: Optional[str]
     unit: Optional[str]
     avg_value: Optional[float]
@@ -50,7 +51,8 @@ class SensorStatsResponse(BaseModel):
             "example": {
                 "items": [
                     {
-                        "production_line_id": "LINE-01",
+                        "production_line_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                        "line_name": "Линия А",
                         "parameter_name": "temperature",
                         "unit": "C",
                         "avg_value": 72.5,

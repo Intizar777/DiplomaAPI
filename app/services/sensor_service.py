@@ -132,6 +132,7 @@ class SensorService:
         """Get aggregated statistics per parameter per line."""
         query = select(
             Sensor.production_line_id,
+            Sensor.line_name,
             SensorParameter.name.label("parameter_name"),
             SensorParameter.unit,
             func.avg(SensorReading.value).label("avg_value"),
@@ -145,6 +146,7 @@ class SensorService:
             SensorParameter, Sensor.sensor_parameter_id == SensorParameter.id
         ).group_by(
             Sensor.production_line_id,
+            Sensor.line_name,
             SensorParameter.name,
             SensorParameter.unit
         )
@@ -158,6 +160,7 @@ class SensorService:
         items = [
             {
                 "production_line_id": str(row.production_line_id) if row.production_line_id else None,
+                "line_name": row.line_name,
                 "parameter_name": row.parameter_name,
                 "unit": row.unit,
                 "avg_value": float(row.avg_value) if row.avg_value else None,
