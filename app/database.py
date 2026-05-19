@@ -13,7 +13,9 @@ logger = structlog.get_logger()
 engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
-    future=True
+    future=True,
+    pool_pre_ping=True,
+    pool_recycle=300,
 )
 
 # Create async session factory
