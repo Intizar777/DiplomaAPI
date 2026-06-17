@@ -349,8 +349,8 @@ class OrderService:
 
         records_processed = 0
         snapshot_date = date.today()
-        batch_size = 50
-
+        batch_size = 1000
+        batch = []
         logger.info("orders_fetched_from_gateway", total_orders=len(orders_response.orders))
 
         # Load product names for enrichment

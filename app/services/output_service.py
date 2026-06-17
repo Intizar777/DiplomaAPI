@@ -136,7 +136,7 @@ class OutputService:
         line_names = {str(row[0]): row[1] for row in line_result.all()}
 
         records_processed = 0
-        batch_size = 50
+        batch_size = 1000
         batch = []
         snapshot_date = date.today()
 

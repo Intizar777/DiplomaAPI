@@ -49,6 +49,41 @@ COLOR_SUMMARY = "D9D9D9"
 STATUS_COLOR = {NORMAL: COLOR_GREEN, WARNING: COLOR_YELLOW, CRITICAL: COLOR_RED}
 STATUS_LABEL = {NORMAL: "Норма", WARNING: "Ниже нормы", CRITICAL: "Критически"}
 
+DECISION_TRANSLATION = {
+    "approved": "Одобрено",
+    "pending": "На рассмотрении",
+    "rejected": "Отклонено",
+    "accepted": "Принято",
+}
+
+UNIT_TRANSLATION = {
+    "kg": "кг",
+    "pcs": "шт",
+    "unit": "ед.",
+    "ton": "т",
+    "tonnes": "т",
+    "l": "л",
+    "liter": "л",
+    "liters": "л",
+    "m": "м",
+    "meters": "м",
+    "h": "ч",
+    "hours": "ч",
+    "min": "мин",
+    "s": "сек",
+    "degC": "°C",
+    "C": "°C",
+    "percent": "%",
+    "%": "%",
+    "pa": "Па",
+    "bar": "бар",
+    "rpm": "об/мин",
+    "Hz": "Гц",
+    "V": "В",
+    "A": "А",
+    "kW": "кВт"
+}
+
 
 class DashboardExportService:
     """Generates Excel/Word reports for each dashboard role."""
@@ -1912,7 +1947,7 @@ class DashboardExportService:
                 lot.get("lot_number", "") if isinstance(lot, dict) else getattr(lot, "lot_number", ""),
                 lot.get("product_name", "") if isinstance(lot, dict) else getattr(lot, "product_name", ""),
                 str(lot.get("test_date", "") if isinstance(lot, dict) else getattr(lot, "test_date", "")),
-                tested, passed, pct, decision,
+                tested, passed, pct, DECISION_TRANSLATION.get(decision, decision),
             ])
             self._color_row(ws4, ws4.max_row, decision_color.get(decision, COLOR_YELLOW), len(lots_hdr))
 
@@ -1944,13 +1979,14 @@ class DashboardExportService:
             reading_count = int(s.get("reading_count", 0) or 1)
             alert_ratio = alert_count / reading_count
             s_label, s_color, _ = self._assess_defect(Decimal(str(round(alert_ratio, 4))))
+            raw_unit = s.get("unit", "—")
             ws5.append([
                 s.get("parameter_name", "—"),
                 s.get("line_name") or s.get("production_line_id", "—"),
                 round(float(s.get("avg_value") or 0), 2),
                 round(float(s.get("min_value") or 0), 2),
                 round(float(s.get("max_value") or 0), 2),
-                s.get("unit", "—"),
+                UNIT_TRANSLATION.get(raw_unit, raw_unit),
                 alert_count,
                 s_label,
             ])
@@ -1961,12 +1997,13 @@ class DashboardExportService:
         self._style_header(ws5, ["Продукт", "Склад", "Лот", "Кол-во", "Ед. изм."])
         snap_date = inventory.get("snapshot_date", "—")
         for item in (inventory.get("items", []) or []):
+            uom = item.get("unit_of_measure", "—")
             ws5.append([
                 item.get("product_name", "—"),
                 item.get("warehouse_code", "—"),
                 item.get("lot_number", "—"),
                 round(float(item.get("quantity", 0)), 2),
-                item.get("unit_of_measure", "—"),
+                UNIT_TRANSLATION.get(uom, uom),
             ])
 
         self._add_title(ws5, f"Продажи, Сенсоры, Запасы | срез: {snap_date}", len(sensor_hdr))
@@ -2178,8 +2215,9 @@ class DashboardExportService:
             readings = int(s.get("reading_count", 0) or 1)
             ratio = alerts / readings
             _, _, lv = self._assess_defect(Decimal(str(round(ratio, 4))))
+            raw_unit = s.get("unit", "")
             sensor_bullets.append(
-                f"• {name}: среднее {float(s.get('avg_value') or 0):.2f} {s.get('unit', '')}, "
+                f"• {name}: среднее {float(s.get('avg_value') or 0):.2f} {UNIT_TRANSLATION.get(raw_unit, raw_unit)}, "
                 f"тревог {alerts}/{readings} — {STATUS_LABEL[lv]}"
             )
 

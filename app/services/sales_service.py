@@ -378,7 +378,7 @@ class SalesService:
                 # Get product name map for enrichment
                 product_names = await get_product_name_map(self.db)
 
-                batch_size = 50
+                batch_size = 1000
                 batch = []
                 snapshot_date = date.today()
 

@@ -528,9 +528,9 @@ class InventoryItem(BaseModel):
     id: UUID
     productId: UUID
     warehouseId: UUID
-    lotNumber: str
+    lotNumber: Optional[str] = None
     quantity: float
-    lastUpdated: datetime
+    lastUpdated: Optional[datetime] = None
 
     class Config:
         json_schema_extra = {

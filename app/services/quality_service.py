@@ -503,7 +503,7 @@ class QualityService:
         quality_response = await self.gateway.get_quality()  # type: ignore[union-attr]
 
         records_processed = 0
-        batch_size = 50
+        batch_size = 1000
 
         all_results = quality_response.results
         logger.info("quality_fetched_from_gateway", total_results=len(all_results))

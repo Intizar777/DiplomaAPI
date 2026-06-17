@@ -43,10 +43,19 @@ class InventoryService:
         if not latest_date:
             return {"items": [], "snapshot_date": None}
 
-        # Use denormalized columns; no JOIN needed
-        query = select(InventorySnapshot).where(
-            InventorySnapshot.snapshot_date == latest_date
-        ).order_by(InventorySnapshot.warehouse_id, InventorySnapshot.product_name)
+        # Join with Product and UnitOfMeasure to ensure we have latest name and unit
+        from app.models.reference import UnitOfMeasure
+        query = (
+            select(
+                InventorySnapshot,
+                Product.name.label("latest_product_name"),
+                UnitOfMeasure.code.label("latest_uom_code")
+            )
+            .outerjoin(Product, InventorySnapshot.product_id == Product.id)
+            .outerjoin(UnitOfMeasure, Product.unit_of_measure_id == UnitOfMeasure.id)
+            .where(InventorySnapshot.snapshot_date == latest_date)
+            .order_by(InventorySnapshot.warehouse_id)
+        )
 
         if warehouse_code:
             query = query.where(InventorySnapshot.warehouse_code == warehouse_code)
@@ -54,18 +63,18 @@ class InventoryService:
             query = query.where(InventorySnapshot.product_id == product_id)
 
         result = await self.db.execute(query)
-        rows = result.scalars().all()
+        rows = result.all()
 
         return {
             "items": [
                 {
-                    "product_id": str(row.product_id),
-                    "product_name": row.product_name,
-                    "warehouse_code": row.warehouse_code or "",
-                    "lot_number": row.lot_number,
-                    "quantity": float(row.quantity) if row.quantity else 0,
-                    "unit_of_measure": row.unit_of_measure,
-                    "last_updated": row.last_updated.isoformat() if row.last_updated else None,
+                    "product_id": str(row[0].product_id),
+                    "product_name": row.latest_product_name or row[0].product_name,
+                    "warehouse_code": row[0].warehouse_code or "",
+                    "lot_number": row[0].lot_number,
+                    "quantity": float(row[0].quantity) if row[0].quantity else 0,
+                    "unit_of_measure": row.latest_uom_code or row[0].unit_of_measure,
+                    "last_updated": row[0].last_updated.isoformat() if row[0].last_updated else None,
                 }
                 for row in rows
             ],
@@ -156,6 +165,24 @@ class InventoryService:
             warehouse_id = inventory_item.warehouseId
             warehouse_name = warehouse_names.get(warehouse_id) if warehouse_id else None
             warehouse_code = warehouse_codes.get(warehouse_id) if warehouse_id else None
+
+            # Check if warehouse exists in local DB, create if missing
+            if not warehouse_code:
+                logger.warning("inventory_item_missing_warehouse_creating_placeholder", warehouse_id=str(warehouse_id))
+                from app.services.reference_sync import upsert_warehouse
+                placeholder_data = {
+                    "id": str(warehouse_id),
+                    "code": f"WH-UNKNOWN-{str(warehouse_id)[:8]}",
+                    "name": f"Unknown Warehouse ({str(warehouse_id)[:8]})",
+                    "isActive": True
+                }
+                await upsert_warehouse(self.db, placeholder_data)
+                await self.db.commit()
+                # Refresh local maps
+                warehouse_names[warehouse_id] = placeholder_data["name"]
+                warehouse_codes[warehouse_id] = placeholder_data["code"]
+                warehouse_name = placeholder_data["name"]
+                warehouse_code = placeholder_data["code"]
 
             # Parse last_updated
             last_updated_raw = inventory_item.lastUpdated
