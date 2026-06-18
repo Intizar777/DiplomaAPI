@@ -156,8 +156,8 @@ class GroupManagerDashboardService:
                 ).label("orders_cancelled"),
             )
             .where(
-                OrderSnapshot.snapshot_date >= date_from,
-                OrderSnapshot.snapshot_date <= date_to,
+                func.date(OrderSnapshot.planned_start) >= date_from,
+                func.date(OrderSnapshot.planned_start) <= date_to,
             )
             .group_by(OrderSnapshot.production_line)
             .order_by(OrderSnapshot.production_line)
