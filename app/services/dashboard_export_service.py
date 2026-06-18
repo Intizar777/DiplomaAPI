@@ -1675,38 +1675,63 @@ class DashboardExportService:
             return self._no_data_chart("Выпуск продукции по сменам")
 
         from collections import defaultdict
-        by_date: dict = defaultdict(float)
+        from datetime import datetime
+
+        # 1. Determine if we should group by month
+        unique_dates = sorted({str(i["date"]) for i in items})
+        group_by_month = False
+        if len(unique_dates) > 31:
+            group_by_month = True
+        elif len(unique_dates) > 1:
+            d_first = datetime.strptime(unique_dates[0], "%Y-%m-%d")
+            d_last = datetime.strptime(unique_dates[-1], "%Y-%m-%d")
+            if (d_last - d_first).days > 30:
+                group_by_month = True
+
+        # 2. Group data
+        by_period: dict = defaultdict(float)
         by_shift: dict = defaultdict(lambda: defaultdict(float))
         for item in items:
-            d = str(item["date"])
-            s = item["shift"]
-            q = float(item.get("total_quantity", 0))
-            by_date[d] += q
-            by_shift[s][d] += q
+            date_str = str(item["date"])
+            if group_by_month:
+                # Format YYYY-MM
+                period = date_str[:7]
+            else:
+                period = date_str
 
-        dates = sorted(by_date.keys())
+            s = item.get("shift", "—")
+            q = float(item.get("total_quantity", 0))
+            by_period[period] += q
+            by_shift[s][period] += q
+
+        periods = sorted(by_period.keys())
         shift_names = sorted(by_shift.keys())
-        x = list(range(len(dates)))
+        x = list(range(len(periods)))
         shift_colors = ["#4472C4", "#FFC000", "#92D050", "#FF4444"]
 
         fig, ax1 = plt.subplots(figsize=(10, 6))
         ax2 = ax1.twinx()
         w = 0.6 / max(len(shift_names), 1)
         for i, shift in enumerate(shift_names):
-            vals = [by_shift[shift].get(d, 0.0) for d in dates]
+            vals = [by_shift[shift].get(p, 0.0) for p in periods]
             offset = (i - len(shift_names) / 2 + 0.5) * w
             ax1.bar([xi + offset for xi in x], vals, width=w,
                     label=shift, color=shift_colors[i % len(shift_colors)],
                     edgecolor="white", linewidth=0.3, zorder=2, alpha=0.85)
 
-        totals = [by_date[d] for d in dates]
+        totals = [by_period[p] for p in periods]
         ax2.plot(x, totals, color="#FF4444", linewidth=2, marker="o", markersize=5,
                  label="Итого", zorder=3)
         ax1.set_xticks(x)
-        ax1.set_xticklabels(dates, rotation=45, ha="right", fontsize=8)
+        ax1.set_xticklabels(periods, rotation=45, ha="right", fontsize=8)
         ax1.set_ylabel("Объём (ед.)")
-        ax2.set_ylabel("Итого по дню", color="#FF4444")
-        ax1.set_title("Выпуск продукции по сменам", fontsize=13, fontweight="bold", pad=15)
+
+        line_label = "Итого за месяц" if group_by_month else "Итого по дню"
+        ax2.set_ylabel(line_label, color="#FF4444")
+
+        title = "Выпуск по сменам (по месяцам)" if group_by_month else "Выпуск продукции по сменам"
+        ax1.set_title(title, fontsize=13, fontweight="bold", pad=15)
+
         lines1, labs1 = ax1.get_legend_handles_labels()
         lines2, labs2 = ax2.get_legend_handles_labels()
         ax1.legend(lines1 + lines2, labs1 + labs2, fontsize=9)

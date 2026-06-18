@@ -48,8 +48,8 @@ class OrderService:
     ) -> OrderStatusSummaryResponse:
         """Get order status summary."""
         query = select(OrderSnapshot).where(
-            OrderSnapshot.snapshot_date >= from_date,
-            OrderSnapshot.snapshot_date <= to_date
+            func.date(OrderSnapshot.planned_start) >= from_date,
+            func.date(OrderSnapshot.planned_end) <= to_date
         )
         
         if production_line:
@@ -98,8 +98,8 @@ class OrderService:
         limit = limit or self.page_size
         
         query = select(OrderSnapshot).where(
-            OrderSnapshot.snapshot_date >= from_date,
-            OrderSnapshot.snapshot_date <= to_date
+            func.date(OrderSnapshot.planned_start) >= from_date,
+            func.date(OrderSnapshot.planned_end) <= to_date
         )
         
         if status:
@@ -220,8 +220,8 @@ class OrderService:
                 func.sum(overdue_case).label("overdue_orders"),
             )
             .where(
-                OrderSnapshot.snapshot_date >= from_date,
-                OrderSnapshot.snapshot_date <= to_date,
+                func.date(OrderSnapshot.planned_start) >= from_date,
+                func.date(OrderSnapshot.planned_end) <= to_date,
             )
             .group_by(OrderSnapshot.production_line)
             .order_by(OrderSnapshot.production_line)
@@ -272,8 +272,8 @@ class OrderService:
                 OrderSnapshot.actual_end,
             )
             .where(
-                OrderSnapshot.snapshot_date >= from_date,
-                OrderSnapshot.snapshot_date <= to_date,
+                func.date(OrderSnapshot.planned_start) >= from_date,
+                func.date(OrderSnapshot.planned_end) <= to_date,
                 OrderSnapshot.status == "completed",
                 OrderSnapshot.actual_end.isnot(None),
                 OrderSnapshot.planned_end.isnot(None),
