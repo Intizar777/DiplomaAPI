@@ -25,6 +25,17 @@ class KPIService:
         self.db = db
         self.gateway = gateway
 
+    @staticmethod
+    def _normalize_oee_estimate(value: Optional[float]) -> Optional[Decimal]:
+        """Store OEE consistently as a ratio in the 0..1 range."""
+        if value is None:
+            return None
+
+        oee_value = Decimal(str(value))
+        if oee_value > Decimal("1"):
+            return oee_value / Decimal("100")
+        return oee_value
+
     async def get_current_kpi(
         self, production_line: Optional[str] = None
     ) -> KPICurrentResponse:
@@ -250,9 +261,7 @@ class KPIService:
                     defect_rate=Decimal(str(kpi_response.defectRate)),
                     completed_orders=kpi_response.completedOrders,
                     total_orders=kpi_response.totalOrders,
-                    oee_estimate=Decimal(str(kpi_response.oeeEstimate))
-                    if kpi_response.oeeEstimate
-                    else None,
+                    oee_estimate=self._normalize_oee_estimate(kpi_response.oeeEstimate),
                 )
                 .on_conflict_do_update(
                     index_elements=["period_from", "period_to", "product_line_id"],
@@ -261,9 +270,7 @@ class KPIService:
                         defect_rate=Decimal(str(kpi_response.defectRate)),
                         completed_orders=kpi_response.completedOrders,
                         total_orders=kpi_response.totalOrders,
-                        oee_estimate=Decimal(str(kpi_response.oeeEstimate))
-                        if kpi_response.oeeEstimate
-                        else None,
+                        oee_estimate=self._normalize_oee_estimate(kpi_response.oeeEstimate),
                     ),
                 )
             )
@@ -306,9 +313,7 @@ class KPIService:
                             defect_rate=Decimal(str(kpi_response.defectRate)),
                             completed_orders=kpi_response.completedOrders,
                             total_orders=kpi_response.totalOrders,
-                            oee_estimate=Decimal(str(kpi_response.oeeEstimate))
-                            if kpi_response.oeeEstimate
-                            else None,
+                            oee_estimate=self._normalize_oee_estimate(kpi_response.oeeEstimate),
                         )
                         self.db.add(aggregated)
                         records_processed += 1
@@ -409,9 +414,7 @@ class KPIService:
                                 defect_rate=Decimal(str(kpi_response.defectRate)),
                                 completed_orders=kpi_response.completedOrders,
                                 total_orders=kpi_response.totalOrders,
-                                oee_estimate=Decimal(str(kpi_response.oeeEstimate))
-                                if kpi_response.oeeEstimate
-                                else None,
+                                oee_estimate=self._normalize_oee_estimate(kpi_response.oeeEstimate),
                             ),
                         )
                     )
@@ -465,9 +468,7 @@ class KPIService:
                                 defect_rate=Decimal(str(kpi_response.defectRate)),
                                 completed_orders=kpi_response.completedOrders,
                                 total_orders=kpi_response.totalOrders,
-                                oee_estimate=Decimal(str(kpi_response.oeeEstimate))
-                                if kpi_response.oeeEstimate
-                                else None,
+                                oee_estimate=self._normalize_oee_estimate(kpi_response.oeeEstimate),
                             )
                             stmt = (
                                 insert(AggregatedKPI)

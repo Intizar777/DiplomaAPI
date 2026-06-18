@@ -350,3 +350,13 @@ async def test_compare_kpi_with_zero_total_orders(session):
 
     # Should handle gracefully (not divide by zero)
     assert result.order_completion_change == Decimal("0")
+
+
+def test_normalize_oee_estimate_accepts_ratio_and_percent() -> None:
+    """OEE from gateway must be stored as a ratio regardless of incoming scale."""
+    service = KPIService(db=None, gateway=None)
+
+    assert service._normalize_oee_estimate(None) is None
+    assert service._normalize_oee_estimate(0.0) == Decimal("0.0")
+    assert service._normalize_oee_estimate(0.78) == Decimal("0.78")
+    assert service._normalize_oee_estimate(78.0) == Decimal("0.78")

@@ -207,6 +207,39 @@ class DashboardExportService:
             return "Умеренная концентрация", COLOR_YELLOW, WARNING
         return "Высокая концентрация", COLOR_RED, CRITICAL
 
+    def _oee_percent(self, value: Any) -> Decimal:
+        """
+        Normalize OEE to percent for export rendering.
+
+        Legacy/export code expects percent values (0-100), while some upstream
+        sources store OEE as a ratio (0-1). Accept both formats here.
+        """
+        if value is None:
+            return Decimal("0")
+
+        oee_value = value if isinstance(value, Decimal) else Decimal(str(value))
+        if oee_value <= Decimal("1"):
+            return oee_value * Decimal("100")
+        return oee_value
+
+    def _assess_target_high(self, value: Decimal, target: Decimal) -> tuple[str, str, int]:
+        """Assess metrics where higher values are better against the displayed target."""
+        warning_threshold = target * Decimal("0.8")
+        if value >= target:
+            return STATUS_LABEL[NORMAL], COLOR_GREEN, NORMAL
+        if value >= warning_threshold:
+            return STATUS_LABEL[WARNING], COLOR_YELLOW, WARNING
+        return STATUS_LABEL[CRITICAL], COLOR_RED, CRITICAL
+
+    def _assess_target_low(self, value: Decimal, target: Decimal) -> tuple[str, str, int]:
+        """Assess metrics where lower values are better against the displayed target."""
+        warning_threshold = target * Decimal("1.2")
+        if value <= target:
+            return STATUS_LABEL[NORMAL], COLOR_GREEN, NORMAL
+        if value <= warning_threshold:
+            return STATUS_LABEL[WARNING], COLOR_YELLOW, WARNING
+        return STATUS_LABEL[CRITICAL], COLOR_RED, CRITICAL
+
     # ── Excel shared helpers ─────────────────────────────────────────────────
 
     def _style_header(self, ws: Any, headers: list[str]) -> None:
@@ -1605,7 +1638,7 @@ class DashboardExportService:
         completed_orders = int(kpi.get("completed_orders", 0))
         fulfillment_pct = (completed_orders / total_orders * 100) if total_orders else 0.0
         metrics = [
-            ("OEE", float(kpi.get("oee_estimate", 0)) * 100, 85.0),
+            ("OEE", float(self._oee_percent(kpi.get("oee_estimate", 0))), 85.0),
             ("Выполнение плана", fulfillment_pct, 90.0),
             ("OTIF", float(otif.get("otif_rate", 0)) * 100, 95.0),
         ]
@@ -1825,49 +1858,60 @@ class DashboardExportService:
         total_orders = int(kpi.get("total_orders", 0))
         completed_orders = int(kpi.get("completed_orders", 0))
         fulfillment_pct = (completed_orders / total_orders * 100) if total_orders else 0.0
-        oee_pct = float(kpi.get("oee_estimate", 0)) * 100
+        oee_pct = float(self._oee_percent(kpi.get("oee_estimate", 0)))
         defect_pct = float(kpi.get("defect_rate", 0)) * 100
         change = kpi.get("change_percent") or {}
+        oee_status, _, _ = self._assess_target_high(Decimal(str(oee_pct)), Decimal("85"))
+        defect_status, _, _ = self._assess_target_low(Decimal(str(defect_pct)), Decimal("1.5"))
+        fulfillment_status, _, _ = self._assess_target_high(Decimal(str(fulfillment_pct)), Decimal("90"))
 
         kpi_rows: list[tuple] = [
             ("Общий выпуск (ед.)", float(kpi.get("total_output", 0)), "—",
-             self._assess_fulfillment(Decimal(str(fulfillment_pct)))[0],
+             "—",
              f"{change.get('total_output', 0):+.1f}%" if change else "—"),
             ("OEE (%)", round(oee_pct, 1), 85.0,
-             self._assess_oee(Decimal(str(oee_pct)))[0],
+             oee_status,
              f"{change.get('oee_estimate', 0):+.1f}%" if change else "—"),
             ("Доля дефектов (%)", round(defect_pct, 2), "≤ 1.5",
-             self._assess_defect(kpi.get("defect_rate", Decimal("0")))[0], "—"),
+             defect_status, "—"),
             ("Выполнение плана (%)", round(fulfillment_pct, 1), 90.0,
-             self._assess_fulfillment(Decimal(str(fulfillment_pct)))[0], "—"),
+             fulfillment_status, "—"),
         ]
         for row_vals in kpi_rows:
             label = row_vals[0]
-            if "OEE" in label:
-                _, color, _ = self._assess_oee(Decimal(str(row_vals[1])))
+            color = None
+            if row_vals[3] == "—":
+                color = None
+            elif "OEE" in label:
+                _, color, _ = self._assess_target_high(Decimal(str(row_vals[1])), Decimal("85"))
             elif "дефект" in label.lower():
-                _, color, _ = self._assess_defect(kpi.get("defect_rate", Decimal("0")))
+                _, color, _ = self._assess_target_low(Decimal(str(row_vals[1])), Decimal("1.5"))
             else:
-                _, color, _ = self._assess_fulfillment(Decimal(str(
-                    row_vals[1] if isinstance(row_vals[1], (int, float)) else 0
-                )))
+                _, color, _ = self._assess_target_high(
+                    Decimal(str(row_vals[1] if isinstance(row_vals[1], (int, float)) else 0)),
+                    Decimal("90"),
+                )
             ws1.append(list(row_vals))
-            self._color_row(ws1, ws1.max_row, color, len(headers1))
+            if color is not None:
+                self._color_row(ws1, ws1.max_row, color, len(headers1))
 
         otif_pct = float(otif.get("otif_rate", 0)) * 100
         otif_total = int(otif.get("total_orders", 0))
         on_time_pct = (float(otif.get("on_time_orders", 0)) / otif_total * 100) if otif_total else 0.0
         otif_rows: list[tuple] = [
             ("OTIF Rate (%)", round(otif_pct, 1), 95.0,
-             self._assess_fulfillment(Decimal(str(otif_pct)))[0], "—"),
+             self._assess_target_high(Decimal(str(otif_pct)), Decimal("95"))[0], "—"),
             ("В срок (%)", round(on_time_pct, 1), 95.0,
-             self._assess_fulfillment(Decimal(str(on_time_pct)))[0], "—"),
+             self._assess_target_high(Decimal(str(on_time_pct)), Decimal("95"))[0], "—"),
             ("В полном объёме (заказов)", otif.get("in_full_quantity_orders", 0), "—", "—", "—"),
             ("OTIF-заказов / всего",
              f"{otif.get('otif_orders', 0)} / {otif.get('total_orders', 0)}", "—", "—", "—"),
         ]
         for row_vals in otif_rows:
             ws1.append(list(row_vals))
+            if row_vals[3] != "—":
+                _, color, _ = self._assess_target_high(Decimal(str(row_vals[1])), Decimal("95"))
+                self._color_row(ws1, ws1.max_row, color, len(headers1))
 
         self._add_title(ws1, f"KPI и OTIF | {date_from} — {date_to}", len(headers1))
         self._autofit(ws1)
@@ -2062,25 +2106,31 @@ class DashboardExportService:
         total_orders = int(kpi.get("total_orders", 0))
         completed_orders = int(kpi.get("completed_orders", 0))
         fulfillment_pct = (completed_orders / total_orders * 100) if total_orders else 0.0
-        oee_pct = float(kpi.get("oee_estimate", 0)) * 100
+        oee_pct = float(self._oee_percent(kpi.get("oee_estimate", 0)))
         defect_pct = float(kpi.get("defect_rate", 0)) * 100
         otif_pct = float(otif.get("otif_rate", 0)) * 100
         change = kpi.get("change_percent") or {}
 
+        oee_assessment = self._assess_target_high(Decimal(str(oee_pct)), Decimal("85"))
+        defect_assessment = self._assess_target_low(Decimal(str(defect_pct)), Decimal("1.5"))
+        fulfillment_assessment = self._assess_target_high(Decimal(str(fulfillment_pct)), Decimal("90"))
+        otif_assessment = self._assess_target_high(Decimal(str(otif_pct)), Decimal("95"))
+
         kpi_bullets = [
             f"• Общий выпуск: {float(kpi.get('total_output', 0)):.0f} ед."
             + (f" ({change.get('total_output', 0):+.1f}% к пред. периоду)" if change else ""),
-            f"• OEE: {oee_pct:.1f}% — {self._assess_oee(Decimal(str(oee_pct)))[0]}"
+            f"• OEE: {oee_pct:.1f}% — {oee_assessment[0]}"
             + (f" ({change.get('oee_estimate', 0):+.1f}%)" if change else ""),
-            f"• Доля дефектов: {defect_pct:.2f}% — {self._assess_defect(kpi.get('defect_rate', Decimal('0')))[0]}",
-            f"• Выполнение плана: {fulfillment_pct:.1f}% ({completed_orders}/{total_orders} заказов)",
-            f"• OTIF: {otif_pct:.1f}% (в срок: {otif.get('on_time_orders', 0)}, "
+            f"• Доля дефектов: {defect_pct:.2f}% — {defect_assessment[0]}",
+            f"• Выполнение плана: {fulfillment_pct:.1f}% ({completed_orders}/{total_orders} заказов) — {fulfillment_assessment[0]}",
+            f"• OTIF: {otif_pct:.1f}% — {otif_assessment[0]} (в срок: {otif.get('on_time_orders', 0)}, "
             f"в полном объёме: {otif.get('in_full_quantity_orders', 0)} из {otif.get('total_orders', 0)})",
         ]
         worst_kpi = self._worst([
-            self._assess_oee(Decimal(str(oee_pct)))[2],
-            self._assess_defect(kpi.get("defect_rate", Decimal("0")))[2],
-            self._assess_fulfillment(Decimal(str(fulfillment_pct)))[2],
+            oee_assessment[2],
+            defect_assessment[2],
+            fulfillment_assessment[2],
+            otif_assessment[2],
         ])
         if worst_kpi == NORMAL:
             kpi_conclusion = (
